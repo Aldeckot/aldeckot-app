@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "node scripts/generate-supabase-config.mjs"
+  "buildCommand": "node scripts/generate-supabase-config.mjs",
+  "outputDirectory": "."
 }
