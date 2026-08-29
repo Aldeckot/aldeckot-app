@@ -6,7 +6,12 @@
     const script = document.createElement('script');
     script.src = 'supabase-config.js';
     script.onload = () => resolve(window.ALDECKOT_SUPABASE_CONFIG || {});
-    script.onerror = () => resolve({});
+    script.onerror = () => {
+      window.ALDECKOT_SUPABASE_CONFIG_ERROR = window.ALDECKOT_SUPABASE_CONFIG_ERROR
+        ? `${window.ALDECKOT_SUPABASE_CONFIG_ERROR} O arquivo supabase-config.js também não foi publicado.`
+        : 'O arquivo supabase-config.js não foi publicado.';
+      resolve({});
+    };
     document.head.appendChild(script);
   });
 
