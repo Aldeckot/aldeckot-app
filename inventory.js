@@ -223,17 +223,30 @@
       const file = input.files?.[0]; if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
+        let payload;
+        let converted;
         try {
-          const payload = JSON.parse(String(reader.result || ''));
-          const converted = normalizeImportedBackup(payload);
-          const restored = converted.data;
-          if (!confirm(`Restaurar ${restored.tables.length} tabela(s)? Os dados atuais do Inventário serão substituídos.`)) return;
+          payload = JSON.parse(String(reader.result || ''));
+          converted = normalizeImportedBackup(payload);
+        } catch (error) {
+          console.warn('Backup do Inventário rejeitado:', error);
+          alert('Este arquivo não é um backup válido do Inventário.');
+          return;
+        }
+
+        const restored = converted.data;
+        if (!confirm(`Restaurar ${restored.tables.length} tabela(s)? Os dados atuais do Inventário serão substituídos.`)) return;
+
+        try {
           await backend().inventory.replace(restored);
           data = await backend().inventory.load(); state.active = data.tables[0]?.id || null; state.query = ''; state.status = ''; state.situation = '';
           const createdAt = payload.createdAt || payload.timestamp;
           writeBackupMeta({ last: createdAt ? new Date(createdAt).toLocaleString('pt-BR') : formattedNow() }); closeModal(); renderInventory();
           if (converted.legacy) alert('Backup antigo importado e convertido com sucesso.');
-        } catch { alert('Este arquivo não é um backup válido do Inventário.'); }
+        } catch (error) {
+          console.error('Falha ao restaurar o backup do Inventário:', error);
+          alert(`Não foi possível restaurar o backup. ${backendMessage(error)}`);
+        }
       };
       reader.readAsText(file);
     });
