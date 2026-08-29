@@ -90,10 +90,10 @@
     const events = read();
     const upcoming = events.filter(event => event.date >= iso(today))
       .sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`))
-      .slice(0, 2);
+      .slice(0, 3);
     const todays = events.filter(event => event.date === iso(today)).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     document.querySelectorAll('.agenda-upcoming-panel').forEach(panel => {
-      panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('') : '<p>Nenhum agendamento próximo.</p>'}`;
+      panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
     });
     document.querySelectorAll('.agenda-today-panel').forEach(panel => {
       panel.innerHTML = `<div class="agenda-panel-heading"><h3>Tarefas de hoje</h3><span>${today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span></div>${todays.length ? `<div class="agenda-today-list">${todays.map(event => `<button class="agenda-task ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><div class="agenda-task-line"><b>${safe(event.title)}</b><i class="agenda-priority" title="${priorityOf(event).label}" aria-label="${priorityOf(event).label}">${priorityOf(event).icon}</i></div><span>${safe(event.time || 'Sem horário')} · ${event.kind === 'task' ? 'Tarefa' : 'Evento'}</span></button>`).join('')}</div>` : '<p>Nenhuma tarefa para hoje.</p>'}`;

@@ -36,6 +36,7 @@
     situation: row.situation,
     notes: row.notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
+    updatedAt: row.updated_at || row.created_at || '',
     logs: (row.inventory_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
       .map(log => ({ id: log.id, at: dateLabel(log.created_at), text: log.message }))

@@ -10,7 +10,8 @@
   let pendingRestore = null;
   let backupBusy = false;
   let initialized = false;
-  let state = { active: null, query: '', status: '', situation: '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null };
+  const inventoryRoute = new URLSearchParams(window.location.search);
+  let state = { active: inventoryRoute.get('table'), pendingItemId: inventoryRoute.get('item'), query: '', status: '', situation: '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null };
 
   const readBackupMeta = () => ({ ...backupMeta });
   const writeBackupMeta = value => { backupMeta = { ...backupMeta, ...value }; };
@@ -163,6 +164,12 @@
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg viewBox="0 0 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4m0 3v4m0 3v4"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
       ${table ? `<main class="inventory-workspace">${tableMarkup(table, visible)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyMarkup()}</main>`}</div></div>`;
     applyHeaderPresentation();
+    const pendingItem = state.pendingItemId && table?.items.find(item => item.id === state.pendingItemId);
+    if (pendingItem) {
+      state.pendingItemId = null;
+      if (window.history?.replaceState) window.history.replaceState({}, '', 'inventory.html');
+      details(pendingItem);
+    }
   }
 
   function emptyMarkup() {
