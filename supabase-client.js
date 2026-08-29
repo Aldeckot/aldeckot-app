@@ -100,13 +100,30 @@
     async updateTable(id, values) {
       await init();
       return check(await client.from('module_tables').update({
-        name: values.name.trim(), icon: values.icon || '📁'
+        name: values.name.trim()
       }).eq('id', id).select().single());
     },
 
     async deleteTable(id) {
       await init();
       check(await client.from('module_tables').delete().eq('id', id));
+    },
+
+    async moveTableToTop(id) {
+      await init();
+      const tables = check(await client
+        .from('module_tables')
+        .select('id')
+        .eq('module', 'inventory')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: false }));
+      const selected = tables.find(table => table.id === id);
+      if (!selected) return;
+
+      const ordered = [selected, ...tables.filter(table => table.id !== id)];
+      await Promise.all(ordered.map((table, position) =>
+        client.from('module_tables').update({ position }).eq('id', table.id).then(check)
+      ));
     },
 
     async saveItem(tableId, values, existingId, logMessage) {
@@ -134,6 +151,7 @@
         action: existingId ? 'update' : 'create',
         message: logMessage || (existingId ? 'Equipamento atualizado.' : 'Equipamento adicionado ao inventário.')
       }));
+      await this.moveTableToTop(tableId);
       return saved;
     },
 
@@ -144,6 +162,18 @@
         action: 'update',
         message: message.trim()
       }).select().single());
+    },
+
+    async updateLog(id, message) {
+      await init();
+      return check(await client.from('inventory_item_logs').update({
+        message: message.trim()
+      }).eq('id', id).select().single());
+    },
+
+    async deleteLog(id) {
+      await init();
+      check(await client.from('inventory_item_logs').delete().eq('id', id));
     },
 
     async deleteItem(id) {
@@ -242,6 +272,12 @@
   };
 
   const backups = {
+    async list(limit = 12) {
+      await init();
+      return check(await client.from('inventory_backups')
+        .select('id, label, snapshot, source, created_at')
+        .order('created_at', { ascending: false }).limit(limit));
+    },
     async latest() {
       await init();
       const rows = check(await client.from('inventory_backups')
