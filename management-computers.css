@@ -1,0 +1,543 @@
+/* Mini computadores da Gestão TI: módulos físicos de monitoramento NOC. */
+body.management-open .management-computer-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, 112px) !important;
+  gap: 12px !important;
+  padding: 15px !important;
+}
+
+body.management-open .mini-computer {
+  grid-template-rows: 66px 8px 7px 25px 18px 19px !important;
+  justify-items: center !important;
+  width: 112px !important;
+  min-height: 184px !important;
+  padding: 10px 7px 8px !important;
+  overflow: visible !important;
+  border: 1px solid #304455 !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(160deg, #14213088, transparent 30%),
+    linear-gradient(180deg, #09131ddb, #050b13ec) !important;
+  box-shadow: inset 0 1px #d9f6ff10, inset 0 -20px 24px #0006, 0 8px 18px #0006 !important;
+}
+
+body.management-open .mini-computer::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 4px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 18%, #66809055);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+body.management-open .mini-computer::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  right: 9px;
+  bottom: 35px;
+  width: 13px;
+  height: 13px;
+  border-right: 1px solid color-mix(in srgb, var(--status-color) 48%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--status-color) 48%, transparent);
+  opacity: .6;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+body.management-open .mini-computer:hover,
+body.management-open .mini-computer:focus-visible {
+  border-color: color-mix(in srgb, var(--status-color) 72%, #dffaff) !important;
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--status-color) 13%, transparent), transparent 30%),
+    linear-gradient(180deg, #0c1c29eb, #07111be9) !important;
+  box-shadow: inset 0 1px #d9f6ff18, inset 0 -20px 24px #0007, 0 10px 23px #0009, 0 0 18px color-mix(in srgb, var(--status-color) 17%, transparent) !important;
+}
+
+body.management-open .mini-category {
+  z-index: 3;
+  top: -5px !important;
+  min-width: 50px;
+  padding: 2px 7px !important;
+  border-color: color-mix(in srgb, var(--category-color) 62%, #7e98a8) !important;
+  border-radius: 3px !important;
+  background: #071119 !important;
+  color: var(--category-color) !important;
+  font-size: 6px !important;
+  letter-spacing: .075em !important;
+  text-shadow: 0 0 7px color-mix(in srgb, var(--category-color) 58%, transparent);
+}
+
+body.management-open .mini-screen {
+  z-index: 1;
+  width: 88px !important;
+  height: 65px !important;
+  border: 1px solid color-mix(in srgb, var(--status-color) 74%, #889ba8) !important;
+  border-radius: 5px !important;
+  background:
+    radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--status-color) 17%, #061019) 0 12%, #07131f 55%, #03080e 100%) !important;
+  box-shadow: inset 0 0 17px color-mix(in srgb, var(--status-color) 28%, transparent), 0 0 14px color-mix(in srgb, var(--status-color) 26%, transparent) !important;
+}
+
+body.management-open .mini-screen::before {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--status-color) 25%, transparent) 1px, transparent 1px) 0 0 / 15px 15px,
+    linear-gradient(180deg, color-mix(in srgb, var(--status-color) 17%, transparent) 1px, transparent 1px) 0 0 / 15px 15px !important;
+  opacity: .35 !important;
+}
+
+body.management-open .mini-screen::after {
+  top: -54% !important;
+  left: -17% !important;
+  width: 24% !important;
+  height: 168% !important;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--status-color) 42%, #e8ffff), transparent) !important;
+  opacity: .15 !important;
+  animation: management-screen-reflection-subtle 14.5s cubic-bezier(.42, 0, .58, 1) infinite !important;
+  will-change: transform, opacity;
+}
+
+body.management-open .mini-screen-hud {
+  position: absolute;
+  z-index: 1;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 30%, transparent);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 2px;
+  opacity: .66;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body.management-open .mini-screen-hud::before,
+body.management-open .mini-screen-hud::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Indicadores discretos: cada situação tem um ritmo próprio na tela. */
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-hud::before {
+  inset: 21% 25%;
+  border: 1px solid color-mix(in srgb, var(--status-color) 74%, transparent);
+  border-radius: 50%;
+  opacity: .18;
+  animation: management-network-ring 5.8s ease-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-hud::after {
+  top: 50%;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--status-color), transparent);
+  opacity: .2;
+  animation: management-network-scan 5.8s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-hud::before {
+  inset: 11px 8px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 56%, transparent);
+  border-radius: 50%;
+  opacity: .12;
+  animation: management-reserve-pulse 5.4s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-hud::after {
+  top: 50%;
+  left: 14%;
+  width: 72%;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, transparent 0 4px, var(--status-color) 4px 7px);
+  opacity: .22;
+  animation: management-reserve-scan 5.4s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud::before {
+  inset: 7px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 62%, transparent);
+  border-radius: 3px;
+  box-shadow: inset 0 0 11px color-mix(in srgb, var(--status-color) 22%, transparent);
+  opacity: .1;
+  animation: management-alert-frame 3.9s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud::after {
+  right: 8px;
+  bottom: 9px;
+  width: 17px;
+  height: 1px;
+  background: var(--status-color);
+  box-shadow: 0 -4px 0 color-mix(in srgb, var(--status-color) 62%, transparent);
+  opacity: .28;
+  animation: management-alert-marker 3.9s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-hud::before {
+  inset: 15px 25px;
+  border: 1px dashed color-mix(in srgb, var(--status-color) 64%, transparent);
+  border-radius: 50%;
+  opacity: .22;
+  animation: management-service-orbit 7.2s linear infinite;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-hud::after {
+  top: 8px;
+  left: 50%;
+  width: 1px;
+  height: 34px;
+  background: linear-gradient(180deg, transparent, var(--status-color), transparent);
+  opacity: .2;
+  animation: management-service-scan 4.7s ease-in-out infinite;
+}
+
+body.management-open .mini-screen-mark {
+  z-index: 2 !important;
+  animation: management-status-signal-soft 4.8s ease-in-out infinite !important;
+  will-change: transform, opacity;
+}
+
+body.management-open .mini-screen-mark svg {
+  width: 33px !important;
+  height: 33px !important;
+  stroke-width: 1.75 !important;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+body.management-open .mini-led {
+  z-index: 3 !important;
+  right: 6px !important;
+  bottom: 6px !important;
+  width: 5px !important;
+  height: 5px !important;
+  animation: management-led-soft 3.8s ease-in-out infinite !important;
+  will-change: transform, opacity;
+}
+
+body.management-open .mini-neck {
+  z-index: 1;
+  width: 15px !important;
+  height: 8px !important;
+  border-color: color-mix(in srgb, var(--status-color) 54%, #324758) !important;
+  background: linear-gradient(90deg, #050a11, #1a2a35 50%, #050a11) !important;
+}
+
+body.management-open .mini-base {
+  z-index: 1;
+  width: 54px !important;
+  height: 7px !important;
+  border-color: color-mix(in srgb, var(--status-color) 48%, #344958) !important;
+  background: linear-gradient(180deg, #1a2832, #050b11) !important;
+}
+
+body.management-open .mini-chassis {
+  z-index: 1;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 80px !important;
+  height: 25px !important;
+  padding: 0 7px !important;
+  border-color: color-mix(in srgb, var(--status-color) 56%, #596d79) !important;
+  border-radius: 4px !important;
+  background: linear-gradient(180deg, #1b2730, #071017 55%, #111b23) !important;
+  box-shadow: inset 0 1px #ffffff26, inset 0 -5px 8px #0007, 0 4px 9px #0008 !important;
+}
+
+body.management-open .mini-chassis i {
+  color: var(--status-color) !important;
+  font-size: 5px !important;
+  letter-spacing: .08em !important;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--status-color) 50%, transparent);
+}
+
+body.management-open .mini-chassis em {
+  display: grid !important;
+  place-items: center;
+  color: var(--status-color) !important;
+}
+
+body.management-open .mini-chassis em svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+body.management-open .mini-computer-label {
+  z-index: 1;
+  align-self: end;
+  max-width: 96px !important;
+  margin-top: 0 !important;
+  color: #e5edf2 !important;
+  font-size: 9px !important;
+  letter-spacing: -.015em;
+}
+
+body.management-open .mini-status {
+  z-index: 1;
+  min-height: 16px !important;
+  margin-top: 1px !important;
+  padding: 2px 6px !important;
+  border-color: color-mix(in srgb, var(--status-color) 58%, transparent) !important;
+  background: color-mix(in srgb, var(--status-color) 13%, #071119) !important;
+  color: var(--status-color) !important;
+  font-size: 6px !important;
+  letter-spacing: .04em;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--status-color) 55%, transparent);
+}
+
+body.management-open .mini-status i {
+  width: 4px !important;
+  height: 4px !important;
+  box-shadow: 0 0 6px currentColor !important;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-mark {
+  animation: management-active-mark 5.8s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-led {
+  animation: management-led-active 3.8s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-mark {
+  animation: management-reserve-mark 5.4s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-led {
+  animation: management-led-reserve 4.9s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-mark {
+  animation: management-alert-mark 3.9s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-led {
+  animation: management-led-alert 3.9s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-mark {
+  animation: management-service-mark 4.7s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-led {
+  animation: management-led-service 4.7s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen,
+body.management-open .mini-computer[data-status="Desativado"] .mini-chassis {
+  filter: saturate(.25) brightness(.7);
+}
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen-mark,
+body.management-open .mini-computer[data-status="Desativado"] .mini-led { animation: none !important; }
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen-mark { opacity: .62; }
+
+/* A moldura do equipamento permanece visualmente ligada ao status ativo. */
+body.management-open .management-modal-dialog.management-status-glow {
+  position: relative;
+  border-color: color-mix(in srgb, var(--management-modal-status-color) 68%, #bdeeff) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--management-modal-status-color) 26%, transparent),
+    0 0 14px color-mix(in srgb, var(--management-modal-status-color) 34%, transparent),
+    0 0 38px color-mix(in srgb, var(--management-modal-status-color) 20%, transparent),
+    0 22px 46px #0009 !important;
+  animation:
+    management-dialog .24s cubic-bezier(.2, .8, .2, 1),
+    management-modal-neon-breathe 4.8s ease-in-out infinite !important;
+}
+
+body.management-open .management-modal-dialog.management-status-glow::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border: 1px solid color-mix(in srgb, var(--management-modal-status-color) 34%, transparent);
+  border-radius: inherit;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--management-modal-status-color) 26%, transparent);
+  opacity: .72;
+  pointer-events: none;
+}
+
+@keyframes management-modal-neon-breathe {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--management-modal-status-color) 22%, transparent),
+      0 0 12px color-mix(in srgb, var(--management-modal-status-color) 28%, transparent),
+      0 0 32px color-mix(in srgb, var(--management-modal-status-color) 16%, transparent),
+      0 22px 46px #0009;
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--management-modal-status-color) 38%, transparent),
+      0 0 17px color-mix(in srgb, var(--management-modal-status-color) 42%, transparent),
+      0 0 46px color-mix(in srgb, var(--management-modal-status-color) 24%, transparent),
+      0 22px 46px #0009;
+  }
+}
+
+@keyframes management-screen-reflection-subtle {
+  0%, 56%, 100% { transform: translateX(0) rotate(24deg); opacity: .05; }
+  72% { transform: translateX(360%) rotate(24deg); opacity: .22; }
+}
+
+@keyframes management-status-signal-soft {
+  0%, 100% { opacity: .88; transform: scale(.985); }
+  50% { opacity: 1; transform: scale(1.018); }
+}
+
+@keyframes management-led-soft {
+  0%, 100% { opacity: .54; transform: scale(.84); }
+  50% { opacity: .9; transform: scale(1); }
+}
+
+@keyframes management-network-ring {
+  0%, 18% { opacity: .05; transform: scale(.68); }
+  60% { opacity: .28; transform: scale(1.18); }
+  100% { opacity: 0; transform: scale(1.36); }
+}
+
+@keyframes management-network-scan {
+  0%, 22% { opacity: 0; transform: translateY(-17px); }
+  48% { opacity: .28; }
+  74%, 100% { opacity: 0; transform: translateY(17px); }
+}
+
+@keyframes management-reserve-pulse {
+  0%, 100% { opacity: .08; transform: scale(.9); }
+  52% { opacity: .28; transform: scale(1.06); }
+}
+
+@keyframes management-reserve-scan {
+  0%, 24% { opacity: 0; transform: translateX(-13px); }
+  52% { opacity: .25; }
+  78%, 100% { opacity: 0; transform: translateX(13px); }
+}
+
+@keyframes management-alert-frame {
+  0%, 100% { opacity: .08; transform: scale(.97); }
+  42% { opacity: .36; transform: scale(1); }
+  58% { opacity: .16; transform: scale(1); }
+}
+
+@keyframes management-alert-marker {
+  0%, 100% { opacity: .1; transform: translateX(-2px); }
+  42% { opacity: .5; transform: translateX(0); }
+  58% { opacity: .16; transform: translateX(0); }
+}
+
+@keyframes management-service-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes management-service-scan {
+  0%, 100% { opacity: .06; transform: translateX(-15px); }
+  50% { opacity: .35; transform: translateX(14px); }
+}
+
+@keyframes management-active-mark {
+  0%, 100% { opacity: .84; transform: scale(.98); }
+  50% { opacity: 1; transform: scale(1.025); }
+}
+
+@keyframes management-reserve-mark {
+  0%, 100% { opacity: .78; transform: scale(.965); }
+  52% { opacity: 1; transform: scale(1.03); }
+}
+
+@keyframes management-alert-mark {
+  0%, 100% { opacity: .76; transform: scale(.975); }
+  42% { opacity: 1; transform: scale(1.035); }
+  58% { opacity: .85; transform: scale(1); }
+}
+
+@keyframes management-service-mark {
+  0%, 100% { opacity: .84; transform: rotate(-3deg) scale(.98); }
+  50% { opacity: 1; transform: rotate(3deg) scale(1.025); }
+}
+
+@keyframes management-led-active {
+  0%, 100% { opacity: .58; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes management-led-reserve {
+  0%, 100% { opacity: .42; transform: scale(.78); }
+  52% { opacity: .9; transform: scale(.96); }
+}
+
+@keyframes management-led-alert {
+  0%, 100% { opacity: .44; transform: scale(.78); }
+  42% { opacity: 1; transform: scale(1.08); }
+  58% { opacity: .55; transform: scale(.86); }
+}
+
+@keyframes management-led-service {
+  0%, 100% { opacity: .46; transform: scale(.8); }
+  50% { opacity: .96; transform: scale(1); }
+}
+
+body.management-open .management-modal-identity .mini-computer.compact {
+  transform: scale(.64) !important;
+  transform-origin: left top !important;
+  margin-right: -39px !important;
+  margin-bottom: -39px !important;
+}
+
+.theme-light.management-open .mini-computer {
+  border-color: #ffffffc8 !important;
+  background: linear-gradient(160deg, #ffffff9c, transparent 30%), linear-gradient(180deg, #dbe8eeea, #c5d6e0e8) !important;
+  box-shadow: inset 0 1px #fff, inset 0 -20px 24px #6c829133, 0 8px 18px #35516d2d !important;
+}
+
+.theme-light.management-open .mini-computer::before { border-color: #ffffffcc; }
+.theme-light.management-open .mini-category { background: #f5fbff !important; }
+
+.theme-light.management-open .mini-screen {
+  background: radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--status-color) 17%, #eaf6fb) 0 12%, #dbeef5 55%, #c0d9e4 100%) !important;
+}
+
+.theme-light.management-open .mini-chassis,
+.theme-light.management-open .mini-neck,
+.theme-light.management-open .mini-base { background: linear-gradient(180deg, #eaf4f8, #aec5d2) !important; }
+
+.theme-light.management-open .mini-computer-label { color: #1c3d55 !important; }
+.theme-light.management-open .mini-status { background: color-mix(in srgb, var(--status-color) 14%, #f7fcff) !important; }
+
+.theme-light.management-open .management-modal-dialog.management-status-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--management-modal-status-color) 30%, transparent),
+    0 0 15px color-mix(in srgb, var(--management-modal-status-color) 25%, transparent),
+    0 0 34px color-mix(in srgb, var(--management-modal-status-color) 14%, transparent),
+    0 20px 40px #38516c34 !important;
+}
+
+@media (max-width: 720px) {
+  body.management-open .management-computer-grid {
+    grid-template-columns: repeat(auto-fit, minmax(104px, 112px)) !important;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 410px) {
+  body.management-open .management-computer-grid { grid-template-columns: repeat(2, 104px) !important; }
+  body.management-open .mini-computer { width: 104px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.management-open .mini-screen::after,
+  body.management-open .mini-screen-hud::before,
+  body.management-open .mini-screen-hud::after,
+  body.management-open .mini-screen-mark,
+  body.management-open .mini-led,
+  body.management-open .management-modal-dialog.management-status-glow { animation: none !important; }
+}

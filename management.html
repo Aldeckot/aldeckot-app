@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALDECKOT — Gestão TI</title>
+  <script>document.documentElement.classList.add('aldeckot-module-booting');</script>
+  <link rel="stylesheet" href="management.css">
+  <link rel="stylesheet" href="management-header.css">
+  <link rel="stylesheet" href="management-computers.css">
+  <link rel="stylesheet" href="management-backup.css">
+  <link rel="stylesheet" href="scrollbars.css">
+  <link rel="stylesheet" href="motion.css">
+  <link rel="stylesheet" href="mascot.css">
+  <link rel="stylesheet" href="page-transition.css">
+</head>
+<body class="management-open" data-management-page="true">
+  <main id="managementApp" class="management-app" aria-live="polite">
+    <section class="management-loading"><i></i><p>Conectando à Gestão TI…</p></section>
+  </main>
+  <input id="managementRestoreInput" type="file" accept="application/json" hidden>
+  <div id="managementModal" class="management-modal" hidden></div>
+  <div id="managementToast" class="management-toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="runtime-config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="theme.js"></script>
+  <script src="page-transition.js"></script>
+  <script src="management.js"></script>
+</body>
+</html>

@@ -68,8 +68,9 @@ create table if not exists public.inventory_items (
   tag text not null default '',
   sector text not null default '',
   location text not null default '',
-  status text not null default 'Ativo' check (status in ('Ativo', 'Reserva', 'Manutenção', 'Troca', 'Defeito')),
+  status text not null default 'Ativo' check (status in ('Ativo', 'Reserva', 'Manutenção', 'Troca', 'Defeito', 'Atenção')),
   situation text not null default 'Normal' check (situation in ('Normal', 'Atenção', 'Substituído', 'Verificando')),
+  cleaning_type text not null default 'Não realizada' check (cleaning_type in ('Completa', 'Preventiva', 'Regular', 'Não realizada')),
   notes text not null default '',
   position integer not null default 0,
   created_at timestamptz not null default timezone('utc', now()),
@@ -211,7 +212,7 @@ create table if not exists public.sync_events (
 
 create index if not exists module_tables_owner_module_position_idx on public.module_tables (owner_id, module, position, created_at desc);
 create index if not exists inventory_items_table_position_idx on public.inventory_items (table_id, position, updated_at desc);
-create index if not exists inventory_items_owner_status_idx on public.inventory_items (owner_id, status, situation);
+create index if not exists inventory_items_owner_status_idx on public.inventory_items (owner_id, status, situation, cleaning_type);
 create index if not exists inventory_items_owner_tag_idx on public.inventory_items (owner_id, tag) where tag <> '';
 create index if not exists inventory_logs_item_created_idx on public.inventory_item_logs (inventory_item_id, created_at desc);
 create index if not exists agenda_entries_owner_due_idx on public.agenda_entries (owner_id, due_date, due_time);

@@ -1,4 +1,11 @@
 (() => {
+  const releaseHomeRender = window.AldeckotHomeStage?.hold?.('agenda');
+  let homeRenderReleased = false;
+  const completeHomeRender = () => {
+    if (homeRenderReleased) return;
+    homeRenderReleased = true;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => releaseHomeRender?.()));
+  };
   const today = new Date();
   let view = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -11,6 +18,8 @@
   const read = () => entries;
   const write = events => { entries = events; };
   const backend = () => window.AldeckotSupabase;
+  const ensureHomeBackend = () => window.AldeckotHomeStage?.ready?.()
+    || (typeof backend()?.init === 'function' ? backend().init() : Promise.resolve());
   const localeMonth = date => date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, char => char.toUpperCase());
   const priorityInfo = {
     urgent: { label: 'Urgente', icon: '🚨' },
@@ -266,21 +275,16 @@
     }).catch(error => alert(error.message || 'Não foi possível salvar o agendamento.'));
   });
 
-  new MutationObserver(() => {
-    document.querySelectorAll('.home-calendar').forEach(widget => {
-      if (!widget.dataset.agendaReady) renderWidget(widget);
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true });
-
   async function bootstrapAgenda() {
     try {
       if (!backend()) throw new Error('Cliente Supabase não foi carregado.');
-      await backend().init();
+      await ensureHomeBackend();
       entries = await backend().agenda.load();
     } catch (error) {
       console.warn('Agenda indisponível:', error.message || error);
     }
     renderAll();
+    completeHomeRender();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrapAgenda);

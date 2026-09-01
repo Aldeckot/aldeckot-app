@@ -1,0 +1,96 @@
+/* Mascote ALDECKOT: presente em cada módulo sem disputar espaço com os controles. */
+@keyframes aldeckot-mascot-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
+}
+
+/* Inventário, Controle TI e Flux: espaço reservado ao lado da identificação. */
+body.inventory-open .inventory-header { position: relative; overflow: visible; }
+
+body.inventory-open .inventory-header::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  bottom: -2px;
+  left: clamp(255px, 20.4vw, 291px);
+  width: clamp(70px, 6.1vw, 85px);
+  height: clamp(79px, 6.9vw, 96px);
+  background: url('assets/mascot-dark.png') center bottom / contain no-repeat;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 12px #0000002e);
+  animation: aldeckot-mascot-float 4.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+body.theme-light.inventory-open .inventory-header::after { background-image: url('assets/mascot-light-clean.png'); }
+
+/* Gestão TI: o mascote ocupa a área livre entre o cabeçalho e a barra de filtros. */
+body.management-open .management-app { position: relative; }
+body.management-open .management-header,
+body.management-open .management-toolbar,
+body.management-open .management-layout { position: relative; z-index: 2; }
+
+body.management-open .management-app::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 88px;
+  left: clamp(164px, 12.9vw, 189px);
+  width: clamp(69px, 5.9vw, 81px);
+  height: clamp(74px, 6.4vw, 88px);
+  background: url('assets/mascot-dark.png') center bottom / contain no-repeat;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 12px #0000002e);
+  animation: aldeckot-mascot-float 4.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+body.theme-light.management-open .management-app::before { background-image: url('assets/mascot-light-clean.png'); }
+
+/* Home: fica próximo à marca, no espaço livre acima da navegação. */
+body.home-page .side {
+  z-index: 3;
+  overflow: visible;
+}
+
+body.home-page .side::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  left: 159px;
+  width: 92px;
+  height: 113px;
+  background: url('assets/mascot-dark.png') center bottom / contain no-repeat;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 12px #0000002e);
+  animation: aldeckot-mascot-float 4.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+body.home-page.theme-light .side::after {
+  background-image: url('assets/mascot-light-clean.png');
+  filter: drop-shadow(0 8px 14px #93682424);
+}
+
+@media (max-width: 900px) {
+  body.inventory-open .inventory-header::after { left: 240px; width: 61px; height: 74px; }
+  body.management-open .management-app::before { left: 150px; width: 60px; height: 68px; }
+}
+
+/* A barra lateral da Home se recolhe nesta largura e deixa de ter área segura. */
+@media (max-width: 980px) {
+  body.home-page .side::after { display: none; }
+}
+
+@media (max-width: 740px) {
+  body.inventory-open .inventory-header::after,
+  body.management-open .management-app::before,
+  body.home-page .side::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.inventory-open .inventory-header::after,
+  body.management-open .management-app::before,
+  body.home-page .side::after { animation: none; }
+}

@@ -1,0 +1,164 @@
+/* Transição entre os módulos e a Home. O wallpaper mantém sua própria animação. */
+.aldeckot-route-curtain {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, #02091400, #04122614 45%, #02091400);
+  animation: aldeckot-route-curtain .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  will-change: opacity;
+}
+
+.aldeckot-route-curtain::before,
+.aldeckot-route-curtain::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  content: '';
+  transform: translateX(-125%);
+}
+
+.aldeckot-route-curtain::before {
+  width: 30vw;
+  min-width: 260px;
+  background: linear-gradient(90deg, transparent, #67ebff0d 30%, #76f1ff56 50%, #67ebff0d 70%, transparent);
+  filter: blur(1px);
+  animation: aldeckot-route-sweep .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  will-change: transform;
+}
+
+.aldeckot-route-curtain::after {
+  width: 2px;
+  background: linear-gradient(180deg, transparent 3%, #9bf7ff 24%, #2acdef 50%, #9bf7ff 76%, transparent 97%);
+  box-shadow: 0 0 12px #5eeaff, 0 0 28px #23c8ed85;
+  animation: aldeckot-route-line .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  will-change: transform;
+}
+
+body.aldeckot-page-leaving { overflow: hidden; }
+
+body.aldeckot-page-leaving .app,
+body.aldeckot-page-leaving .management-app {
+  pointer-events: none;
+  animation: aldeckot-module-leave .46s cubic-bezier(.22, 1, .36, 1) forwards !important;
+}
+
+body.aldeckot-page-leaving .management-modal,
+body.aldeckot-page-leaving .inv-modal {
+  animation: aldeckot-overlay-leave .24s ease forwards !important;
+}
+
+/* O primeiro conteúdo do módulo é preparado fora da vista e apresentado de uma vez. */
+html.aldeckot-module-booting body[data-inventory-page] #app,
+html.aldeckot-module-booting body[data-management-page] #managementApp,
+html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
+html.aldeckot-module-booting body[data-management-page] .management-modal {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 12px, 0) scale(.994);
+}
+
+html.aldeckot-module-revealing body[data-inventory-page] #app,
+html.aldeckot-module-revealing body[data-management-page] #managementApp {
+  animation: aldeckot-module-arrive .48s cubic-bezier(.22, 1, .36, 1) both !important;
+  will-change: opacity, transform;
+}
+
+/* As entradas estruturais antigas não podem recomeçar em filtros, menus ou sincronizações. */
+body.inventory-open .inventory-shell,
+body.inventory-open .inventory-layout > * {
+  animation: none !important;
+}
+
+/* O atributo hidden é usado pelos filtros para preservar os nós já renderizados. */
+body.inventory-open .inventory-data tr[hidden],
+body.management-open .mini-computer[hidden],
+body.management-open .management-clear[hidden] {
+  display: none !important;
+}
+
+/* Remove as entradas individuais antigas: a Home passa a usar uma única entrada coordenada. */
+body.home-page .side,
+body.home-page .home-reference,
+body.home-page .home-intro,
+body.home-page .home-side {
+  animation: none !important;
+}
+
+/* A Home só fica visível após agenda e dados recentes concluírem a primeira renderização. */
+html.aldeckot-home-booting body.home-page .side,
+html.aldeckot-home-booting body.home-page main {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0) scale(.992);
+  pointer-events: none;
+}
+
+html.aldeckot-home-booting body.home-page .side,
+html.aldeckot-home-booting body.home-page .home-reference,
+html.aldeckot-home-booting body.home-page .home-intro,
+html.aldeckot-home-booting body.home-page .home-side {
+  animation: none !important;
+}
+
+html.aldeckot-home-revealing body.home-page .side,
+html.aldeckot-home-revealing body.home-page main {
+  animation: aldeckot-home-arrive .58s cubic-bezier(.22, 1, .36, 1) both !important;
+  will-change: opacity, transform;
+}
+
+@keyframes aldeckot-module-leave {
+  0% { opacity: 1; }
+  100% { opacity: .88; }
+}
+
+@keyframes aldeckot-module-arrive {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.994); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes aldeckot-overlay-leave { to { opacity: 0; } }
+
+@keyframes aldeckot-route-curtain {
+  0% { opacity: 0; }
+  35% { opacity: .78; }
+  100% { opacity: .32; }
+}
+
+@keyframes aldeckot-route-sweep { to { transform: translateX(360vw); } }
+
+@keyframes aldeckot-route-line { to { transform: translateX(150vw); } }
+
+@keyframes aldeckot-home-arrive {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(.992); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aldeckot-route-curtain,
+  .aldeckot-route-curtain::before,
+  .aldeckot-route-curtain::after,
+  body.aldeckot-page-leaving .app,
+  body.aldeckot-page-leaving .management-app,
+  html.aldeckot-module-revealing body[data-inventory-page] #app,
+  html.aldeckot-module-revealing body[data-management-page] #managementApp,
+  html.aldeckot-home-revealing body.home-page .side,
+  html.aldeckot-home-revealing body.home-page main { animation: none !important; }
+
+  html.aldeckot-home-booting body.home-page .side,
+  html.aldeckot-home-booting body.home-page main {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  html.aldeckot-module-booting body[data-inventory-page] #app,
+  html.aldeckot-module-booting body[data-management-page] #managementApp,
+  html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
+  html.aldeckot-module-booting body[data-management-page] .management-modal {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}

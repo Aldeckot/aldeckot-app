@@ -1,0 +1,122 @@
+/* Gráficos compactos compartilhados: Inventário, Controle TI e Flux. */
+body.inventory-open .inventory-charts {
+  display: grid !important;
+  gap: 10px !important;
+  align-content: start !important;
+}
+
+body.inventory-open .inventory-chart {
+  min-height: 0 !important;
+  padding: 12px !important;
+  overflow: hidden;
+  border: 1px solid #617a9a67 !important;
+  border-radius: 12px !important;
+  background: linear-gradient(145deg, #1622387c, #0c142769) !important;
+  box-shadow: 0 14px 34px #0005 !important;
+  backdrop-filter: blur(12px) saturate(118%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(118%) !important;
+}
+
+body.inventory-open .inventory-chart h3 {
+  margin: 0 !important;
+  color: #eaf8ff !important;
+  font-size: 10px !important;
+  letter-spacing: .04em;
+}
+
+body.inventory-open .inventory-chart-stage {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-around !important;
+  gap: 8px !important;
+  height: 126px !important;
+  margin: 8px 0 10px !important;
+  padding: 0 5px !important;
+  border-bottom: 1px solid #6b7c9c5c !important;
+  background: repeating-linear-gradient(180deg, transparent 0 30px, #60809b12 30px 31px) !important;
+}
+
+body.inventory-open .inventory-chart-bar {
+  flex: 0 0 20px !important;
+  width: 20px !important;
+  min-height: 4px !important;
+  border: 1px solid color-mix(in srgb, var(--chart-color) 80%, white 10%) !important;
+  border-radius: 6px 6px 2px 2px !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--chart-color) 88%, white 12%), color-mix(in srgb, var(--chart-color) 48%, #06111e)) !important;
+  box-shadow: 0 0 13px color-mix(in srgb, var(--chart-color) 42%, transparent) !important;
+  transition: height .35s ease, filter .2s ease !important;
+}
+
+body.inventory-open .inventory-chart-bar:hover { filter: brightness(1.16); }
+
+body.inventory-open .inventory-legend {
+  display: grid !important;
+  gap: 5px !important;
+  margin: 0 !important;
+}
+
+body.inventory-open .inventory-legend span {
+  display: grid !important;
+  grid-template-columns: 8px minmax(0, 1fr) auto !important;
+  gap: 6px !important;
+  align-items: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #b8d0e3 !important;
+  font-size: 9px !important;
+}
+
+body.inventory-open .inventory-legend i {
+  width: 7px !important;
+  height: 7px !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: var(--chart-color) !important;
+  box-shadow: 0 0 7px var(--chart-color);
+}
+
+body.inventory-open .inventory-legend em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.inventory-open .inventory-legend b {
+  color: #ecf8ff !important;
+  font-size: 10px !important;
+}
+
+.theme-light.inventory-open .inventory-chart {
+  border-color: #ffffffa8 !important;
+  background: linear-gradient(145deg, #fbfdff76, #e6eef964) !important;
+  box-shadow: 0 14px 30px #24344b20 !important;
+}
+
+.theme-light.inventory-open .inventory-chart h3,
+.theme-light.inventory-open .inventory-legend b { color: #1c3d60 !important; }
+
+.theme-light.inventory-open .inventory-legend span { color: #557998 !important; }
+
+.theme-light.inventory-open .inventory-chart-stage {
+  border-color: #b6d4e455 !important;
+  background: repeating-linear-gradient(180deg, transparent 0 30px, #52779510 30px 31px) !important;
+}
+
+.theme-light.inventory-open .inventory-chart-bar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--chart-color) 78%, white 22%), color-mix(in srgb, var(--chart-color) 50%, white 30%)) !important;
+}
+
+@media (max-width: 1000px) {
+  body.inventory-open .inventory-charts { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.inventory-open .inventory-chart-stage { height: 106px !important; }
+  body.inventory-open .inventory-chart-bar { flex-basis: 17px !important; width: 17px !important; }
+}
+
+@media (max-width: 700px) {
+  body.inventory-open .inventory-charts { grid-template-columns: 1fr !important; }
+  body.inventory-open .inventory-chart-stage { height: 94px !important; }
+  body.inventory-open .inventory-chart-bar { flex-basis: 25px !important; width: 25px !important; }
+}

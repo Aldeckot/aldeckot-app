@@ -1,0 +1,129 @@
+/* Movimento fluido dos controles e painéis. Não altera as animações do wallpaper. */
+@media (prefers-reduced-motion: no-preference) {
+  :root { --aldeckot-motion: cubic-bezier(.22, 1, .36, 1); }
+
+  /* Tela inicial */
+  .home-page .side,
+  .home-page .nav button,
+  .home-page .theme-toggle,
+  .home-page .sidebar-search,
+  .home-page .home-search,
+  .home-page .home-search .input,
+  .home-page .home-calendar,
+  .home-page .agenda-upcoming-panel,
+  .home-page .agenda-today-panel,
+  .home-page .agenda-task,
+  .home-page .agenda-list button,
+  .home-page .agenda-date,
+  .home-page .agenda-nav button,
+  .home-page .agenda-add,
+  .home-page .agenda-save,
+  .home-page .agenda-cancel,
+  .home-page .agenda-delete,
+  .home-page .home-recent-panel,
+  .home-page .home-recent-item,
+  .home-page .panel,
+  .home-page .device,
+  .home-page .btn,
+  .home-page .input,
+  .home-page .select,
+  .home-page .table-tab,
+  .home-page tr.data-row {
+    transition-duration: .34s, .34s, .34s, .34s, .34s, .3s, .34s !important;
+    transition-timing-function: var(--aldeckot-motion) !important;
+  }
+
+  .home-page .nav button:hover { transform: translateX(3px) !important; }
+  .home-page .theme-toggle:hover { transform: translateX(3px) scale(1.004) !important; }
+  .home-page .home-calendar:hover,
+  .home-page .agenda-upcoming-panel:hover,
+  .home-page .agenda-today-panel:hover { transform: translateY(-2px) scale(1.004) !important; }
+  .home-page .agenda-date:hover,
+  .home-page .agenda-nav button:hover,
+  .home-page .agenda-add:hover { transform: translateY(-1px) scale(1.035) !important; }
+  .home-page .agenda-task:hover,
+  .home-page .agenda-list button:hover { transform: translateX(3px) !important; }
+  .home-page .home-recent-item:hover { transform: translateY(-2px) !important; }
+  .home-page .agenda-modal { animation-duration: .28s !important; }
+  .home-page .agenda-dialog,
+  .home-page .modal.show .dialog { animation-duration: .38s !important; }
+
+  /* Inventário e Controle TI */
+  .inventory-shell { animation-duration: .56s !important; }
+  .inventory-layout > * { animation-duration: .5s !important; }
+  .inventory-layout,
+  .inventory-table-sidebar,
+  .inventory-sidebar-content,
+  .inventory-sidebar-toggle span,
+  .inventory-table-sidebar .inventory-table-add,
+  .inventory-header,
+  .inventory-panel,
+  .inventory-header-action,
+  .inventory-table-add,
+  .inventory-table-choice,
+  .inventory-table-tool,
+  .inventory-table-header-action,
+  .inventory-search,
+  .inventory-filter,
+  .inventory-add,
+  .inventory-data tbody tr,
+  .inventory-status,
+  .inventory-situation,
+  .inventory-chart,
+  .inventory-chart-bar,
+  .inv-primary,
+  .inv-ghost,
+  .inv-choice-card,
+  .backup-action-card,
+  .backup-destination-card,
+  .backup-restore-option,
+  .backup-history-restore,
+  .backup-secondary-button,
+  .backup-critical-button,
+  .backup-switch i {
+    transition-timing-function: var(--aldeckot-motion) !important;
+  }
+
+  .inventory-header-action,
+  .inventory-table-add,
+  .inventory-table-choice,
+  .inventory-table-header-action,
+  .inventory-add,
+  .inv-primary,
+  .inv-ghost,
+  .backup-action-card,
+  .backup-destination-card,
+  .backup-restore-option,
+  .backup-history-restore,
+  .backup-secondary-button,
+  .backup-critical-button {
+    transition-duration: .3s !important;
+  }
+
+  .inventory-layout { transition-duration: .42s !important; }
+  .inventory-sidebar-content { transition-duration: .42s, .3s, .38s, .36s !important; }
+  .inventory-chart-bar { transition-duration: .58s, .28s !important; }
+  .inv-modal { animation-duration: .26s !important; }
+  .inv-dialog { animation-duration: .4s !important; }
+  .inventory-table-choice:hover { transform: translateX(3px) scale(1.004) !important; }
+  .inventory-chart:hover { transform: translateY(-2px) !important; }
+  .inventory-header-action:hover,
+  .inventory-table-add:hover,
+  .inventory-add:hover,
+  .inv-primary:hover { transform: translateY(-1px) !important; }
+}
+
+/* Estado vazio: a mensagem fica mais próxima do centro visual da área de trabalho. */
+body.inventory-open .inventory-empty-content {
+  transform: translateY(clamp(-115px, -11vh, -72px));
+}
+
+/* Inventário e Controle TI mantêm a mesma escala para suas ilustrações vazias. */
+body.inventory-open .inventory-empty-illustration {
+  width: min(58vw, 260px) !important;
+}
+
+@media (max-width: 700px) {
+  body.inventory-open .inventory-empty-content { transform: translateY(-48px); }
+  body.inventory-open .inventory-empty-illustration { width: min(72vw, 245px) !important; }
+}

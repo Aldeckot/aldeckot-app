@@ -1,0 +1,332 @@
+/* Cabeçalho da Gestão TI alinhado ao padrão dos módulos operacionais. */
+body.management-open .management-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  min-height: clamp(82px, 6vw, 96px) !important;
+  padding: 12px clamp(18px, 1.5vw, 26px) !important;
+  border: 1px solid #6380a372 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(108deg, #09182de0, #0c1729be 54%, #071324d6) !important;
+  box-shadow: 0 16px 38px #0005 !important;
+  backdrop-filter: blur(15px) saturate(122%) !important;
+  -webkit-backdrop-filter: blur(15px) saturate(122%) !important;
+  flex-wrap: wrap !important;
+  container-type: inline-size;
+}
+
+body.management-open .management-heading {
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  min-width: min(100%, 170px);
+  flex: 1 1 170px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body.management-open .management-heading-icon {
+  width: clamp(28px, 2.25vw, 36px) !important;
+  height: clamp(28px, 2.25vw, 36px) !important;
+  flex: 0 0 auto;
+  border: 0 !important;
+  background: transparent !important;
+  color: #47dff5 !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 7px #32d9f066);
+}
+
+body.management-open .management-heading-icon svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+body.management-open .management-heading h1 {
+  margin: 0 !important;
+  color: #f4f8ff !important;
+  font-size: clamp(22px, 1.75vw, 28px) !important;
+  font-weight: 760;
+  letter-spacing: -.65px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+body.management-open .management-heading p {
+  margin: 3px 0 0 !important;
+  overflow: hidden;
+  color: #aabbd0 !important;
+  font-size: clamp(10px, .85vw, 13px) !important;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.management-open .management-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: clamp(7px, .65vw, 10px) !important;
+  margin-left: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-wrap: nowrap !important;
+}
+
+body.management-open .management-action.icon {
+  --management-action: #c8d8f2;
+  --management-action-border: #8da4c36c;
+  --management-action-glow: #7c9cc532;
+  flex: 0 0 clamp(42px, 3.25vw, 54px) !important;
+  width: clamp(42px, 3.25vw, 54px) !important;
+  height: clamp(42px, 3.25vw, 54px) !important;
+  min-height: 0 !important;
+  padding: 9px !important;
+  border-color: var(--management-action-border) !important;
+  border-radius: 10px !important;
+  background: linear-gradient(145deg, #11223ab8, #0a1628a8) !important;
+  color: var(--management-action) !important;
+  box-shadow: inset 0 1px #ffffff0c, 0 8px 18px #0003 !important;
+  backdrop-filter: blur(10px) saturate(118%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(118%) !important;
+}
+
+body.management-open .management-action.icon svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 25px;
+  max-height: 25px;
+  stroke-width: 1.8;
+  transition: transform .25s cubic-bezier(.2, .8, .2, 1), filter .25s ease;
+}
+
+body.management-open .management-pdf-action {
+  --management-action: #ff5b6e !important;
+  --management-action-border: #ff5b6eb0 !important;
+  --management-action-glow: #ff5b6e35 !important;
+}
+
+body.management-open .management-backup-action {
+  --management-action: #38e48d !important;
+  --management-action-border: #38e48db0 !important;
+  --management-action-glow: #38e48d35 !important;
+}
+
+body.management-open .management-sync-action {
+  --management-action: #3baeff !important;
+  --management-action-border: #3baeffb0 !important;
+  --management-action-glow: #3baeff35 !important;
+}
+
+body.management-open .management-home-action {
+  --management-action: #ffd43f !important;
+  --management-action-border: #ffd43fb0 !important;
+  --management-action-glow: #ffd43f35 !important;
+  margin-left: clamp(2px, .5vw, 10px);
+}
+
+body.management-open .management-action.icon:hover:not(:disabled) {
+  border-color: var(--management-action) !important;
+  background: #172b46d4 !important;
+  color: var(--management-action) !important;
+  box-shadow: inset 0 1px #ffffff14, 0 0 0 1px var(--management-action-glow), 0 10px 22px var(--management-action-glow) !important;
+}
+
+body.management-open .management-action.icon:hover:not(:disabled) svg {
+  transform: scale(1.14);
+}
+
+body.management-open .management-sync-action:hover:not(:disabled) svg {
+  animation: management-header-sync-hover .7s ease-in-out;
+}
+
+body.management-open .management-sync {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  color: #e0ebff !important;
+  font-size: clamp(10px, .82vw, 12px) !important;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+body.management-open .management-sync i {
+  display: inline-block;
+  width: 7px !important;
+  height: 7px !important;
+  margin-left: 5px;
+  background: #3de084 !important;
+  box-shadow: 0 0 9px #3de0848a !important;
+  animation: management-header-online-pulse 2.4s ease-in-out infinite;
+}
+
+body.management-open .management-sync-action.is-syncing {
+  cursor: wait;
+  pointer-events: none;
+  animation: management-header-sync-rotate .7s linear infinite;
+}
+
+body.management-open .management-sync-action.is-syncing svg {
+  animation: none;
+}
+
+@keyframes management-header-sync-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes management-header-sync-hover {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes management-header-online-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+.theme-light.management-open .management-header {
+  border-color: #7192b58a !important;
+  background: linear-gradient(108deg, #f9fcffd4, #e7f0f8b7 54%, #f3f8fcce) !important;
+  box-shadow: 0 14px 30px #35506b20 !important;
+}
+
+.theme-light.management-open .management-heading h1 { color: #1d3956 !important; }
+.theme-light.management-open .management-heading p,
+.theme-light.management-open .management-sync { color: #365a7b !important; }
+
+.theme-light.management-open .management-action.icon {
+  background: linear-gradient(145deg, #fbfdffd0, #e5eef7ae) !important;
+  box-shadow: inset 0 1px #fff, 0 8px 18px #45617b18 !important;
+}
+
+@media (max-width: 700px) {
+  body.management-open .management-header {
+    align-items: center !important;
+    flex-direction: row !important;
+    padding: 12px !important;
+  }
+
+  body.management-open .management-heading p { display: none; }
+  body.management-open .management-heading h1 { font-size: 20px !important; }
+  body.management-open .management-header-actions { gap: 6px !important; }
+  body.management-open .management-action.icon { flex-basis: 40px !important; width: 40px !important; height: 40px !important; padding: 8px !important; }
+  body.management-open .management-home-action { margin-left: 0; }
+}
+
+@media (max-width: 580px) {
+  body.management-open .management-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 0 !important;
+  }
+
+  body.management-open .management-heading {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  body.management-open .management-header-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    justify-content: center !important;
+  }
+
+  body.management-open .management-sync { margin-left: 2px !important; }
+}
+
+@container (max-width: 620px) {
+  body.management-open .management-heading {
+    flex-basis: 100%;
+  }
+
+  body.management-open .management-header-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center !important;
+  }
+}
+
+/* Barra de filtros no mesmo padrão visual dos módulos operacionais. */
+body.management-open .management-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  width: min(720px, calc(100% - 32px));
+  min-height: 52px;
+  margin: 14px auto 0 !important;
+  padding: 9px 12px !important;
+  border: 1px solid #687aa264 !important;
+  border-radius: 11px !important;
+  background: #1321399c !important;
+  box-shadow: 0 15px 34px #0004 !important;
+  backdrop-filter: blur(22px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(130%) !important;
+}
+
+body.management-open .management-toolbar .management-search {
+  flex: 0 1 305px;
+  min-width: 190px;
+  max-width: 360px;
+}
+
+body.management-open .management-toolbar .management-search input,
+body.management-open .management-toolbar .management-filter {
+  height: 33px;
+  border-color: #7387ad67;
+  border-radius: 6px;
+  background: #15233ab5;
+  color: #eff5ff;
+  font-size: 11px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body.management-open .management-toolbar .management-filter-wrap::before { display: none; }
+
+body.management-open .management-toolbar .management-filter-wrap .management-filter {
+  width: 119px;
+  padding: 0 10px;
+}
+
+body.management-open .management-toolbar .management-clear {
+  height: 33px;
+  border-color: #7387ad67;
+  border-radius: 6px;
+  background: #15233ab5;
+  color: #dceaff;
+  font-size: 10px;
+}
+
+body.theme-light.management-open .management-toolbar {
+  border-color: #ffffffa8 !important;
+  background: #eef6fb8a !important;
+  box-shadow: 0 14px 30px #24344b20 !important;
+}
+
+body.theme-light.management-open .management-toolbar .management-search input,
+body.theme-light.management-open .management-toolbar .management-filter,
+body.theme-light.management-open .management-toolbar .management-clear {
+  border-color: #ffffffbd;
+  background: #fbfdff8f;
+  color: #24405f;
+}
+
+@media (max-width: 720px) {
+  body.management-open .management-toolbar {
+    width: 100%;
+    min-height: 0;
+    margin-top: 12px !important;
+  }
+
+  body.management-open .management-toolbar .management-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  body.management-open .management-toolbar .management-filter-wrap,
+  body.management-open .management-toolbar .management-filter-wrap .management-filter,
+  body.management-open .management-toolbar .management-clear { width: 100%; }
+}

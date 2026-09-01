@@ -14,4 +14,22 @@ html[data-theme="light"]::-webkit-scrollbar-thumb,body.theme-light::-webkit-scro
 html[data-theme="light"]::-webkit-scrollbar-thumb:hover,body.theme-light::-webkit-scrollbar-thumb:hover,html[data-theme="light"] *::-webkit-scrollbar-thumb:hover,body.theme-light *::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#b9cbe2,#879fc1)}
 html[data-theme="light"]::-webkit-scrollbar-corner,body.theme-light::-webkit-scrollbar-corner,html[data-theme="light"] *::-webkit-scrollbar-corner,body.theme-light *::-webkit-scrollbar-corner{background:#e9f1fa}
 
+/* Nos módulos, a rolagem permanece disponível sem exibir a barra lateral. */
+body.inventory-open,
+body.inventory-open *,
+body.management-open,
+body.management-open * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body.inventory-open::-webkit-scrollbar,
+body.inventory-open *::-webkit-scrollbar,
+body.management-open::-webkit-scrollbar,
+body.management-open *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 @media(prefers-reduced-motion:reduce){html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb,*::-webkit-scrollbar-thumb{transition:none}}
