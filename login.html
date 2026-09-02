@@ -7,28 +7,37 @@
   <link rel="stylesheet" href="login.css">
 </head>
 <body class="login-page">
-  <div class="login-wallpaper" aria-hidden="true">
-    <div class="login-dashboard-preview"><i></i><i></i><i></i><i></i><i></i></div>
-  </div>
+  <div class="login-wallpaper" aria-hidden="true"><div class="login-dashboard-preview"><i></i><i></i><i></i><i></i></div></div>
   <main class="login-shell">
-    <section class="login-card" aria-live="polite">
-      <div class="login-brand"><img class="login-mascot mascot-dark" src="assets/mascot-dark.png" alt=""><img class="login-mascot mascot-light" src="assets/mascot-light-clean.png" alt=""><div><b>ALDECKOT</b><span>SISTEMA DE GESTÃO</span></div></div>
-      <div class="login-heading"><h1>ALDECKOT Sistema de Gestão</h1><p id="loginIntro">Entre com sua conta para acessar o ambiente corporativo.</p></div>
-      <p id="loginMessage" class="login-message" role="status" hidden></p>
-      <form id="signInForm" class="login-form">
+    <section id="signInModal" class="auth-modal" aria-labelledby="signInTitle">
+      <div class="auth-modal-heading"><img class="login-mascot mascot-dark" src="assets/mascot-dark.png" alt=""><img class="login-mascot mascot-light" src="assets/mascot-light-clean.png" alt=""><div><span>ALDECKOT</span><h1 id="signInTitle">Entrar na conta</h1></div></div>
+      <p id="signInMessage" class="auth-message" role="status" hidden></p>
+      <form id="signInForm" class="auth-form">
         <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="seu@email.com"></label>
         <label>Senha<input name="password" type="password" autocomplete="current-password" required placeholder="Sua senha"></label>
-        <button class="login-primary" type="submit">Entrar</button>
+        <button class="auth-primary" type="submit">Entrar</button>
       </form>
-      <form id="signUpForm" class="login-form" hidden>
+      <p class="auth-register-link">Ainda não possui acesso? <button id="openSignUp" type="button">Cadastre-se</button></p>
+    </section>
+
+    <section id="signUpModal" class="auth-modal" aria-labelledby="signUpTitle" hidden>
+      <div class="auth-modal-heading"><img class="login-mascot mascot-dark" src="assets/mascot-dark.png" alt=""><img class="login-mascot mascot-light" src="assets/mascot-light-clean.png" alt=""><div><span>ALDECKOT</span><h1 id="signUpTitle">Criar novo usuário</h1></div></div>
+      <p id="signUpMessage" class="auth-message" role="status" hidden></p>
+      <form id="signUpForm" class="auth-form">
         <label>Nome completo<input name="fullName" autocomplete="name" required minlength="3" placeholder="Como deseja ser identificado"></label>
         <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="seu@email.com"></label>
         <label>Senha<input name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="Ao menos 8 caracteres"></label>
         <label>Confirmar senha<input name="passwordConfirmation" type="password" autocomplete="new-password" required minlength="8" placeholder="Repita sua senha"></label>
-        <button class="login-primary" type="submit">Enviar solicitação</button>
+        <button class="auth-primary" type="submit">Enviar solicitação</button>
       </form>
-      <button id="loginSecondary" class="login-secondary" type="button">Criar conta</button>
-      <p class="login-note">Contas novas aguardam aprovação de um administrador.</p>
+      <p class="auth-register-link">Já possui uma conta? <button id="openSignIn" type="button">Entrar</button></p>
+    </section>
+
+    <section id="requestProcessing" class="request-processing" role="status" aria-live="polite" hidden>
+      <img class="login-mascot mascot-dark" src="assets/mascot-dark.png" alt=""><img class="login-mascot mascot-light" src="assets/mascot-light-clean.png" alt="">
+      <h1>Sua solicitação está sendo processada</h1>
+      <p>Aguarde a confirmação de um administrador para acessar o sistema.</p>
+      <button id="backToSignIn" class="auth-secondary" type="button">Voltar para entrar</button>
     </section>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
