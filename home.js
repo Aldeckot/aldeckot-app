@@ -80,6 +80,8 @@
     const panel = document.querySelector('[data-home-recent-items]');
     const api = window.AldeckotSupabase;
     try {
+      await (window.AldeckotAuthReady || Promise.resolve());
+      if (!window.AldeckotAuth?.session) return;
       if (!panel || !api) {
         renderRecentItems([]);
         return;

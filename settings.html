@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configurações — ALDECKOT</title>
+  <script>document.documentElement.classList.add('auth-pending');</script>
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="auth-ui.css">
+</head>
+<body class="settings-page">
+  <main class="settings-shell">
+    <section class="settings-card">
+      <header class="settings-header"><div><span class="settings-kicker">ALDECKOT</span><h1>Configurações</h1><p id="settingsIdentity">Carregando sua conta…</p></div><a href="index.html" class="settings-home">Home</a></header>
+      <nav class="settings-tabs" aria-label="Seções das configurações"><button data-settings-tab="general" class="active">Geral</button><button data-settings-tab="security">Segurança</button><button data-settings-tab="users" data-admin-only hidden>Usuários</button></nav>
+      <div id="settingsContent" class="settings-content" aria-live="polite"></div>
+      <footer class="settings-footer"><button id="logoutButton" class="logout-button" type="button">Sair</button></footer>
+    </section>
+  </main>
+  <div id="settingsModal" class="settings-modal" hidden></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="runtime-config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="auth-guard.js"></script>
+  <script src="theme.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

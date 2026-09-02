@@ -18,6 +18,7 @@
   const read = () => entries;
   const write = events => { entries = events; };
   const backend = () => window.AldeckotSupabase;
+  const canManageAgenda = () => Boolean(window.AldeckotAuth?.isAdmin);
   const ensureHomeBackend = () => window.AldeckotHomeStage?.ready?.()
     || (typeof backend()?.init === 'function' ? backend().init() : Promise.resolve());
   const localeMonth = date => date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, char => char.toUpperCase());
@@ -121,6 +122,7 @@
   }
 
   function openForm(date, item) {
+    if (item && !canManageAgenda()) { openDetails(item); return; }
     const existing = item || {};
     const dialog = document.createElement('div');
     dialog.className = 'agenda-modal';
@@ -161,7 +163,7 @@
     const reminderNames = { 0: 'No horário', 10: '10 min antes', 30: '30 min antes', 60: '1 hora antes', 1440: '1 dia antes' };
     const dialog = document.createElement('div');
     dialog.className = 'agenda-modal';
-    dialog.innerHTML = `<div class="agenda-dialog" role="dialog" aria-modal="true" aria-label="Detalhes do agendamento"><div class="agenda-dialog-head"><h2>${safe(item.title)}</h2><button class="agenda-close" data-agenda-close aria-label="Fechar">×</button></div><div class="agenda-details"><div><span>Tipo</span><b>${item.kind === 'task' ? 'Tarefa' : 'Evento'}</b></div><div><span>Data e hora</span><b>${date}${item.time ? ` às ${safe(item.time)}` : ''}</b></div><div><span>Alerta</span><b>${reminderNames[item.reminder] || 'No horário'}</b></div><div><span>Nível</span><b>${priorityOf(item).label}</b></div>${item.notes ? `<div class="agenda-details-full"><span>Observações</span><b>${safe(item.notes)}</b></div>` : ''}</div><div class="agenda-actions"><button class="agenda-delete" data-agenda-delete>Excluir</button><button class="agenda-cancel" data-agenda-close>Fechar</button><button class="agenda-save" data-agenda-edit-open="${item.id}">Editar</button></div></div>`;
+    dialog.innerHTML = `<div class="agenda-dialog" role="dialog" aria-modal="true" aria-label="Detalhes do agendamento"><div class="agenda-dialog-head"><h2>${safe(item.title)}</h2><button class="agenda-close" data-agenda-close aria-label="Fechar">×</button></div><div class="agenda-details"><div><span>Tipo</span><b>${item.kind === 'task' ? 'Tarefa' : 'Evento'}</b></div><div><span>Data e hora</span><b>${date}${item.time ? ` às ${safe(item.time)}` : ''}</b></div><div><span>Alerta</span><b>${reminderNames[item.reminder] || 'No horário'}</b></div><div><span>Nível</span><b>${priorityOf(item).label}</b></div>${item.notes ? `<div class="agenda-details-full"><span>Observações</span><b>${safe(item.notes)}</b></div>` : ''}</div><div class="agenda-actions">${canManageAgenda() ? `<button class="agenda-delete" data-agenda-delete>Excluir</button>` : ''}<button class="agenda-cancel" data-agenda-close>Fechar</button>${canManageAgenda() ? `<button class="agenda-save" data-agenda-edit-open="${item.id}">Editar</button>` : ''}</div></div>`;
     dialog.dataset.editId = item.id;
     document.body.appendChild(dialog);
   }
@@ -277,6 +279,8 @@
 
   async function bootstrapAgenda() {
     try {
+      await (window.AldeckotAuthReady || Promise.resolve());
+      if (!window.AldeckotAuth?.session) return;
       if (!backend()) throw new Error('Cliente Supabase não foi carregado.');
       await ensureHomeBackend();
       entries = await backend().agenda.load();

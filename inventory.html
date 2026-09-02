@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ALDECKOT — Inventário</title>
-  <script>document.documentElement.classList.add('aldeckot-module-booting');</script>
+  <script>document.documentElement.classList.add('aldeckot-module-booting', 'auth-pending');</script>
   <link rel="stylesheet" href="inventory.css">
   <link rel="stylesheet" href="module-charts.css">
   <link rel="stylesheet" href="scrollbars.css">
   <link rel="stylesheet" href="motion.css">
   <link rel="stylesheet" href="realtime-sync.css">
+  <link rel="stylesheet" href="auth-ui.css">
   <link rel="stylesheet" href="mascot.css">
   <link rel="stylesheet" href="page-transition.css">
 </head>
@@ -21,6 +22,8 @@
   <script src="supabase-config.js"></script>
   <script src="runtime-config.js"></script>
   <script src="supabase-client.js"></script>
+  <script src="auth-guard.js"></script>
+  <script src="access-control.js"></script>
   <script src="realtime-sync.js"></script>
   <script src="theme.js"></script>
   <script src="page-transition.js"></script>

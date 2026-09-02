@@ -23,6 +23,8 @@
   }
 
   async function connect() {
+    await (window.AldeckotAuthReady || Promise.resolve());
+    if (!window.AldeckotAuth?.session) return;
     const realtime = window.AldeckotSupabase?.realtime;
     if (!realtime?.subscribe) return;
     try {

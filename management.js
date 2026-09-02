@@ -608,10 +608,12 @@
 
   async function load() {
     try {
+      await (window.AldeckotAuthReady || Promise.resolve());
+      if (!window.AldeckotAuth?.session) return;
       await window.AldeckotSupabase.init();
       payload = await window.AldeckotSupabase.management.load();
       state.syncAt = new Date().toISOString();
-      try { await refreshBackupState(true); }
+      try { await refreshBackupState(Boolean(window.AldeckotAuth?.isAdmin)); }
       catch (backupError) { console.warn('Backup automático da Gestão TI indisponível:', backupError); }
       render();
       window.AldeckotModuleStage?.reveal?.();
@@ -639,7 +641,7 @@
       ]);
       payload = nextPayload;
       state.syncAt = new Date().toISOString();
-      try { await refreshBackupState(true); }
+      try { await refreshBackupState(Boolean(window.AldeckotAuth?.isAdmin)); }
       catch (backupError) { console.warn('Backup automático da Gestão TI indisponível:', backupError); }
       if (!document.body.contains(label)) return;
       label.dataset.syncing = 'false';

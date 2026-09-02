@@ -228,6 +228,8 @@
   }
 
   async function reloadInventory() {
+    await (window.AldeckotAuthReady || Promise.resolve());
+    if (!window.AldeckotAuth?.session) return;
     const api = backend();
     if (!api) throw new Error('Cliente Supabase não foi carregado.');
     await api.init();
@@ -235,7 +237,7 @@
     const [setting, initialHistory] = await Promise.all([backupApi().settings(), backupApi().list()]);
     let history = initialHistory;
     let latest = history[0] || null;
-    if (setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= 7 * 24 * 60 * 60 * 1000)) {
+    if (window.AldeckotAuth?.isAdmin && setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= 7 * 24 * 60 * 60 * 1000)) {
       latest = await backupApi().create(clone(data), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
       history = [latest, ...history.filter(backup => backup.id !== latest.id)].slice(0, 3);
     }

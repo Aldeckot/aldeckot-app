@@ -89,7 +89,7 @@
       if (!window.supabase?.createClient) fail('Não foi possível carregar a biblioteca do Supabase. Verifique sua conexão com a internet.');
 
       client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
       });
       return { client };
     })();
@@ -943,11 +943,87 @@
     }
   };
 
+  const auth = {
+    async session() {
+      await init();
+      const { data, error } = await client.auth.getSession();
+      if (error) fail(error.message);
+      return data.session || null;
+    },
+
+    async state() {
+      const session = await this.session();
+      if (!session?.user) return { session: null, user: null, profile: null, isAdmin: false };
+      const profile = check(await client.from('profiles')
+        .select('id, full_name, email, role, status, created_at, updated_at, last_sign_in_at')
+        .eq('id', session.user.id).maybeSingle());
+      return { session, user: session.user, profile, isAdmin: profile?.role === 'admin' && profile?.status === 'active' };
+    },
+
+    async signIn(email, password) {
+      await init();
+      const { data, error } = await client.auth.signInWithPassword({ email: String(email || '').trim(), password: String(password || '') });
+      if (error) fail(error.message);
+      return data;
+    },
+
+    async signOut() {
+      await init();
+      const { error } = await client.auth.signOut({ scope: 'local' });
+      if (error) fail(error.message);
+    },
+
+    async api(path, options = {}) {
+      const session = await this.session();
+      if (!session?.access_token) fail('Sua sessão expirou. Entre novamente.');
+      const response = await fetch(path, {
+        method: options.method || 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
+        },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) fail(payload.error || 'Não foi possível concluir esta operação.');
+      return payload;
+    },
+
+    async register(values) {
+      const response = await fetch('/api/auth-register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) fail(payload.error || 'Não foi possível enviar a solicitação.');
+      return payload;
+    },
+
+    async bootstrapAdministrator() {
+      const response = await fetch('/api/auth-bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) fail(payload.error || 'Administrador inicial não configurado.');
+      return payload;
+    },
+
+    async updateOwnAccount(values) {
+      return this.api('/api/account', { method: 'PATCH', body: values });
+    },
+
+    async listUsers() {
+      return this.api('/api/admin-users');
+    },
+
+    async manageUser(values) {
+      return this.api('/api/admin-users', { method: values.action === 'delete' ? 'DELETE' : 'PATCH', body: values });
+    }
+  };
+
   const realtime = {
     async subscribe(onChange) {
       await init();
       let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      ['module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
+      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
         channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
           try { onChange?.(payload); }
           catch (error) { console.warn('Falha ao processar uma atualização em tempo real.', error); }
@@ -1022,5 +1098,5 @@
     }
   };
 
-  window.AldeckotSupabase = { configured, init, realtime, inventory, management, control, flux, agenda, backups, managementBackups, controlBackups, fluxBackups, events, central };
+  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, agenda, backups, managementBackups, controlBackups, fluxBackups, events, central };
 })();
