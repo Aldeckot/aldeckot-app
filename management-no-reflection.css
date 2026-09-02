@@ -1,0 +1,2 @@
+/* Mantém brilho de status e LEDs; remove somente o reflexo que atravessava a tela. */
+.management-open .mini-screen:after{display:none!important}
