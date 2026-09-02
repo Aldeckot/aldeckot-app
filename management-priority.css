@@ -1,0 +1,4 @@
+/* Prioridade é mostrada e definida exclusivamente nos modais de equipamento. */
+.management-priority-field{--priority-color:#3de5d3}
+.management-priority-field[data-tone="red"]{--priority-color:#ff6674}.management-priority-field[data-tone="yellow"]{--priority-color:#ffce59}.management-priority-field[data-tone="turquoise"]{--priority-color:#3de5d3}
+.management-priority-select{position:relative}.management-priority-select i{position:absolute;z-index:1;top:50%;left:10px;width:7px;height:7px;border-radius:999px;background:var(--priority-color);box-shadow:0 0 8px var(--priority-color);transform:translateY(-50%)}.management-priority-select select{border-color:color-mix(in srgb,var(--priority-color) 58%,#55789769)!important;padding-left:25px!important}.management-priority-select select:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--priority-color) 20%,transparent)!important}

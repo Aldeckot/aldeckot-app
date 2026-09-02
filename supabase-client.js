@@ -21,6 +21,15 @@
     return { priority: match?.[1] || null, notes: String(notes || '').replace(priorityMarker, '') };
   };
   const storeLegacyPriority = (notes, priority) => `[[aldeckot:priority:${priority}]]\n${notes || ''}`;
+  const itemPriorityMarker = /^\[\[aldeckot:item-priority:(alta|media|estavel)\]\]\r?\n?/i;
+  const itemPriorityKey = value => ({ Alta: 'alta', 'Média': 'media', 'Estável': 'estavel' })[value] || 'estavel';
+  const itemPriorityValue = value => ({ alta: 'Alta', media: 'Média', estavel: 'Estável' })[String(value || '').toLowerCase()] || 'Estável';
+  const splitItemPriority = notes => {
+    const text = String(notes || '');
+    const match = text.match(itemPriorityMarker);
+    return { priority: itemPriorityValue(match?.[1]), notes: text.replace(itemPriorityMarker, '') };
+  };
+  const storeItemPriority = (notes, priority) => `[[aldeckot:item-priority:${itemPriorityKey(priority)}]]\n${splitItemPriority(notes).notes}`;
   const dateLabel = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html' })[module] || '';
   const activityTarget = (module, tableId, itemId, operation) => {
@@ -69,7 +78,8 @@
     status: row.status,
     situation: row.situation,
     cleaning: row.cleaning_type || 'Não realizada',
-    notes: row.notes,
+    priority: splitItemPriority(row.notes).priority,
+    notes: splitItemPriority(row.notes).notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.inventory_item_logs || [])
@@ -168,7 +178,7 @@
         status: values.status,
         situation: values.situation,
         cleaning_type: values.cleaning || 'Não realizada',
-        notes: values.notes || '',
+        notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
       const result = existingId
@@ -245,7 +255,7 @@
             status: sourceItem.status || 'Ativo',
             situation: sourceItem.situation || 'Normal',
             cleaning_type: sourceItem.cleaning || 'Não realizada',
-            notes: sourceItem.notes || '',
+            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
             position: 0
           }).select().single());
           const logs = sourceItem.logs?.length ? sourceItem.logs : [{ text: 'Equipamento restaurado a partir de backup.' }];
@@ -278,7 +288,8 @@
     exitDate: row.exit_date || '',
     status: row.status,
     situation: row.cleaning_type,
-    notes: row.notes,
+    priority: splitItemPriority(row.notes).priority,
+    notes: splitItemPriority(row.notes).notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.control_item_logs || [])
@@ -351,7 +362,7 @@
         exit_date: values.exitDate || null,
         status: values.status,
         cleaning_type: values.situation,
-        notes: values.notes || '',
+        notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
       const result = existingId
@@ -434,7 +445,7 @@
             exit_date: sourceItem.exitDate || null,
             status: sourceItem.status || 'Em manutenção',
             cleaning_type: sourceItem.situation || 'Não realizada',
-            notes: sourceItem.notes || '',
+            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
             position: 0
           }).select().single());
           restoredItems.push(restored.id);
@@ -475,7 +486,8 @@
     shippingType: row.shipping_type,
     situation: row.reason,
     status: row.status,
-    notes: row.notes,
+    priority: splitItemPriority(row.notes).priority,
+    notes: splitItemPriority(row.notes).notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.flux_item_logs || [])
@@ -496,7 +508,7 @@
       ip: payload.ip || '', gateway: payload.gateway || payload.gatway || '', subnetMask: payload.subnetMask || payload.mask || payload.mascara || '', hostname: payload.hostname || '', operatingSystem: payload.operatingSystem || '', osVersion: payload.osVersion || '',
       processor: payload.processor || '', memory: payload.memory || '', storage: payload.storage || '',
       type: payload.type || 'Escritório', company: payload.company || '', sector: payload.sector || '', location: payload.location || '',
-      responsible: payload.responsible || '', user: payload.user || '', notes: payload.notes || '', status: payload.status || 'Ativo',
+      responsible: payload.responsible || '', user: payload.user || '', notes: payload.notes || '', status: payload.status || 'Ativo', priority: payload.priority || 'Estável',
       situation: payload.situation || 'Em Uso', cleaning: payload.cleaning || 'Preventiva', area: payload.area || 'Escritório',
       isFixed: Boolean(payload.isFixed), peripherals, monitoring: {
         cpu: Number(metrics.cpu) || 0, ram: Number(metrics.ram) || 0, disk: Number(metrics.disk) || 0,
@@ -516,7 +528,7 @@
     ip: String(item.ip || '').trim(), gateway: String(item.gateway || '').trim(), subnetMask: String(item.subnetMask || '').trim(), hostname: String(item.hostname || '').trim(), operatingSystem: String(item.operatingSystem || '').trim(), osVersion: String(item.osVersion || '').trim(),
     processor: String(item.processor || '').trim(), memory: String(item.memory || '').trim(), storage: String(item.storage || '').trim(),
     type: item.type || 'Escritório', company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
-    responsible: String(item.responsible || '').trim(), user: String(item.user || '').trim(), notes: String(item.notes || '').trim(), status: item.status || 'Ativo',
+    responsible: String(item.responsible || '').trim(), user: String(item.user || '').trim(), notes: String(item.notes || '').trim(), status: item.status || 'Ativo', priority: item.priority || 'Estável',
     situation: item.situation || 'Em Uso', cleaning: item.cleaning || 'Preventiva', area: item.area || 'Escritório', isFixed: Boolean(item.isFixed),
     peripherals: Array.isArray(item.peripherals) ? item.peripherals : [], monitoring: item.monitoring || {}, registeredAt: item.registeredAt || new Date().toISOString().slice(0, 10),
     logs: Array.isArray(item.logs) ? item.logs : [], lastActivity: String(activityDescription || '').trim()
@@ -671,7 +683,7 @@
         shipping_type: values.shippingType,
         reason: values.situation,
         status: values.status,
-        notes: values.notes || '',
+        notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
       const result = existingId
@@ -759,7 +771,7 @@
             shipping_type: sourceItem.shippingType || 'Motoboy',
             reason: sourceItem.situation || 'Manutenção',
             status: sourceItem.status || 'Pendente',
-            notes: sourceItem.notes || '',
+            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
             position: 0
           }).select().single());
           restoredItems.push(restored.id);

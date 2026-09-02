@@ -15,6 +15,7 @@
   const first = values => values.find(value => String(value || '').trim()) || '';
   const recentDate = values => values.filter(Boolean).sort((a, b) => String(b).localeCompare(String(a)))[0] || '';
   const meta = item => item && typeof item.metadata === 'object' && item.metadata ? item.metadata : {};
+  const visibleNotes = value => String(value || '').replace(/^\[\[aldeckot:item-priority:(alta|media|estavel)\]\]\r?\n?/i, '');
   const service = () => window.AldeckotSupabase?.central;
   let searchTimer;
   let searchVersion = 0;
@@ -193,11 +194,11 @@
     return matches.filter(row => ['inventory', 'management', 'control', 'flux'].includes(row.module)).map(row => {
       const data = meta(row);
       if (row.module === 'inventory') {
-        const values = [row.model && 'Modelo ' + row.model, row.brand && 'Marca ' + row.brand, data.sector && 'Setor ' + data.sector, row.notes && 'Observações: ' + row.notes].filter(Boolean);
+        const values = [row.model && 'Modelo ' + row.model, row.brand && 'Marca ' + row.brand, data.sector && 'Setor ' + data.sector, visibleNotes(row.notes) && 'Observações: ' + visibleNotes(row.notes)].filter(Boolean);
         return { module: row.module, icon: '▣', title: 'Dados cadastrais do Inventário', text: values.join(' · ') || 'Sem informações adicionais cadastradas.' };
       }
       if (row.module === 'control') {
-        const values = [row.status && 'Status: ' + row.status, row.cleaning && 'Limpeza: ' + row.cleaning, data.entryDate && 'Entrada: ' + dateOnly(data.entryDate), data.exitDate && 'Saída: ' + dateOnly(data.exitDate), row.notes && 'Observações: ' + row.notes].filter(Boolean);
+        const values = [row.status && 'Status: ' + row.status, row.cleaning && 'Limpeza: ' + row.cleaning, data.entryDate && 'Entrada: ' + dateOnly(data.entryDate), data.exitDate && 'Saída: ' + dateOnly(data.exitDate), visibleNotes(row.notes) && 'Observações: ' + visibleNotes(row.notes)].filter(Boolean);
         return { module: row.module, icon: '⚙', title: 'Manutenção e limpeza', text: values.join(' · ') || 'Sem informações técnicas adicionais cadastradas.' };
       }
       if (row.module === 'management') {
@@ -251,7 +252,7 @@
     const flux = source.find(row => row.module === 'flux');
     const tables = [...new Set(source.map(row => row.table_name).filter(Boolean))];
     const sourceModules = [...new Set(source.map(row => row.module))];
-    const notes = first(source.map(row => row.notes));
+    const notes = first(source.map(row => visibleNotes(row.notes)));
     const links = [current.company, values(['pdv', 'pdvName', 'pdvNome', 'pointOfSale', 'pontoDeVenda']) && 'PDV ' + values(['pdv', 'pdvName', 'pdvNome', 'pointOfSale', 'pontoDeVenda'])].filter(Boolean);
     const dates = [
       control && getMeta(control, ['entryDate']) && 'Entrada: ' + dateOnly(getMeta(control, ['entryDate'])),

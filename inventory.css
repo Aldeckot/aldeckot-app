@@ -166,3 +166,7 @@ body.inventory-open .inv-dialog.inv-status-glow {
 @media (prefers-reduced-motion: reduce) {
   body.inventory-open .inv-dialog.inv-status-glow { animation: none !important; }
 }
+
+/* Prioridade aparece apenas no modal do item, com a cor correspondente. */
+.inv-priority-detail{border-color:var(--priority-color)!important;background:color-mix(in srgb,var(--priority-color) 15%,transparent)!important}.inv-priority-detail b{color:var(--priority-color)!important}.inv-priority-detail.priority-red{--priority-color:#ff6674}.inv-priority-detail.priority-yellow{--priority-color:#ffce59}.inv-priority-detail.priority-turquoise{--priority-color:#3de5d3}
+.inv-choice-field[data-kind="priority"][data-tone="red"] select{border-color:#ff6674a6}.inv-choice-field[data-kind="priority"][data-tone="yellow"] select{border-color:#ffce59a6}.inv-choice-field[data-kind="priority"][data-tone="turquoise"] select{border-color:#3de5d3a6}
