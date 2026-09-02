@@ -8,7 +8,7 @@
   function renderHomeIdentity(profile) {
     if (!document.body.classList.contains('home-page') || document.querySelector('[data-auth-home-identity]')) return;
     const main = document.querySelector('.home-reference');
-    const side = document.querySelector('.home-page .side');
+    const onlineStatus = document.querySelector('.home-page .online');
     if (main) {
       const identity = document.createElement('span');
       identity.className = 'auth-home-identity';
@@ -17,7 +17,7 @@
       identity.setAttribute('aria-label', 'Usuário conectado');
       main.append(identity);
     }
-    if (side) {
+    if (onlineStatus) {
       const button = document.createElement('button');
       button.className = 'auth-home-config';
       button.type = 'button';
@@ -25,7 +25,7 @@
       button.title = 'Abrir Configurações';
       button.setAttribute('aria-label', 'Abrir Configurações');
       button.addEventListener('click', () => { window.location.href = 'settings.html'; });
-      side.append(button);
+      onlineStatus.append(button);
     }
   }
 
