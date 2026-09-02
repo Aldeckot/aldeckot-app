@@ -3,20 +3,67 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Configurações — ALDECKOT</title>
+  <meta name="theme-color" content="#07111e">
+  <title>Configurações do Sistema — ALDECKOT</title>
   <script>document.documentElement.classList.add('auth-pending');</script>
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="settings-overrides.css">
   <link rel="stylesheet" href="auth-ui.css">
 </head>
 <body class="settings-page">
-  <main class="settings-shell">
-    <section class="settings-card">
-      <header class="settings-header"><div><span class="settings-kicker">ALDECKOT</span><h1>Configurações</h1><p id="settingsIdentity">Carregando sua conta…</p></div><a href="index.html" class="settings-home">Home</a></header>
-      <nav class="settings-tabs" aria-label="Seções das configurações"><button data-settings-tab="general" class="active">Geral</button><button data-settings-tab="security">Segurança</button><button data-settings-tab="users" data-admin-only hidden>Usuários</button></nav>
+  <main class="settings-workspace">
+    <aside class="settings-sidebar" aria-label="Navegação das configurações">
+      <a class="settings-brand" href="index.html" aria-label="Voltar para a Home do ALDECKOT">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span><b>ALDECKOT</b><small>Sistema de Gestão</small></span>
+      </a>
+
+      <nav class="settings-navigation" aria-label="Seções das configurações">
+        <p class="nav-caption">Administração</p>
+        <button class="settings-nav-item active" data-settings-tab="general" type="button"><span class="nav-symbol">☷</span>Geral</button>
+        <button class="settings-nav-item" data-settings-tab="users" data-admin-only hidden type="button"><span class="nav-symbol">♧</span>Usuários e Permissões</button>
+        <button class="settings-nav-item" data-settings-tab="security" type="button"><span class="nav-symbol">♢</span>Segurança</button>
+        <button class="settings-nav-item" data-settings-tab="appearance" type="button"><span class="nav-symbol">◉</span>Aparência</button>
+        <button class="settings-nav-item" data-settings-tab="integrations" type="button"><span class="nav-symbol">⌘</span>Integrações</button>
+        <button class="settings-nav-item" data-settings-tab="notifications" type="button"><span class="nav-symbol">♧</span>Notificações</button>
+        <button class="settings-nav-item" data-settings-tab="backup" type="button"><span class="nav-symbol">↥</span>Backup</button>
+        <button class="settings-nav-item" data-settings-tab="audit" type="button"><span class="nav-symbol">▤</span>Auditoria</button>
+      </nav>
+
+      <div class="settings-sidebar-bottom">
+        <div class="secure-note"><span class="secure-note-icon">✦</span><div><b>Ambiente seguro</b><span>Dados protegidos por conta.</span></div></div>
+        <a class="sidebar-home" href="index.html"><span>⌂</span>Voltar à Home</a>
+        <button id="logoutButton" class="sidebar-logout" type="button"><span>⇥</span>Sair da conta</button>
+      </div>
+    </aside>
+
+    <section class="settings-main">
+      <header class="settings-topbar">
+        <div class="settings-title-block">
+          <span class="title-icon" aria-hidden="true">⚙</span>
+          <div><h1>Configurações do Sistema</h1><p>Central de Administração e Segurança</p></div>
+        </div>
+        <div class="settings-topbar-actions">
+          <label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Buscar configurações…" autocomplete="off"></label>
+          <span class="online-indicator"><i></i>Sistema online</span>
+          <div class="admin-avatar" id="settingsAvatar" title="Conta conectada">AD</div>
+          <button id="restoreSettingsButton" class="top-action secondary" type="button">Restaurar</button>
+          <button id="saveSettingsButton" class="top-action primary" type="button">Salvar</button>
+        </div>
+      </header>
+
+      <section class="settings-overview" aria-label="Resumo do sistema">
+        <article class="overview-card online"><span class="overview-icon">⌁</span><div><small>Sistema</small><strong>Online</strong><p>Serviços operando normalmente</p></div><i class="card-pulse" aria-hidden="true"></i></article>
+        <article class="overview-card database"><span class="overview-icon">▣</span><div><small>Banco de dados</small><strong>Conectado</strong><p>Supabase PostgreSQL</p></div></article>
+        <article class="overview-card users"><span class="overview-icon">♧</span><div><small>Usuários ativos</small><strong id="activeUsersMetric">—</strong><p id="activeUsersHint">Verificando acessos</p></div></article>
+        <article class="overview-card backup"><span class="overview-icon">↥</span><div><small>Último backup</small><strong>Monitorado</strong><p>Consulte os módulos para detalhes</p></div></article>
+      </section>
+
       <div id="settingsContent" class="settings-content" aria-live="polite"></div>
-      <footer class="settings-footer"><button id="logoutButton" class="logout-button" type="button">Sair</button></footer>
+      <footer class="settings-footer">© 2026 ALDECKOT Sistema de Gestão <span>Central administrativa</span></footer>
     </section>
   </main>
+  <input id="themeSwitch" class="theme-switch-native" type="checkbox" aria-label="Ativar tema claro">
   <div id="settingsModal" class="settings-modal" hidden></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
