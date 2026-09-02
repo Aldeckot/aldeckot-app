@@ -290,4 +290,10 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrapAgenda);
   else bootstrapAgenda();
   setInterval(checkAlerts, 30000);
+  let agendaRealtimeTimer;
+  window.addEventListener('aldeckot:realtime-change', event => {
+    if (event.detail?.table !== 'agenda_entries') return;
+    window.clearTimeout(agendaRealtimeTimer);
+    agendaRealtimeTimer = window.setTimeout(bootstrapAgenda, 180);
+  });
 })();

@@ -147,4 +147,10 @@
     homeReference.appendChild(recentPanel);
     loadRecentItems();
   } else completeHomeRender();
+  let homeRealtimeTimer;
+  window.addEventListener('aldeckot:realtime-change', event => {
+    if (!['module_tables', 'inventory_items', 'inventory_item_logs', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events'].includes(event.detail?.table)) return;
+    window.clearTimeout(homeRealtimeTimer);
+    homeRealtimeTimer = window.setTimeout(loadRecentItems, 180);
+  });
 })();

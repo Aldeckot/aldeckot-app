@@ -1,7 +1,6 @@
 /* global supabase */
 (() => {
   let client;
-  let user;
   let bootPromise;
 
   const configured = configuration => Boolean(
@@ -90,17 +89,9 @@
       if (!window.supabase?.createClient) fail('Não foi possível carregar a biblioteca do Supabase. Verifique sua conexão com a internet.');
 
       client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
-      const current = check(await client.auth.getSession());
-      let session = current.session;
-      if (!session) {
-        const signed = check(await client.auth.signInAnonymously());
-        session = signed.session;
-      }
-      if (!session?.user) fail('Não foi possível iniciar uma sessão segura no Supabase. Ative Anonymous Sign-Ins em Authentication > Providers.');
-      user = session.user;
-      return { client, user };
+      return { client };
     })();
     try { return await bootPromise; }
     catch (error) { bootPromise = null; throw error; }
@@ -606,7 +597,7 @@
     },
     async setAutomatic(automatic) {
       await init();
-      return check(await client.from('management_backup_settings').upsert({ owner_id: user.id, automatic: Boolean(automatic) }).select().single());
+      return check(await client.from('management_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
     }
   };
 
@@ -812,7 +803,7 @@
     },
     async setAutomatic(automatic) {
       await init();
-      return check(await client.from('control_backup_settings').upsert({ owner_id: user.id, automatic: Boolean(automatic) }).select().single());
+      return check(await client.from('control_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
     }
   };
 
@@ -841,7 +832,7 @@
     },
     async setAutomatic(automatic) {
       await init();
-      return check(await client.from('flux_backup_settings').upsert({ owner_id: user.id, automatic: Boolean(automatic) }).select().single());
+      return check(await client.from('flux_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
     }
   };
 
@@ -931,7 +922,7 @@
     },
     async setAutomatic(automatic) {
       await init();
-      return check(await client.from('inventory_backup_settings').upsert({ owner_id: user.id, automatic: Boolean(automatic) }).select().single());
+      return check(await client.from('inventory_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
     }
   };
 
@@ -949,6 +940,23 @@
         .in('operation', ['create', 'update', 'delete', 'log'])
         .order('created_at', { ascending: false })
         .limit(limit));
+    }
+  };
+
+  const realtime = {
+    async subscribe(onChange) {
+      await init();
+      let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      ['module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
+        channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
+          try { onChange?.(payload); }
+          catch (error) { console.warn('Falha ao processar uma atualização em tempo real.', error); }
+        });
+      });
+      channel.subscribe(status => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Canal de atualizações em tempo real indisponível:', status);
+      });
+      return () => client.removeChannel(channel);
     }
   };
 
@@ -972,7 +980,7 @@
         module: row.module,
         operation: row.operation,
         description: row.description,
-        actor: row.actor || 'Sessão atual',
+        actor: row.actor || 'Equipe ALDECKOT',
         occurredAt: row.occurred_at,
         details: row.details || {}
       }));
@@ -1010,15 +1018,9 @@
     },
 
     async subscribe(onChange) {
-      await init();
-      let channel = client.channel(`equipment-central-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      ['inventory_items', 'inventory_item_logs', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'module_records', 'sync_events'].forEach(table => {
-        channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
-      });
-      channel.subscribe();
-      return () => client.removeChannel(channel);
+      return realtime.subscribe(onChange);
     }
   };
 
-  window.AldeckotSupabase = { configured, init, inventory, management, control, flux, agenda, backups, managementBackups, controlBackups, fluxBackups, events, central };
+  window.AldeckotSupabase = { configured, init, realtime, inventory, management, control, flux, agenda, backups, managementBackups, controlBackups, fluxBackups, events, central };
 })();

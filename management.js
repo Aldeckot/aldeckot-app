@@ -729,5 +729,11 @@
       notify(error?.message || 'Não foi possível ler este arquivo de backup.');
     }
   });
+  let managementRealtimeTimer;
+  window.addEventListener('aldeckot:realtime-change', event => {
+    if (!['module_tables', 'module_records', 'management_backups', 'management_backup_settings'].includes(event.detail?.table)) return;
+    window.clearTimeout(managementRealtimeTimer);
+    managementRealtimeTimer = window.setTimeout(load, 180);
+  });
   load();
 })();

@@ -405,7 +405,7 @@
       if (!node.isConnected) return;
       const current = summary(matches, selected);
       const logs = fetched[1];
-      const events = ordered(fetched[0].length ? fetched[0] : logs.map(log => ({ ...log, actor: 'Sessão atual' })));
+      const events = ordered(fetched[0].length ? fetched[0] : logs.map(log => ({ ...log, actor: 'Equipe ALDECKOT' })));
       const information = signals(current, matches, events, logs);
       const criticality = severity(information);
       const entries = audit(events, logs);
@@ -427,7 +427,7 @@
     const node = document.createElement('div');
     node.className = 'central-equipment-modal'; node.innerHTML = shell(selected); document.body.appendChild(node);
     const escapeHandler = event => { if (event.key === 'Escape') closeCentral(); };
-    modalState = { node, unsubscribe: null, poll: null, escapeHandler, refreshTimer: null, data: null };
+    modalState = { node, unsubscribe: null, escapeHandler, refreshTimer: null, data: null };
     node.addEventListener('click', event => {
       if (event.target === node || event.target.closest('[data-central-close]')) closeCentral();
       if (event.target.closest('[data-central-export-pdf]')) exportPdf();
@@ -441,7 +441,6 @@
     };
     try { modalState.unsubscribe = await service().subscribe(refresh); }
     catch (error) { console.warn('Atualização em tempo real indisponível para a Central.', error); }
-    modalState.poll = window.setInterval(refresh, 30000);
   }
 
   function setupSearch() {

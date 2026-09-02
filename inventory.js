@@ -808,6 +808,17 @@
       renderConnectionState(`${moduleConfig.name} indisponível`, backendMessage(error), true);
     }
   }
+  let realtimeRefreshTimer;
+  const realtimeTables = controlMode
+    ? ['module_tables', 'control_items', 'control_item_logs', 'control_backups', 'control_backup_settings']
+    : fluxMode
+      ? ['module_tables', 'flux_items', 'flux_item_logs', 'flux_backups', 'flux_backup_settings']
+      : ['module_tables', 'inventory_items', 'inventory_item_logs', 'inventory_backups', 'inventory_backup_settings'];
+  window.addEventListener('aldeckot:realtime-change', event => {
+    if (!realtimeTables.includes(event.detail?.table)) return;
+    window.clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = window.setTimeout(() => openInventorySafely(), 180);
+  });
   window.openInventory = openInventorySafely;
   document.querySelectorAll('#nav button').forEach(button => {
     if (button.textContent.includes('Inventário')) button.onclick = openInventorySafely;

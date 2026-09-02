@@ -20,13 +20,45 @@ const verify = async response => {
 };
 const testName = `__aldeckot_validation_${Date.now()}`;
 const testTag = `VAL-${Date.now()}`;
-const created = { inventoryTable: null, controlTable: null, fluxTable: null, managementTable: null, managementRecord: null, managementEvent: null, agenda: null, backup: null, managementBackup: null, controlBackup: null, fluxBackup: null, sync: null, userId: null };
+const created = { inventoryTable: null, controlTable: null, fluxTable: null, managementTable: null, managementRecord: null, managementEvent: null, agenda: null, backup: null, managementBackup: null, controlBackup: null, fluxBackup: null, sync: null };
+let realtimeProbe;
+
+const createRealtimeProbe = (table, matches) => {
+  let channel;
+  let settled = false;
+  let resolveReady;
+  let rejectReady;
+  let resolveEvent;
+  let rejectEvent;
+  const cleanup = () => {
+    clearTimeout(timeout);
+    if (channel) void client.removeChannel(channel);
+  };
+  const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  const received = new Promise((resolve, reject) => { resolveEvent = resolve; rejectEvent = reject; });
+  void received.catch(() => {});
+  const timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    const error = new Error(`Não foi recebida uma alteração em tempo real de ${table}. Verifique a publicação supabase_realtime.`);
+    rejectReady(error); rejectEvent(error); cleanup();
+  }, 10000);
+  channel = client.channel(`aldeckot-validation-${Date.now()}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table }, payload => {
+      if (!matches(payload.new)) return;
+      if (!settled) { settled = true; clearTimeout(timeout); resolveEvent(payload); cleanup(); }
+    })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') resolveReady();
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (!settled) { settled = true; clearTimeout(timeout); const error = new Error(`Canal Realtime indisponível (${status}).`); rejectReady(error); rejectEvent(error); cleanup(); }
+      }
+    });
+  return { ready, received, close: cleanup };
+};
 
 try {
-  const session = await verify(await client.auth.signInAnonymously());
-  if (!session.session?.user) throw new Error('A sessão anônima não foi criada. Ative Anonymous Sign-Ins no Supabase.');
-  created.userId = session.session.user.id;
-  console.log('✓ Sessão anônima e RLS autenticado');
+  console.log('✓ Cliente corporativo centralizado, sem sessão por máquina');
 
   created.inventoryTable = await verify(await client.from('module_tables').insert({ module: 'inventory', name: testName, icon: '🧪' }).select().single());
   const item = await verify(await client.from('inventory_items').insert({ table_id: created.inventoryTable.id, equipment: 'Validação ALDECKOT', model: 'Teste', serial: 'SERIAL-VALIDACAO', tag: testTag, status: 'Ativo', situation: 'Normal', cleaning_type: 'Preventiva' }).select().single());
@@ -87,13 +119,11 @@ try {
   console.log('✓ Gestão TI, monitoramento e atividade automática');
 
   created.backup = await verify(await client.from('inventory_backups').insert({ label: 'Validação temporária', snapshot: { tables: [] }, source: 'network' }).select().single());
-  await verify(await client.from('inventory_backup_settings').upsert({ owner_id: created.userId, automatic: false }));
   created.managementBackup = await verify(await client.from('management_backups').insert({ label: 'Validação temporária', snapshot: { data: { items: [] } }, source: 'network' }).select().single());
-  await verify(await client.from('management_backup_settings').upsert({ owner_id: created.userId, automatic: false }));
   created.controlBackup = await verify(await client.from('control_backups').insert({ label: 'Validação temporária', snapshot: { tables: [] }, source: 'network' }).select().single());
-  await verify(await client.from('control_backup_settings').upsert({ owner_id: created.userId, automatic: false }));
   created.fluxBackup = await verify(await client.from('flux_backups').insert({ label: 'Validação temporária', snapshot: { tables: [] }, source: 'network' }).select().single());
-  await verify(await client.from('flux_backup_settings').upsert({ owner_id: created.userId, automatic: false }));
+  realtimeProbe = createRealtimeProbe('sync_events', row => row?.details?.realtimeValidation === testTag);
+  await realtimeProbe.ready;
   created.sync = await verify(await client.from('sync_events').insert({
     module: 'inventory',
     operation: 'create',
@@ -107,10 +137,13 @@ try {
       serial: item.serial,
       tag: item.tag,
       status: item.status,
+      realtimeValidation: testTag,
       description: 'Validação temporária do histórico global.',
       targetUrl: `inventory.html?table=${created.inventoryTable.id}&item=${item.id}`
     }
   }).select().single());
+  await realtimeProbe.received;
+  console.log('✓ Entrega Realtime entre conexões');
   const recentActivity = await verify(await client.from('sync_events').select('id').in('operation', ['create', 'update', 'delete', 'log']).eq('id', created.sync.id).single());
   if (!recentActivity?.id) throw new Error('O evento de atividade recente não foi localizado.');
   const centralMatches = await verify(await client.rpc('central_equipment_search', { search_term: testTag }));
@@ -122,6 +155,7 @@ try {
 
   console.log('VALIDAÇÃO CONCLUÍDA: todas as chamadas do ALDECKOT estão funcionando.');
 } finally {
+  realtimeProbe?.close();
   // A validação não deixa registros de negócio no projeto.
   if (created.agenda) await client.from('agenda_entries').delete().eq('id', created.agenda.id);
   if (created.backup) await client.from('inventory_backups').delete().eq('id', created.backup.id);
@@ -134,9 +168,4 @@ try {
   if (created.controlTable) await client.from('module_tables').delete().eq('id', created.controlTable.id);
   if (created.fluxTable) await client.from('module_tables').delete().eq('id', created.fluxTable.id);
   if (created.managementTable) await client.from('module_tables').delete().eq('id', created.managementTable.id);
-  if (created.userId) await client.from('inventory_backup_settings').delete().eq('owner_id', created.userId);
-  if (created.userId) await client.from('management_backup_settings').delete().eq('owner_id', created.userId);
-  if (created.userId) await client.from('control_backup_settings').delete().eq('owner_id', created.userId);
-  if (created.userId) await client.from('flux_backup_settings').delete().eq('owner_id', created.userId);
-  await client.auth.signOut();
 }
