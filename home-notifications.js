@@ -12,11 +12,22 @@
     return Number.isFinite(time) ? time : 0;
   };
   const daysSince = value => Math.max(0, Math.floor((Date.now() - dateValue(value)) / 86400000));
+  const dismissedStorageKey = 'aldeckot-dismissed-notifications';
+  const readDismissed = () => {
+    try { return new Set(JSON.parse(sessionStorage.getItem(dismissedStorageKey) || '[]')); }
+    catch { return new Set(); }
+  };
+  const saveDismissed = dismissed => {
+    try { sessionStorage.setItem(dismissedStorageKey, JSON.stringify([...dismissed])); }
+    catch { /* A limpeza continua funcionando durante esta sessão. */ }
+  };
   let root;
   let button;
   let panel;
   let badge;
   let notifications = [];
+  let allNotifications = [];
+  let dismissed = readDismissed();
   let dataError = false;
 
   const bell = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>';
@@ -88,6 +99,11 @@
       .slice(0, 4);
   }
 
+  const notificationKey = notification => `${notification.item.module}:${notification.item.id}:${notification.level}:${notification.description}`;
+  const showCurrentNotifications = () => {
+    notifications = allNotifications.filter(notification => !dismissed.has(notificationKey(notification)));
+  };
+
   function render() {
     if (!root) return;
     const list = root.querySelector('[data-home-notification-list]');
@@ -97,6 +113,9 @@
     button.setAttribute('aria-label', count ? `Abrir ${count} notificações prioritárias` : 'Abrir Central de Notificações');
     root.dataset.hasNotifications = String(Boolean(count));
     root.querySelector('[data-home-notification-count]').textContent = dataError ? 'Atualização indisponível' : (count ? `${count} alertas prioritários` : 'Sem alertas pendentes');
+    const clear = root.querySelector('[data-home-notification-clear]');
+    clear.hidden = !count;
+    clear.setAttribute('aria-label', `Limpar ${count} notificações`);
     if (dataError) {
       list.innerHTML = '<div class="home-notification-empty"><span>!</span><div><b>Atualização indisponível</b><p>Não foi possível consultar os alertas neste momento.</p></div></div>';
       return;
@@ -134,18 +153,26 @@
     button.setAttribute('aria-expanded', 'true');
   }
 
+  function clearNotifications() {
+    notifications.forEach(notification => dismissed.add(notificationKey(notification)));
+    saveDismissed(dismissed);
+    showCurrentNotifications();
+    render();
+  }
+
   function mount() {
     const anchor = document.querySelector('[data-central-search]');
     if (!anchor || document.querySelector('[data-home-notifications]')) return;
     root = document.createElement('section');
     root.className = 'home-notification-center';
     root.dataset.homeNotifications = 'true';
-    root.innerHTML = `<button class="home-notification-toggle" type="button" data-home-notification-toggle aria-expanded="false" aria-controls="homeNotificationsPanel">${bell}<span data-home-notification-badge hidden></span></button><section class="home-notification-panel" id="homeNotificationsPanel" data-home-notification-panel hidden><header><div><p>Central de Notificações</p><h2>Equipamentos em atenção</h2></div><span data-home-notification-count>Carregando alertas…</span></header><div class="home-notification-list" data-home-notification-list><div class="home-notification-loading"><i></i>Verificando equipamentos…</div></div></section>`;
+    root.innerHTML = `<button class="home-notification-toggle" type="button" data-home-notification-toggle aria-expanded="false" aria-controls="homeNotificationsPanel">${bell}<span data-home-notification-badge hidden></span></button><section class="home-notification-panel" id="homeNotificationsPanel" data-home-notification-panel hidden><header><div><p>Central de Notificações</p><h2>Equipamentos em atenção</h2></div><div class="home-notification-head-actions"><span data-home-notification-count>Carregando alertas…</span><button class="home-notification-clear" type="button" data-home-notification-clear title="Limpar notificações">×</button></div></header><div class="home-notification-list" data-home-notification-list><div class="home-notification-loading"><i></i>Verificando equipamentos…</div></div></section>`;
     anchor.insertAdjacentElement('afterend', root);
     button = root.querySelector('[data-home-notification-toggle]');
     panel = root.querySelector('[data-home-notification-panel]');
     badge = root.querySelector('[data-home-notification-badge]');
     button.addEventListener('click', event => { event.stopPropagation(); togglePanel(); });
+    root.querySelector('[data-home-notification-clear]').addEventListener('click', clearNotifications);
     document.addEventListener('click', event => {
       if (!root.contains(event.target)) closePanel();
     });
@@ -155,7 +182,8 @@
   mount();
   window.addEventListener('aldeckot:home-data', event => {
     dataError = Boolean(event.detail?.error);
-    notifications = dataError ? [] : importantNotifications(event.detail || {});
+    allNotifications = dataError ? [] : importantNotifications(event.detail || {});
+    showCurrentNotifications();
     render();
   });
 })();
