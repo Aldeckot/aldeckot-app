@@ -1,5 +1,5 @@
 .home-page .online{display:flex;align-items:center}
-.home-page .online .auth-home-config{position:static;z-index:auto;display:inline-flex;min-width:0;margin-left:7px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#59e6f6;font-size:10px;font-weight:850;line-height:1;text-decoration:none;text-underline-offset:3px;backdrop-filter:none;-webkit-backdrop-filter:none;transition:color .18s ease,text-decoration-color .18s ease}
+.home-page .online .auth-home-config{position:static;z-index:auto;display:inline-flex;min-width:0;margin-left:8px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#59e6f6;font-size:12px;font-weight:900;line-height:1;text-decoration:none;text-underline-offset:3px;backdrop-filter:none;-webkit-backdrop-filter:none;transition:color .18s ease,text-decoration-color .18s ease}
 .home-page .online .auth-home-config:hover{transform:none;border-color:transparent;color:#b8fbff;text-decoration:underline}
 .theme-light .home-page .online .auth-home-config{border-color:transparent;background:transparent;color:#087b9a;box-shadow:none}
 .theme-light .home-page .online .auth-home-config:hover{color:#035d7a}
