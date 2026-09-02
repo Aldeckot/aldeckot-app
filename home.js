@@ -98,6 +98,7 @@
       const management = managementResult.status === 'fulfilled' ? managementResult.value : { table: null, items: [] };
       const control = controlResult.status === 'fulfilled' ? controlResult.value : { tables: [] };
       const flux = fluxResult.status === 'fulfilled' ? fluxResult.value : { tables: [] };
+      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { inventory, management, control, flux } }));
       const storedEvents = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
       const activityEvents = (storedEvents || []).map(eventEntry).filter(Boolean);
       const updatedKeys = new Set(activityEvents.map(itemKey));
@@ -113,6 +114,7 @@
       renderRecentItems(recentItems);
     } catch (error) {
       console.warn('Atualizações recentes indisponíveis:', error.message || error);
+      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { error: true } }));
       renderRecentItems([]);
     } finally {
       completeHomeRender();
