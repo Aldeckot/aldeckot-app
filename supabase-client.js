@@ -30,6 +30,26 @@
     return { priority: itemPriorityValue(match?.[1]), notes: text.replace(itemPriorityMarker, '') };
   };
   const storeItemPriority = (notes, priority) => `[[aldeckot:item-priority:${itemPriorityKey(priority)}]]\n${splitItemPriority(notes).notes}`;
+  const normalizedItemValue = value => String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const meaningfulItemIdentity = value => {
+    const normalized = normalizedItemValue(value);
+    return ['', 'nao informado', 'sem tag', 'n/a', '-', '—'].includes(normalized) ? '' : normalized;
+  };
+  const withoutDuplicateItems = (items, fields) => {
+    const seen = new Set();
+    return items.filter(item => {
+      const tag = meaningfulItemIdentity(item.tag);
+      const serial = meaningfulItemIdentity(item.serial);
+      const key = tag
+        ? `tag:${tag}`
+        : serial
+          ? `serial:${serial}`
+          : `record:${fields.map(field => normalizedItemValue(item[field])).join('\u001f')}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
   const dateLabel = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html' })[module] || '';
   const activityTarget = (module, tableId, itemId, operation) => {
@@ -121,9 +141,12 @@
           id: table.id,
           name: table.name,
           icon: table.icon,
-          items: (table.inventory_items || [])
-            .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
-            .map(itemFromRow)
+          items: withoutDuplicateItems(
+            (table.inventory_items || [])
+              .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
+              .map(itemFromRow),
+            ['equipment', 'model', 'brand', 'sector', 'location', 'status', 'situation', 'cleaning', 'notes']
+          )
         }))
       };
     },
@@ -311,9 +334,12 @@
           id: table.id,
           name: table.name,
           icon: table.icon,
-          items: (table.control_items || [])
-            .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
-            .map(controlItemFromRow)
+          items: withoutDuplicateItems(
+            (table.control_items || [])
+              .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
+              .map(controlItemFromRow),
+            ['equipment', 'model', 'brand', 'sector', 'entryDate', 'exitDate', 'status', 'situation', 'notes']
+          )
         }))
       };
     },
@@ -549,7 +575,13 @@
     async load() {
       const table = await this.ensureTable();
       const rows = check(await client.from('module_records').select('id, table_id, payload, position, created_at, updated_at').eq('table_id', table.id).order('position', { ascending: true }).order('updated_at', { ascending: false }));
-      return { table, items: rows.map(managementItemFromRow) };
+      return {
+        table,
+        items: withoutDuplicateItems(
+          rows.map(managementItemFromRow),
+          ['equipment', 'model', 'brand', 'ip', 'hostname', 'area', 'sector', 'status', 'situation', 'cleaning', 'notes']
+        )
+      };
     },
 
     async save(item, existingId, activityDescription) {
@@ -627,9 +659,12 @@
           id: table.id,
           name: table.name,
           icon: table.icon,
-          items: (table.flux_items || [])
-            .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
-            .map(fluxItemFromRow)
+          items: withoutDuplicateItems(
+            (table.flux_items || [])
+              .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
+              .map(fluxItemFromRow),
+            ['movement', 'equipment', 'model', 'brand', 'senderCompany', 'destinationCompany', 'senderResponsible', 'receiverResponsible', 'sendDate', 'receivedDate', 'shippingType', 'situation', 'status', 'notes']
+          )
         }))
       };
     },
