@@ -9,10 +9,14 @@ module.exports = async (request, response) => {
 
   if (request.method === 'GET') {
     try {
-      const [users, auditRows] = await Promise.all([
+      const [profiles, auditRows, authRecords] = await Promise.all([
         requestSupabase(context.config, '/rest/v1/profiles?select=id,full_name,email,role,status,created_at,updated_at,last_sign_in_at&order=created_at.desc'),
-        requestSupabase(context.config, '/rest/v1/user_audit_logs?select=id,actor_id,target_user_id,action,details,created_at&order=created_at.desc&limit=30')
+        requestSupabase(context.config, '/rest/v1/user_audit_logs?select=id,actor_id,target_user_id,action,details,created_at&order=created_at.desc&limit=30'),
+        requestSupabase(context.config, '/auth/v1/admin/users?per_page=1000&page=1')
       ]);
+      const authUsers = authRecords?.users || authRecords || [];
+      const authIds = new Set(authUsers.map(user => user.id));
+      const users = profiles.filter(profile => authIds.has(profile.id));
       return send(response, 200, { users, audit: auditRows });
     } catch (error) {
       return send(response, error.status || 500, { error: 'Não foi possível carregar os usuários.' });
@@ -21,6 +25,35 @@ module.exports = async (request, response) => {
 
   if (request.method !== 'PATCH' && request.method !== 'DELETE') return send(response, 405, { error: 'Método não permitido.' });
   const body = readBody(request);
+
+  if (request.method === 'DELETE' && body.action === 'cleanup-legacy') {
+    try {
+      const [profiles, authRecords] = await Promise.all([
+        requestSupabase(context.config, '/rest/v1/profiles?select=id,full_name,email,role,status'),
+        requestSupabase(context.config, '/auth/v1/admin/users?per_page=1000&page=1')
+      ]);
+      const authIds = new Set((authRecords?.users || authRecords || []).map(user => user.id));
+      const legacyProfiles = profiles.filter(profile =>
+        String(profile.email || '').trim() === '' &&
+        profile.full_name === 'Usuário ALDECKOT' &&
+        profile.role === 'standard' &&
+        profile.status === 'pending'
+      );
+      for (const profile of legacyProfiles) {
+        if (authIds.has(profile.id)) {
+          await requestSupabase(context.config, `/auth/v1/admin/users/${encodeURIComponent(profile.id)}`, { method: 'DELETE' });
+        }
+        await requestSupabase(context.config, `/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`, {
+          method: 'DELETE', headers: { Prefer: 'return=minimal' }
+        });
+      }
+      await audit(context.config, context.user.id, null, 'legacy_test_profiles_removed', { count: legacyProfiles.length });
+      return send(response, 200, { removed: legacyProfiles.length });
+    } catch (error) {
+      return send(response, error.status || 500, { error: 'Não foi possível limpar os perfis antigos de teste.' });
+    }
+  }
+
   const targetId = String(body.id || request.query?.id || '').trim();
   if (!targetId) return send(response, 400, { error: 'Usuário não informado.' });
   if (targetId === context.user.id && request.method === 'DELETE') return send(response, 400, { error: 'O administrador não pode excluir a própria conta.' });
