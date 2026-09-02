@@ -100,6 +100,18 @@ body.inventory-open .inventory-legend b {
 
 .theme-light.inventory-open .inventory-legend span { color: #557998 !important; }
 
+/* No tema claro, cada item da legenda permanece integrado ao gráfico, sem
+   criar uma faixa branca atrás do texto. */
+body.theme-light.inventory-open .inventory-chart .inventory-legend span {
+  padding: 0 !important;
+  border: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 .theme-light.inventory-open .inventory-chart-stage {
   border-color: #b6d4e455 !important;
   background: repeating-linear-gradient(180deg, transparent 0 30px, #52779510 30px 31px) !important;
