@@ -18,6 +18,13 @@
     Manutenção: { color: '#ff3030', icon: 'wrench' },
     Desativado: { color: '#555a60', icon: 'offline' }
   };
+  const screenReadouts = {
+    Ativo: { code: 'NET', value: 'LIVE' },
+    Reserva: { code: 'STBY', value: 'READY' },
+    Defeito: { code: 'ALRT', value: 'CHECK' },
+    Manutenção: { code: 'SERV', value: 'WORK' },
+    Desativado: { code: 'OFF', value: 'SLEEP' }
+  };
   const statusColors = Object.fromEntries(Object.entries(statusPresentation).map(([status, presentation]) => [status, presentation.color]));
   const situationColors = { 'Em Sala': '#9d6cff', 'Em Uso': '#36c8f4', Estoque: '#e582ff', 'Em Manutenção': '#ff6d47' };
   const cleaningColors = { Preventiva: '#4d8dff', Completa: '#58e6bd', 'Não Realizada': '#d486ff' };
@@ -87,10 +94,11 @@
 
   function computerMarkup(item, compact = false) {
     const presentation = statusPresentation[item.status] || statusPresentation.Ativo;
+    const readout = screenReadouts[item.status] || screenReadouts.Ativo;
     const color = presentation.color;
     const areaColor = areaColors[item.area] || areaColors['Escritório'];
     const tooltip = `<span class="mini-tooltip"><b>${escape(item.equipment)}</b><span>TAG ${escape(display(item.tag))} · ${escape(display(item.ip))}</span><span>${escape(display(item.operatingSystem))} · ${escape(display(item.model))}</span><span>${escape(display(item.user))} · ${escape(item.status)}</span></span>`;
-    return `<button class="mini-computer${compact ? ' compact' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${escape(item.status)}" style="--status-color:${color};--area-color:${areaColor};--category-color:${color}" aria-label="Equipamento ${escape(item.equipment)} — Status: ${escape(item.status)}. Ativar para ver detalhes."><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"></span><span class="mini-screen-mark">${svg(statusIcon(item.status), 28)}</span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis"><i>ALDECKOT</i><em aria-hidden="true">${svg('cube', 12)}</em></span><b class="mini-computer-label">${escape(item.equipment)}</b><span class="mini-status"><i></i>${escape(item.status)}</span>${tooltip}</button>`;
+    return `<button class="mini-computer${compact ? ' compact' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${escape(item.status)}" style="--status-color:${color};--area-color:${areaColor};--category-color:${color}" aria-label="Equipamento ${escape(item.equipment)} — Status: ${escape(item.status)}. Ativar para ver detalhes."><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(statusIcon(item.status), 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis"><i>ALDECKOT</i><em aria-hidden="true">${svg('cube', 12)}</em></span><b class="mini-computer-label">${escape(item.equipment)}</b><span class="mini-status"><i></i>${escape(item.status)}</span>${tooltip}</button>`;
   }
 
   function areaMarkup(area, items) {

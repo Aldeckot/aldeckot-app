@@ -119,6 +119,49 @@ body.management-open .mini-screen-hud::after {
   will-change: transform, opacity;
 }
 
+/* Leitura compacta: identifica o estado sem competir com o ícone central. */
+body.management-open .mini-screen-hud b,
+body.management-open .mini-screen-hud i {
+  position: absolute;
+  z-index: 2;
+  color: var(--status-color);
+  font-size: 4px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: .11em;
+  line-height: 1;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--status-color) 72%, transparent);
+}
+
+body.management-open .mini-screen-hud b { top: 4px; left: 4px; }
+body.management-open .mini-screen-hud i { top: 4px; right: 3px; opacity: .72; }
+
+body.management-open .mini-screen-telemetry {
+  position: absolute;
+  z-index: 3;
+  bottom: 7px;
+  left: 7px;
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  height: 7px;
+  pointer-events: none;
+}
+
+body.management-open .mini-screen-telemetry i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 1px 1px 0 0;
+  background: var(--status-color);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--status-color) 78%, transparent);
+  opacity: .64;
+  transform-origin: bottom;
+}
+
+body.management-open .mini-screen-telemetry i:nth-child(2) { height: 5px; }
+body.management-open .mini-screen-telemetry i:nth-child(3) { height: 7px; }
+
 /* Indicadores discretos: cada situação tem um ritmo próprio na tela. */
 body.management-open .mini-computer[data-status="Ativo"] .mini-screen-hud::before {
   inset: 21% 25%;
@@ -138,6 +181,17 @@ body.management-open .mini-computer[data-status="Ativo"] .mini-screen-hud::after
   animation: management-network-scan 5.8s ease-in-out infinite;
 }
 
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-hud i {
+  animation: management-readout-active 5.8s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-telemetry i {
+  animation: management-telemetry-active 1.9s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-telemetry i:nth-child(2) { animation-delay: .16s; }
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-telemetry i:nth-child(3) { animation-delay: .32s; }
+
 body.management-open .mini-computer[data-status="Reserva"] .mini-screen-hud::before {
   inset: 11px 8px;
   border: 1px solid color-mix(in srgb, var(--status-color) 56%, transparent);
@@ -155,6 +209,16 @@ body.management-open .mini-computer[data-status="Reserva"] .mini-screen-hud::aft
   opacity: .22;
   animation: management-reserve-scan 5.4s ease-in-out infinite;
 }
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-hud i {
+  animation: management-readout-reserve 5.4s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-telemetry i {
+  animation: management-telemetry-reserve 4.9s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-telemetry i:nth-child(3) { opacity: .2; }
 
 body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud::before {
   inset: 7px;
@@ -176,6 +240,15 @@ body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud::aft
   animation: management-alert-marker 3.9s ease-in-out infinite;
 }
 
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud b,
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud i {
+  animation: management-readout-alert 3.9s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-telemetry i {
+  animation: management-telemetry-alert 3.9s ease-in-out infinite;
+}
+
 body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-hud::before {
   inset: 15px 25px;
   border: 1px dashed color-mix(in srgb, var(--status-color) 64%, transparent);
@@ -192,6 +265,24 @@ body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-hud
   background: linear-gradient(180deg, transparent, var(--status-color), transparent);
   opacity: .2;
   animation: management-service-scan 4.7s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-hud b {
+  animation: management-readout-service 4.7s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-telemetry i {
+  animation: management-telemetry-service 4.7s ease-in-out infinite;
+}
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen-hud,
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen-telemetry {
+  opacity: .32;
+}
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen-telemetry i {
+  height: 2px;
+  animation: none;
 }
 
 body.management-open .mini-screen-mark {
@@ -412,6 +503,16 @@ body.management-open .management-modal-dialog.management-status-glow::before {
   74%, 100% { opacity: 0; transform: translateY(17px); }
 }
 
+@keyframes management-readout-active {
+  0%, 20%, 100% { opacity: .46; transform: translateY(0); }
+  45%, 62% { opacity: 1; transform: translateY(-1px); }
+}
+
+@keyframes management-telemetry-active {
+  0%, 100% { opacity: .36; transform: scaleY(.7); }
+  48% { opacity: 1; transform: scaleY(1); }
+}
+
 @keyframes management-reserve-pulse {
   0%, 100% { opacity: .08; transform: scale(.9); }
   52% { opacity: .28; transform: scale(1.06); }
@@ -421,6 +522,16 @@ body.management-open .management-modal-dialog.management-status-glow::before {
   0%, 24% { opacity: 0; transform: translateX(-13px); }
   52% { opacity: .25; }
   78%, 100% { opacity: 0; transform: translateX(13px); }
+}
+
+@keyframes management-readout-reserve {
+  0%, 100% { opacity: .42; }
+  52% { opacity: .88; }
+}
+
+@keyframes management-telemetry-reserve {
+  0%, 100% { opacity: .3; transform: scaleY(.72); }
+  52% { opacity: .76; transform: scaleY(.94); }
 }
 
 @keyframes management-alert-frame {
@@ -435,6 +546,18 @@ body.management-open .management-modal-dialog.management-status-glow::before {
   58% { opacity: .16; transform: translateX(0); }
 }
 
+@keyframes management-readout-alert {
+  0%, 100% { opacity: .32; transform: translateX(0); }
+  42% { opacity: 1; transform: translateX(1px); }
+  58% { opacity: .48; transform: translateX(0); }
+}
+
+@keyframes management-telemetry-alert {
+  0%, 100% { opacity: .26; transform: scaleY(.58); }
+  42% { opacity: 1; transform: scaleY(1); }
+  58% { opacity: .4; transform: scaleY(.72); }
+}
+
 @keyframes management-service-orbit {
   to { transform: rotate(360deg); }
 }
@@ -442,6 +565,16 @@ body.management-open .management-modal-dialog.management-status-glow::before {
 @keyframes management-service-scan {
   0%, 100% { opacity: .06; transform: translateX(-15px); }
   50% { opacity: .35; transform: translateX(14px); }
+}
+
+@keyframes management-readout-service {
+  0%, 100% { opacity: .44; transform: rotate(0); }
+  50% { opacity: .96; transform: rotate(4deg); }
+}
+
+@keyframes management-telemetry-service {
+  0%, 100% { opacity: .3; transform: scaleY(.62); }
+  50% { opacity: .9; transform: scaleY(1); }
 }
 
 @keyframes management-active-mark {
@@ -537,6 +670,9 @@ body.management-open .management-modal-identity .mini-computer.compact {
   body.management-open .mini-screen::after,
   body.management-open .mini-screen-hud::before,
   body.management-open .mini-screen-hud::after,
+  body.management-open .mini-screen-hud b,
+  body.management-open .mini-screen-hud i,
+  body.management-open .mini-screen-telemetry i,
   body.management-open .mini-screen-mark,
   body.management-open .mini-led,
   body.management-open .management-modal-dialog.management-status-glow { animation: none !important; }
