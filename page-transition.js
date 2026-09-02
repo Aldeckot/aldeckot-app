@@ -1,7 +1,7 @@
 (() => {
   const HOME_URL = 'index.html';
   const TRANSITION_KEY = 'aldeckot-home-transition';
-  const DURATION = 460;
+  const DURATION = 360;
   const homeTasks = new Set();
   let isNavigating = false;
   let homeDomReady = document.readyState !== 'loading';
@@ -10,6 +10,17 @@
   let homeDataReady = null;
   let moduleRevealQueued = false;
   let moduleRevealed = false;
+
+  // No retorno de um módulo, a estrutura da Home já existe no HTML. Ela não
+  // precisa aguardar uma nova consulta ao banco para começar a transição.
+  // Agenda e itens recentes continuam a ser atualizados em segundo plano.
+  const hasPendingHomeTransition = () => {
+    try {
+      return new URLSearchParams(window.location.search).get('aldeckotTransition') === 'home'
+        || sessionStorage.getItem(TRANSITION_KEY) === '1';
+    } catch { return false; }
+  };
+  const homeTransitionReturn = hasPendingHomeTransition();
 
   const nextFrame = () => new Promise(resolve => window.requestAnimationFrame(resolve));
   const isHome = () => document.body?.classList.contains('home-page');
@@ -87,6 +98,7 @@
 
   function holdHomeRender(name = 'pending') {
     if (!isHome()) return () => {};
+    if (homeTransitionReturn) return () => {};
     const token = `${name}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     homeTasks.add(token);
     let released = false;
@@ -118,9 +130,11 @@
     storeHomeEntrance();
     const destination = new URL(HOME_URL, window.location.href);
     destination.searchParams.set('aldeckotTransition', 'home');
-    document.body.classList.add('aldeckot-page-leaving');
-    addRouteCurtain();
-    window.setTimeout(() => { window.location.href = destination.href; }, DURATION);
+    window.requestAnimationFrame(() => {
+      document.body.classList.add('aldeckot-page-leaving');
+      addRouteCurtain();
+      window.setTimeout(() => { window.location.href = destination.href; }, DURATION);
+    });
   }
 
   function isHomeLink(anchor) {

@@ -7,7 +7,7 @@
   pointer-events: none;
   opacity: 0;
   background: linear-gradient(90deg, #02091400, #04122614 45%, #02091400);
-  animation: aldeckot-route-curtain .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-curtain .36s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: opacity;
 }
 
@@ -24,8 +24,7 @@
   width: 30vw;
   min-width: 260px;
   background: linear-gradient(90deg, transparent, #67ebff0d 30%, #76f1ff56 50%, #67ebff0d 70%, transparent);
-  filter: blur(1px);
-  animation: aldeckot-route-sweep .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-sweep .36s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
@@ -33,7 +32,7 @@
   width: 2px;
   background: linear-gradient(180deg, transparent 3%, #9bf7ff 24%, #2acdef 50%, #9bf7ff 76%, transparent 97%);
   box-shadow: 0 0 12px #5eeaff, 0 0 28px #23c8ed85;
-  animation: aldeckot-route-line .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-line .36s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
@@ -42,7 +41,9 @@ body.aldeckot-page-leaving { overflow: hidden; }
 body.aldeckot-page-leaving .app,
 body.aldeckot-page-leaving .management-app {
   pointer-events: none;
-  animation: aldeckot-module-leave .46s cubic-bezier(.22, 1, .36, 1) forwards !important;
+  transform-origin: 50% 50%;
+  animation: aldeckot-module-leave .36s cubic-bezier(.22, 1, .36, 1) forwards !important;
+  will-change: opacity, transform;
 }
 
 body.aldeckot-page-leaving .management-modal,
@@ -109,8 +110,8 @@ html.aldeckot-home-revealing body.home-page main {
 }
 
 @keyframes aldeckot-module-leave {
-  0% { opacity: 1; }
-  100% { opacity: .88; }
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: .52; transform: translate3d(-14px, 0, 0) scale(.992); }
 }
 
 @keyframes aldeckot-module-arrive {
@@ -126,7 +127,7 @@ html.aldeckot-home-revealing body.home-page main {
   100% { opacity: .32; }
 }
 
-@keyframes aldeckot-route-sweep { to { transform: translateX(360vw); } }
+@keyframes aldeckot-route-sweep { to { transform: translateX(330vw); } }
 
 @keyframes aldeckot-route-line { to { transform: translateX(150vw); } }
 
