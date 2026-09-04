@@ -8,6 +8,12 @@
   const signUpMessage = document.getElementById('signUpMessage');
   const api = () => window.AldeckotSupabase?.auth;
   const message = (node, text = '', type = '') => { node.hidden = !text; node.textContent = text; node.className = `auth-message ${type}`; };
+  const authenticationError = error => {
+    if (window.location.protocol === 'file:' && /fetch|network/i.test(String(error?.message || ''))) {
+      return 'Esta cópia local não inclui o servidor de autenticação. Para entrar, abra o site publicado.';
+    }
+    return error?.message || 'Não foi possível entrar.';
+  };
   const setBusy = (modal, value) => modal.classList.toggle('is-busy', value);
   const showSignIn = () => { signInModal.hidden = false; signUpModal.hidden = true; processing.hidden = true; message(signInMessage); signInForm.querySelector('input')?.focus(); };
   const showSignUp = () => { signInModal.hidden = true; signUpModal.hidden = false; processing.hidden = true; message(signUpMessage); signUpForm.querySelector('input')?.focus(); };
@@ -30,7 +36,7 @@
         throw new Error(state.profile?.status === 'blocked' ? 'Sua conta está bloqueada. Procure um administrador.' : 'Não foi possível validar sua conta.');
       }
       destination();
-    } catch (error) { message(signInMessage, error.message || 'Não foi possível entrar.'); }
+    } catch (error) { message(signInMessage, authenticationError(error)); }
     finally { setBusy(signInModal, false); }
   });
   signUpForm.addEventListener('submit', async event => {
