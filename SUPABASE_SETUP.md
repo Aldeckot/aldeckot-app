@@ -8,6 +8,9 @@ No **SQL Editor** do Supabase, execute as migrações históricas em ordem, term
 
 1. [014_centralized_realtime.sql](supabase/014_centralized_realtime.sql)
 2. [015_authentication_and_permissions.sql](supabase/015_authentication_and_permissions.sql)
+3. [017_notification_acknowledgements.sql](supabase/017_notification_acknowledgements.sql)
+4. [018_fiscal_nfe.sql](supabase/018_fiscal_nfe.sql)
+5. [019_nfe_investigation_history.sql](supabase/019_nfe_investigation_history.sql)
 
 Para um banco novo, execute também as migrações `001` até `012` antes dessas duas. A migração 015 substitui o acesso público que a 014 havia criado: restaura o RLS por conta/perfil, mantém a mesma base corporativa compartilhada e preserva o Realtime já configurado.
 
@@ -46,8 +49,8 @@ Não grave a senha inicial no projeto, em uma migração SQL ou no frontend. Ap�
 | Perfil/situação | Acesso |
 | --- | --- |
 | Pendente | Não entra no sistema; aparece na aba **Configurações → Usuários** para aprovação. |
-| Ativo padrão | Consulta Dashboard, Inventário, Gestão TI, Controle TI, Flux e Central do Equipamento; pode criar tarefas e eventos na Agenda. |
-| Ativo administrador | Acesso integral, Configurações → Usuários, aprovação, bloqueio, edição, redefinição de senha e exclusão de usuários. |
+| Ativo padrão | Consulta Dashboard, Inventário, Gestão TI, Controle TI, Flux, Central do Equipamento e Central Fiscal NF-e (incluindo PDFs e auditoria); pode criar tarefas e eventos na Agenda, mas não pode criar, editar, excluir, restaurar ou criar backups fiscais. |
+| Ativo administrador | Acesso integral, inclusive à Central Fiscal NF-e, Configurações → Usuários, aprovação, bloqueio, edição, redefinição de senha e exclusão de usuários. |
 | Bloqueado | A sessão é recusada e a conta não acessa dados. |
 
 Todas as ações administrativas de usuários ficam registradas em `user_audit_logs`, sem armazenar senhas. Equipamentos, gráficos, Central, Home, agenda e histórico continuam centralizados e recebem alterações via Supabase Realtime para as telas conectadas.
@@ -69,3 +72,6 @@ Abra a versão conectada usando um servidor HTTP ou o endereço publicado. `file
 | `api/account.js` | Atualização da própria conta autenticada. |
 | `api/admin-users.js` | Administração de usuários, exclusiva do perfil administrador. |
 | `supabase/015_authentication_and_permissions.sql` | RLS por status/perfil e permissões corporativas. |
+| `supabase/017_notification_acknowledgements.sql` | Reconhecimentos individuais da Central de Notificações, sincronizados em tempo real. |
+| `supabase/018_fiscal_nfe.sql` | Tabelas Fiscal NF-e, auditoria, backups, bucket privado `nfe-pdfs`, RLS, métricas e Realtime. |
+| `supabase/019_nfe_investigation_history.sql` | Histórico de PDVs sob investigação, solução auditada, RLS e Realtime. |

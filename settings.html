@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#07111e">
   <title>Configurações do Sistema — ALDECKOT</title>
-  <script>document.documentElement.classList.add('auth-pending');</script>
+  <script>document.documentElement.classList.add('aldeckot-module-booting', 'auth-pending');</script>
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="settings-overrides.css">
   <link rel="stylesheet" href="auth-ui.css">
+  <link rel="stylesheet" href="page-transition.css">
 </head>
 <body class="settings-page">
   <main class="settings-workspace">
@@ -71,6 +72,7 @@
   <script src="supabase-client.js"></script>
   <script src="auth-guard.js"></script>
   <script src="theme.js"></script>
+  <script src="page-transition.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

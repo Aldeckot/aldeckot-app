@@ -4,7 +4,8 @@
       event.preventDefault();
       event.stopImmediatePropagation();
     }
-    window.location.href = 'inventory.html';
+    if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate('inventory.html');
+    else window.location.href = 'inventory.html';
   }
   window.openInventoryPage = openPage;
   window.addEventListener('click', function (event) {

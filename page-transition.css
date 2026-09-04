@@ -7,7 +7,7 @@
   pointer-events: none;
   opacity: 0;
   background: linear-gradient(90deg, #02091400, #04122614 45%, #02091400);
-  animation: aldeckot-route-curtain .36s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-curtain .56s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: opacity;
 }
 
@@ -24,7 +24,7 @@
   width: 30vw;
   min-width: 260px;
   background: linear-gradient(90deg, transparent, #67ebff0d 30%, #76f1ff56 50%, #67ebff0d 70%, transparent);
-  animation: aldeckot-route-sweep .36s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-sweep .56s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
@@ -32,17 +32,19 @@
   width: 2px;
   background: linear-gradient(180deg, transparent 3%, #9bf7ff 24%, #2acdef 50%, #9bf7ff 76%, transparent 97%);
   box-shadow: 0 0 12px #5eeaff, 0 0 28px #23c8ed85;
-  animation: aldeckot-route-line .36s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-line .56s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
 body.aldeckot-page-leaving { overflow: hidden; }
 
 body.aldeckot-page-leaving .app,
-body.aldeckot-page-leaving .management-app {
+body.aldeckot-page-leaving .management-app,
+body.aldeckot-page-leaving .nfe-app,
+body.aldeckot-page-leaving .settings-workspace {
   pointer-events: none;
   transform-origin: 50% 50%;
-  animation: aldeckot-module-leave .36s cubic-bezier(.22, 1, .36, 1) forwards !important;
+  animation: aldeckot-module-leave .56s cubic-bezier(.22, 1, .36, 1) forwards !important;
   will-change: opacity, transform;
 }
 
@@ -54,6 +56,7 @@ body.aldeckot-page-leaving .inv-modal {
 /* O primeiro conteúdo do módulo é preparado fora da vista e apresentado de uma vez. */
 html.aldeckot-module-booting body[data-inventory-page] #app,
 html.aldeckot-module-booting body[data-management-page] #managementApp,
+html.aldeckot-module-booting body.settings-page .settings-workspace,
 html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
 html.aldeckot-module-booting body[data-management-page] .management-modal {
   opacity: 0;
@@ -62,8 +65,9 @@ html.aldeckot-module-booting body[data-management-page] .management-modal {
 }
 
 html.aldeckot-module-revealing body[data-inventory-page] #app,
-html.aldeckot-module-revealing body[data-management-page] #managementApp {
-  animation: aldeckot-module-arrive .48s cubic-bezier(.22, 1, .36, 1) both !important;
+html.aldeckot-module-revealing body[data-management-page] #managementApp,
+html.aldeckot-module-revealing body.settings-page .settings-workspace {
+  animation: aldeckot-module-arrive .72s cubic-bezier(.22, 1, .36, 1) both !important;
   will-change: opacity, transform;
 }
 
@@ -105,17 +109,17 @@ html.aldeckot-home-booting body.home-page .home-side {
 
 html.aldeckot-home-revealing body.home-page .side,
 html.aldeckot-home-revealing body.home-page main {
-  animation: aldeckot-home-arrive .58s cubic-bezier(.22, 1, .36, 1) both !important;
+  animation: aldeckot-home-arrive .76s cubic-bezier(.22, 1, .36, 1) both !important;
   will-change: opacity, transform;
 }
 
 @keyframes aldeckot-module-leave {
   from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-  to { opacity: .52; transform: translate3d(-14px, 0, 0) scale(.992); }
+  to { opacity: .72; transform: translate3d(-9px, 0, 0) scale(.996); }
 }
 
 @keyframes aldeckot-module-arrive {
-  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.994); }
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.99); }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
@@ -123,8 +127,8 @@ html.aldeckot-home-revealing body.home-page main {
 
 @keyframes aldeckot-route-curtain {
   0% { opacity: 0; }
-  35% { opacity: .78; }
-  100% { opacity: .32; }
+  42% { opacity: .68; }
+  100% { opacity: .24; }
 }
 
 @keyframes aldeckot-route-sweep { to { transform: translateX(330vw); } }
@@ -132,7 +136,7 @@ html.aldeckot-home-revealing body.home-page main {
 @keyframes aldeckot-route-line { to { transform: translateX(150vw); } }
 
 @keyframes aldeckot-home-arrive {
-  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(.992); }
+  from { opacity: 0; transform: translate3d(0, 20px, 0) scale(.99); }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
@@ -142,8 +146,11 @@ html.aldeckot-home-revealing body.home-page main {
   .aldeckot-route-curtain::after,
   body.aldeckot-page-leaving .app,
   body.aldeckot-page-leaving .management-app,
+  body.aldeckot-page-leaving .nfe-app,
+  body.aldeckot-page-leaving .settings-workspace,
   html.aldeckot-module-revealing body[data-inventory-page] #app,
   html.aldeckot-module-revealing body[data-management-page] #managementApp,
+  html.aldeckot-module-revealing body.settings-page .settings-workspace,
   html.aldeckot-home-revealing body.home-page .side,
   html.aldeckot-home-revealing body.home-page main { animation: none !important; }
 
@@ -156,6 +163,7 @@ html.aldeckot-home-revealing body.home-page main {
 
   html.aldeckot-module-booting body[data-inventory-page] #app,
   html.aldeckot-module-booting body[data-management-page] #managementApp,
+  html.aldeckot-module-booting body.settings-page .settings-workspace,
   html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
   html.aldeckot-module-booting body[data-management-page] .management-modal {
     opacity: 1;

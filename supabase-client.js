@@ -51,7 +51,7 @@
     });
   };
   const dateLabel = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-  const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html' })[module] || '';
+  const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html', nfe: 'nfe.html' })[module] || '';
   const activityTarget = (module, tableId, itemId, operation) => {
     const page = activityPage(module);
     if (!page || !tableId) return '';
@@ -973,6 +973,254 @@
     }
   };
 
+  const nfeReasonValues = ['Erro no SASII', 'Erro no Pin Pad', 'Travamento do PC', 'Erro no cartão'];
+  const nfeRow = row => ({
+    id: row.id,
+    operator: row.operator || '',
+    operatorCode: row.operator_code || '',
+    fiscal: row.fiscal || '',
+    occurredAt: row.occurred_at || '',
+    pdv: row.pdv || '',
+    nfeNumber: row.nfe_number || '',
+    reason: row.reason || '',
+    notes: row.notes || '',
+    pdfPath: row.pdf_path || '',
+    pdfName: row.pdf_name || '',
+    pdfSize: Number(row.pdf_size || 0),
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || row.created_at || ''
+  });
+  const nfePayload = values => ({
+    operator: String(values.operator || '').trim(),
+    operator_code: String(values.operatorCode || '').trim(),
+    fiscal: String(values.fiscal || '').trim(),
+    occurred_at: String(values.occurredAt || ''),
+    pdv: String(values.pdv || '').trim(),
+    nfe_number: String(values.nfeNumber || '').trim(),
+    reason: String(values.reason || '').trim(),
+    notes: String(values.notes || '').trim(),
+    pdf_path: String(values.pdfPath || '').trim(),
+    pdf_name: String(values.pdfName || '').trim(),
+    pdf_size: Number(values.pdfSize || 0)
+  });
+  const nfeSafeFileName = name => String(name || 'documento.pdf').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'documento.pdf';
+  const nfeCurrentUser = async () => {
+    const { data, error } = await client.auth.getUser();
+    if (error) fail(error.message);
+    if (!data?.user?.id) fail('Sua sessão expirou. Entre novamente.');
+    return data.user;
+  };
+
+  const nfe = {
+    reasons: nfeReasonValues,
+    async load(filters = {}) {
+      await init();
+      const page = Math.max(1, Number(filters.page || 1));
+      const pageSize = Math.min(50, Math.max(10, Number(filters.pageSize || 15)));
+      let request = client.from('nfe_occurrences')
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at', { count: 'exact' })
+        .order('occurred_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1);
+      const term = String(filters.query || '').trim().replace(/[(),]/g, ' ').slice(0, 80);
+      if (term) {
+        const match = `%${term}%`;
+        request = request.or(`operator.ilike.${match},operator_code.ilike.${match},fiscal.ilike.${match},pdv.ilike.${match},nfe_number.ilike.${match},reason.ilike.${match}`);
+      }
+      if (filters.reason) request = request.eq('reason', filters.reason);
+      if (filters.pdv) request = request.ilike('pdv', `%${String(filters.pdv).trim()}%`);
+      if (filters.operator) request = request.ilike('operator', `%${String(filters.operator).trim()}%`);
+      if (filters.dateFrom) request = request.gte('occurred_at', `${filters.dateFrom}T00:00:00`);
+      if (filters.dateTo) request = request.lte('occurred_at', `${filters.dateTo}T23:59:59`);
+      const { data, error, count } = await request;
+      if (error) fail(error.message);
+      return { items: (data || []).map(nfeRow), count: Number(count || 0), page, pageSize };
+    },
+
+    async all(filters = {}) {
+      await init();
+      let request = client.from('nfe_occurrences')
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
+        .order('occurred_at', { ascending: false })
+        .limit(5000);
+      const term = String(filters.query || '').trim().replace(/[(),]/g, ' ').slice(0, 80);
+      if (term) {
+        const match = `%${term}%`;
+        request = request.or(`operator.ilike.${match},operator_code.ilike.${match},fiscal.ilike.${match},pdv.ilike.${match},nfe_number.ilike.${match},reason.ilike.${match}`);
+      }
+      if (filters.reason) request = request.eq('reason', filters.reason);
+      if (filters.pdv) request = request.ilike('pdv', `%${String(filters.pdv).trim()}%`);
+      if (filters.operator) request = request.ilike('operator', `%${String(filters.operator).trim()}%`);
+      if (filters.dateFrom) request = request.gte('occurred_at', `${filters.dateFrom}T00:00:00`);
+      if (filters.dateTo) request = request.lte('occurred_at', `${filters.dateTo}T23:59:59`);
+      return check(await request).map(nfeRow);
+    },
+
+    async dashboard() {
+      await init();
+      const { data, error } = await client.rpc('nfe_dashboard_metrics');
+      if (error) fail(error.message);
+      return data || { total: 0, today: 0, month: 0, reasons: {} };
+    },
+
+    async recurringPdvAlerts() {
+      await init();
+      const { data, error } = await client.rpc('nfe_recurring_pdv_alerts');
+      if (error) fail(error.message);
+      return (data || []).map(row => ({ id: row.occurrence_id, pdv: row.pdv, occurrences: Number(row.occurrences || 0), latestAt: row.latest_at }));
+    },
+
+    async get(id) {
+      await init();
+      const row = check(await client.from('nfe_occurrences')
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
+        .eq('id', id).single());
+      const logs = check(await client.from('nfe_occurrence_logs')
+        .select('id, action, details, created_at')
+        .eq('occurrence_id', id).order('created_at', { ascending: false }).limit(100));
+      return { item: nfeRow(row), logs };
+    },
+
+    async investigationHistory(filters = {}) {
+      await init();
+      const [items, alerts] = await Promise.all([this.all(filters), this.recurringPdvAlerts()]);
+      const occurrenceIds = items.map(item => item.id);
+      let resolutions = [];
+      if (occurrenceIds.length) {
+        resolutions = check(await client.from('nfe_investigation_resolutions')
+          .select('id, occurrence_id, solution, pc_replacement, nfe_paid_pos, resolved_at, created_at, updated_at')
+          .in('occurrence_id', occurrenceIds));
+      }
+      const byOccurrence = new Map(resolutions.map(row => [row.occurrence_id, {
+        id: row.id,
+        solution: row.solution || '',
+        pcReplacement: Boolean(row.pc_replacement),
+        nfePaidPos: Boolean(row.nfe_paid_pos),
+        resolvedAt: row.resolved_at || row.updated_at || row.created_at || ''
+      }]));
+      const investigatePdvs = new Set(alerts.map(alert => String(alert.pdv || '').trim().toLocaleLowerCase('pt-BR')));
+      return items.map(item => ({
+        item,
+        resolution: byOccurrence.get(item.id) || null,
+        requiresInvestigation: investigatePdvs.has(String(item.pdv || '').trim().toLocaleLowerCase('pt-BR'))
+      })).filter(entry => entry.requiresInvestigation || entry.resolution);
+    },
+
+    async saveInvestigationResolution(occurrenceId, values) {
+      await init();
+      const user = await nfeCurrentUser();
+      const solution = String(values.solution || '').trim();
+      if (solution.length < 3) fail('Informe a solução encontrada antes de salvar.');
+      if (!['true', 'false'].includes(String(values.pcReplacement)) || !['true', 'false'].includes(String(values.nfePaidPos))) fail('Informe se houve troca do PC e pagamento em POS.');
+      const row = check(await client.from('nfe_investigation_resolutions').upsert({
+        occurrence_id: occurrenceId,
+        solution,
+        pc_replacement: String(values.pcReplacement) === 'true',
+        nfe_paid_pos: String(values.nfePaidPos) === 'true',
+        resolved_by: user.id,
+        resolved_at: new Date().toISOString()
+      }, { onConflict: 'occurrence_id' }).select().single());
+      await events.record('nfe', 'resolve', { occurrenceId, pcReplacement: row.pc_replacement, nfePaidPos: row.nfe_paid_pos });
+      return row;
+    },
+
+    async uploadPdf(file) {
+      await init();
+      if (!(file instanceof File)) fail('Anexe o PDF da NF-e para continuar.');
+      if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) fail('Envie apenas um arquivo PDF.');
+      if (!file.size || file.size > 10485760) fail('O PDF deve ter até 10 MB.');
+      const id = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const path = `occurrences/${id}-${nfeSafeFileName(file.name)}`;
+      const { error } = await client.storage.from('nfe-pdfs').upload(path, file, { contentType: 'application/pdf', upsert: false });
+      if (error) fail(error.message);
+      return { path, name: file.name, size: file.size };
+    },
+
+    async signedPdfUrl(path) {
+      await init();
+      if (!path) fail('O PDF desta ocorrência não está disponível.');
+      const { data, error } = await client.storage.from('nfe-pdfs').createSignedUrl(path, 1800, { download: false });
+      if (error) fail(error.message);
+      return data.signedUrl;
+    },
+
+    async discardPdf(path) {
+      await init();
+      if (!path) return;
+      const { error } = await client.storage.from('nfe-pdfs').remove([path]);
+      if (error) console.warn('Não foi possível remover o PDF temporário da NF-e.', error);
+    },
+
+    async create(values) {
+      await init();
+      const user = await nfeCurrentUser();
+      const row = check(await client.from('nfe_occurrences').insert({ ...nfePayload(values), created_by: user.id }).select().single());
+      await events.record('nfe', 'create', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason });
+      return nfeRow(row);
+    },
+
+    async update(id, values) {
+      await init();
+      const row = check(await client.from('nfe_occurrences').update(nfePayload(values)).eq('id', id).select().single());
+      await events.record('nfe', 'update', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason });
+      return nfeRow(row);
+    },
+
+    async remove(item) {
+      await init();
+      check(await client.from('nfe_occurrences').delete().eq('id', item.id));
+      await events.record('nfe', 'delete', { occurrenceId: item.id, pdv: item.pdv, nfeNumber: item.nfeNumber, reason: item.reason });
+    },
+
+    async backups() {
+      await init();
+      return check(await client.from('nfe_backups').select('id, label, snapshot, created_at').order('created_at', { ascending: false }).limit(3));
+    },
+
+    async createBackup(label = 'Backup Fiscal NF-e') {
+      await init();
+      const [occurrences, resolutionResult] = await Promise.all([
+        this.all(),
+        client.from('nfe_investigation_resolutions').select('id, occurrence_id, solution, pc_replacement, nfe_paid_pos, resolved_by, resolved_at, created_at, updated_at')
+      ]);
+      const investigationResolutions = check(resolutionResult);
+      const row = check(await client.from('nfe_backups').insert({ label, snapshot: { occurrences, investigationResolutions } }).select().single());
+      const outdated = check(await client.from('nfe_backups').select('id').order('created_at', { ascending: false }).range(3, 1000));
+      if (outdated.length) check(await client.from('nfe_backups').delete().in('id', outdated.map(backup => backup.id)));
+      return row;
+    },
+
+    async restoreBackup(backup) {
+      await init();
+      const rows = Array.isArray(backup?.snapshot?.occurrences) ? backup.snapshot.occurrences : null;
+      if (!rows) fail('Este backup Fiscal NF-e é inválido.');
+      const investigationResolutions = Array.isArray(backup?.snapshot?.investigationResolutions) ? backup.snapshot.investigationResolutions : [];
+      check(await client.from('nfe_occurrences').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
+      if (rows.length) {
+        const payload = rows.map(item => ({
+          id: item.id, operator: item.operator, operator_code: item.operatorCode, fiscal: item.fiscal,
+          occurred_at: item.occurredAt, pdv: item.pdv, nfe_number: item.nfeNumber, reason: item.reason,
+          notes: item.notes || '', pdf_path: item.pdfPath, pdf_name: item.pdfName, pdf_size: item.pdfSize,
+          created_at: item.createdAt || undefined, updated_at: item.updatedAt || undefined
+        }));
+        check(await client.from('nfe_occurrences').insert(payload));
+      }
+      if (investigationResolutions.length) {
+        check(await client.from('nfe_investigation_resolutions').insert(investigationResolutions.map(resolution => ({
+          id: resolution.id,
+          occurrence_id: resolution.occurrence_id,
+          solution: resolution.solution,
+          pc_replacement: Boolean(resolution.pc_replacement),
+          nfe_paid_pos: Boolean(resolution.nfe_paid_pos),
+          resolved_by: resolution.resolved_by || null,
+          resolved_at: resolution.resolved_at || undefined,
+          created_at: resolution.created_at || undefined,
+          updated_at: resolution.updated_at || undefined
+        }))));
+      }
+      await events.record('nfe', 'restore', { backupId: backup.id });
+    }
+  };
+
   const events = {
     async record(module, operation, details = {}) {
       await init();
@@ -987,6 +1235,35 @@
         .in('operation', ['create', 'update', 'delete', 'log'])
         .order('created_at', { ascending: false })
         .limit(limit));
+    }
+  };
+
+  const notificationAcknowledgements = {
+    async list() {
+      await init();
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) fail(sessionError.message);
+      const userId = sessionData.session?.user?.id;
+      if (!userId) return [];
+      return check(await client.from('notification_acknowledgements')
+        .select('state_key')
+        .eq('user_id', userId));
+    },
+
+    async acknowledge({ module, itemId, stateKey }) {
+      await init();
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) fail(sessionError.message);
+      const userId = sessionData.session?.user?.id;
+      if (!userId) fail('Sua sessão expirou. Entre novamente.');
+      const { error } = await client.from('notification_acknowledgements').insert({
+        user_id: userId,
+        module: String(module || ''),
+        item_id: itemId,
+        state_key: String(stateKey || '')
+      });
+      // A mesma confirmação pode chegar em duas abas quase ao mesmo tempo.
+      if (error && error.code !== '23505') fail(error.message);
     }
   };
 
@@ -1070,7 +1347,7 @@
     async subscribe(onChange) {
       await init();
       let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
+      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'sync_events', 'notification_acknowledgements', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
         channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
           try { onChange?.(payload); }
           catch (error) { console.warn('Falha ao processar uma atualização em tempo real.', error); }
@@ -1145,5 +1422,5 @@
     }
   };
 
-  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, agenda, backups, managementBackups, controlBackups, fluxBackups, events, central };
+  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, nfe, agenda, backups, managementBackups, controlBackups, fluxBackups, events, notificationAcknowledgements, central };
 })();

@@ -106,7 +106,12 @@
       panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
     });
     document.querySelectorAll('.agenda-today-panel').forEach(panel => {
-      panel.innerHTML = `<div class="agenda-panel-heading"><h3>Tarefas de hoje</h3><span>${today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span></div>${todays.length ? `<div class="agenda-today-list">${todays.map(event => `<button class="agenda-task ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><div class="agenda-task-line"><b>${safe(event.title)}</b><i class="agenda-priority" title="${priorityOf(event).label}" aria-label="${priorityOf(event).label}">${priorityOf(event).icon}</i></div><span>${safe(event.time || 'Sem horário')} · ${event.kind === 'task' ? 'Tarefa' : 'Evento'}</span></button>`).join('')}</div>` : '<p>Nenhuma tarefa para hoje.</p>'}`;
+      panel.hidden = !todays.length;
+      if (!todays.length) {
+        panel.innerHTML = '';
+        return;
+      }
+      panel.innerHTML = `<div class="agenda-panel-heading"><h3>Tarefas de hoje</h3><span>${today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span></div><div class="agenda-today-list">${todays.map(event => `<button class="agenda-task ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><div class="agenda-task-line"><b>${safe(event.title)}</b><i class="agenda-priority" title="${priorityOf(event).label}" aria-label="${priorityOf(event).label}">${priorityOf(event).icon}</i></div><span>${safe(event.time || 'Sem horário')} · ${event.kind === 'task' ? 'Tarefa' : 'Evento'}</span></button>`).join('')}</div>`;
     });
   }
 

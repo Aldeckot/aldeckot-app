@@ -170,3 +170,48 @@ body.inventory-open .inv-dialog.inv-status-glow {
 /* Prioridade aparece apenas no modal do item, com a cor correspondente. */
 .inv-priority-detail{border-color:var(--priority-color)!important;background:color-mix(in srgb,var(--priority-color) 15%,transparent)!important}.inv-priority-detail b{color:var(--priority-color)!important}.inv-priority-detail.priority-red{--priority-color:#ff6674}.inv-priority-detail.priority-yellow{--priority-color:#ffce59}.inv-priority-detail.priority-turquoise{--priority-color:#3de5d3}
 .inv-choice-field[data-kind="priority"][data-tone="red"] select{border-color:#ff6674a6}.inv-choice-field[data-kind="priority"][data-tone="yellow"] select{border-color:#ffce59a6}.inv-choice-field[data-kind="priority"][data-tone="turquoise"] select{border-color:#3de5d3a6}
+
+/* Barra compartilhada de filtros: Inventário, Controle TI e Flux. */
+body.inventory-open .inventory-toolbar{
+  width:min(100%,860px);
+  min-height:58px;
+  margin:12px auto 14px;
+  padding:10px 13px;
+  gap:9px;
+  border-radius:12px;
+  justify-content:flex-start;
+}
+body.inventory-open .inventory-toolbar .inventory-search-wrap{
+  flex:1 1 304px;
+  width:auto;
+  min-width:220px;
+}
+body.inventory-open .inventory-toolbar .inventory-search,
+body.inventory-open .inventory-toolbar .inventory-filter{
+  height:35px;
+  border-radius:7px;
+}
+body.inventory-open .inventory-toolbar-create{
+  flex:0 0 auto;
+  margin-left:0;
+  gap:9px;
+}
+body.inventory-open .inventory-toolbar-create .inventory-filter{
+  width:120px;
+}
+body.inventory-open .inventory-toolbar-table-actions{
+  margin-left:auto;
+}
+
+@media(max-width:900px){
+  body.inventory-open .inventory-toolbar{width:100%;flex-wrap:wrap}
+  body.inventory-open .inventory-toolbar .inventory-search-wrap{flex:1 1 290px}
+  body.inventory-open .inventory-toolbar-table-actions{margin-left:0}
+}
+@media(max-width:620px){
+  body.inventory-open .inventory-toolbar{align-items:stretch}
+  body.inventory-open .inventory-toolbar-create{width:100%;flex-wrap:wrap}
+  body.inventory-open .inventory-toolbar-create .inventory-filter{flex:1 1 130px;width:auto}
+  body.inventory-open .inventory-toolbar-create .inventory-add{flex:1 1 120px}
+  body.inventory-open .inventory-toolbar-table-actions{justify-content:flex-end}
+}

@@ -168,7 +168,8 @@
     if (!state) return;
     avatar.textContent = initials(state.profile.full_name);
     if (state.isAdmin) document.querySelector('[data-admin-only]').hidden = false;
-    try { await refreshUsersData(); } catch { updateMetrics(); }
     showGeneral();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.AldeckotModuleStage?.reveal?.()));
+    try { await refreshUsersData(); } catch { updateMetrics(); }
   })();
 })();

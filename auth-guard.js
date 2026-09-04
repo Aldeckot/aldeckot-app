@@ -24,7 +24,10 @@
       button.textContent = 'Config';
       button.title = 'Abrir Configurações';
       button.setAttribute('aria-label', 'Abrir Configurações');
-      button.addEventListener('click', () => { window.location.href = 'settings.html'; });
+      button.addEventListener('click', () => {
+        if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate('settings.html');
+        else window.location.href = 'settings.html';
+      });
       onlineStatus.append(button);
     }
   }

@@ -1,7 +1,8 @@
 (() => {
   const HOME_URL = 'index.html';
   const TRANSITION_KEY = 'aldeckot-home-transition';
-  const DURATION = 360;
+  const DURATION = 560;
+  const APP_ROUTE_FILES = new Set(['index.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'settings.html']);
   const homeTasks = new Set();
   let isNavigating = false;
   let homeDomReady = document.readyState !== 'loading';
@@ -24,7 +25,7 @@
 
   const nextFrame = () => new Promise(resolve => window.requestAnimationFrame(resolve));
   const isHome = () => document.body?.classList.contains('home-page');
-  const isModule = () => Boolean(document.body?.matches('[data-inventory-page], [data-management-page]'));
+  const isModule = () => Boolean(document.body?.matches('[data-inventory-page], [data-management-page], .settings-page'));
 
   function storeHomeEntrance() {
     try { sessionStorage.setItem(TRANSITION_KEY, '1'); }
@@ -62,7 +63,7 @@
       window.setTimeout(() => {
         root.classList.remove('aldeckot-home-revealing');
         document.body.classList.remove('aldeckot-home-entering');
-      }, 640);
+      }, 820);
     } finally {
       homeRevealQueued = false;
     }
@@ -90,7 +91,7 @@
       const root = document.documentElement;
       root.classList.remove('aldeckot-module-booting');
       root.classList.add('aldeckot-module-revealing');
-      window.setTimeout(() => root.classList.remove('aldeckot-module-revealing'), 520);
+      window.setTimeout(() => root.classList.remove('aldeckot-module-revealing'), 780);
     } finally {
       moduleRevealQueued = false;
     }
@@ -124,38 +125,43 @@
     document.body.appendChild(curtain);
   }
 
-  function goHome() {
+  function navigate(destination) {
     if (isNavigating) return;
+    const target = destination instanceof URL ? destination : new URL(destination, window.location.href);
+    if (target.href === window.location.href) return;
     isNavigating = true;
-    storeHomeEntrance();
-    const destination = new URL(HOME_URL, window.location.href);
-    destination.searchParams.set('aldeckotTransition', 'home');
+    if (/\/index\.html$/i.test(target.pathname)) {
+      storeHomeEntrance();
+      target.searchParams.set('aldeckotTransition', 'home');
+    }
     window.requestAnimationFrame(() => {
       document.body.classList.add('aldeckot-page-leaving');
       addRouteCurtain();
-      window.setTimeout(() => { window.location.href = destination.href; }, DURATION);
+      window.setTimeout(() => { window.location.href = target.href; }, DURATION);
     });
   }
 
-  function isHomeLink(anchor) {
+  function goHome() { navigate(HOME_URL); }
+
+  function isAppLink(anchor) {
     if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return false;
     const href = anchor.getAttribute('href');
     if (!href) return false;
     try {
       const target = new URL(href, window.location.href);
-      return target.origin === window.location.origin && /\/index\.html$/i.test(target.pathname);
+      return target.origin === window.location.origin && APP_ROUTE_FILES.has(target.pathname.split('/').pop().toLowerCase());
     } catch { return false; }
   }
 
   document.addEventListener('click', event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const homeLink = event.target.closest('a[href]');
-    if (!isHomeLink(homeLink)) return;
+    const appLink = event.target.closest('a[href]');
+    if (!isAppLink(appLink)) return;
     event.preventDefault();
-    goHome();
+    navigate(appLink.href);
   }, true);
 
-  window.AldeckotRoute = { goHome };
+  window.AldeckotRoute = { goHome, navigate };
   window.AldeckotHomeStage = { hold: holdHomeRender, ready: ensureHomeDataReady };
   window.AldeckotModuleStage = { reveal: revealModuleWhenStable };
 

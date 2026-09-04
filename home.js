@@ -8,6 +8,10 @@
   };
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const statusClass = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '-');
+  const navigateTo = target => {
+    if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(target);
+    else window.location.href = target;
+  };
   const latestLogText = entry => {
     if (entry.description) return entry.description;
     const logEntry = Array.isArray(entry.logs) ? entry.logs[0] : null;
@@ -19,7 +23,8 @@
     inventory: { label: 'Inventário', page: 'inventory.html' },
     management: { label: 'Gestão TI', page: 'management.html' },
     control: { label: 'Controle TI', page: 'control.html' },
-    flux: { label: 'Flux', page: 'flux.html' }
+    flux: { label: 'Flux', page: 'flux.html' },
+    nfe: { label: 'Fiscal NF-e', page: 'nfe.html' }
   })[module] || { label: 'Módulo', page: '' };
   const activityTime = entry => entry.occurredAt || entry.updatedAt || entry.date || '';
   const itemKey = entry => `${entry.module || 'inventory'}:${entry.id || ''}`;
@@ -87,18 +92,20 @@
         return;
       }
       await (window.AldeckotHomeStage?.ready?.() || api.init?.() || Promise.resolve());
-      const [inventoryResult, managementResult, controlResult, fluxResult, eventsResult] = await Promise.allSettled([
+      const [inventoryResult, managementResult, controlResult, fluxResult, nfeAlertResult, eventsResult] = await Promise.allSettled([
         api.inventory.load(),
         api.management?.load?.() || Promise.resolve({ table: null, items: [] }),
         api.control?.load?.() || Promise.resolve({ tables: [] }),
         api.flux?.load?.() || Promise.resolve({ tables: [] }),
+        api.nfe?.recurringPdvAlerts?.() || Promise.resolve([]),
         api.events?.recentActivity?.(12) || Promise.resolve([])
       ]);
       const inventory = inventoryResult.status === 'fulfilled' ? inventoryResult.value : { tables: [] };
       const management = managementResult.status === 'fulfilled' ? managementResult.value : { table: null, items: [] };
       const control = controlResult.status === 'fulfilled' ? controlResult.value : { tables: [] };
       const flux = fluxResult.status === 'fulfilled' ? fluxResult.value : { tables: [] };
-      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { inventory, management, control, flux } }));
+      const nfeAlerts = nfeAlertResult.status === 'fulfilled' ? nfeAlertResult.value : [];
+      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { inventory, management, control, flux, nfeAlerts } }));
       const storedEvents = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
       const activityEvents = (storedEvents || []).map(eventEntry).filter(Boolean);
       const updatedKeys = new Set(activityEvents.map(itemKey));
@@ -122,10 +129,10 @@
   }
 
   function openRecentInventoryItem(tableId, itemId) {
-    window.location.href = `inventory.html?table=${encodeURIComponent(tableId)}&item=${encodeURIComponent(itemId)}`;
+    navigateTo(`inventory.html?table=${encodeURIComponent(tableId)}&item=${encodeURIComponent(itemId)}`);
   }
   function openRecentItem(targetUrl) {
-    if (targetUrl) window.location.href = targetUrl;
+    if (targetUrl) navigateTo(targetUrl);
   }
 
   updateClock();
@@ -134,12 +141,23 @@
   window.openRecentItem = openRecentItem;
 
   window.go = module => {
-    if (module === 'inventory') window.location.href = 'inventory.html';
-    else if (module === 'management') window.location.href = 'management.html';
-    else if (module === 'control') window.location.href = 'control.html';
-    else if (module === 'flux') window.location.href = 'flux.html';
+    if (module === 'inventory') navigateTo('inventory.html');
+    else if (module === 'management') navigateTo('management.html');
+    else if (module === 'control') navigateTo('control.html');
+    else if (module === 'flux') navigateTo('flux.html');
+    else if (module === 'nfe') navigateTo('nfe.html');
     else window.alert('A interface deste módulo será conectada às tabelas próprias do Supabase na próxima etapa.');
   };
+
+  const homeNavigation = document.getElementById('nav');
+  if (homeNavigation && !homeNavigation.querySelector('[data-home-nfe-module]')) {
+    const nfeButton = document.createElement('button');
+    nfeButton.type = 'button';
+    nfeButton.dataset.homeNfeModule = 'true';
+    nfeButton.innerHTML = '▧ <span>Fiscal NF-e</span>';
+    nfeButton.addEventListener('click', () => window.go('nfe'));
+    homeNavigation.append(nfeButton);
+  }
 
   const homeReference = document.querySelector('.home-reference');
   if (homeReference) {
@@ -153,7 +171,7 @@
   } else completeHomeRender();
   let homeRealtimeTimer;
   window.addEventListener('aldeckot:realtime-change', event => {
-    if (!['module_tables', 'inventory_items', 'inventory_item_logs', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'sync_events'].includes(event.detail?.table)) return;
+    if (!['module_tables', 'inventory_items', 'inventory_item_logs', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'sync_events'].includes(event.detail?.table)) return;
     window.clearTimeout(homeRealtimeTimer);
     homeRealtimeTimer = window.setTimeout(loadRecentItems, 180);
   });

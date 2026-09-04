@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALDECKOT — Fiscal NF-e</title>
+  <script>document.documentElement.classList.add('aldeckot-module-booting', 'auth-pending');</script>
+  <link rel="stylesheet" href="nfe.css">
+  <link rel="stylesheet" href="nfe-refined.css">
+  <link rel="stylesheet" href="nfe-history.css">
+  <link rel="stylesheet" href="scrollbars.css">
+  <link rel="stylesheet" href="motion.css">
+  <link rel="stylesheet" href="realtime-sync.css">
+  <link rel="stylesheet" href="auth-ui.css">
+  <link rel="stylesheet" href="mascot.css">
+  <link rel="stylesheet" href="page-transition.css">
+</head>
+<body class="nfe-open inventory-open" data-inventory-page="true">
+  <input id="themeSwitch" type="checkbox" hidden aria-hidden="true">
+  <main id="app" class="nfe-app" aria-live="polite">
+    <section class="nfe-loading"><i></i><p>Conectando à Central Fiscal NF-e…</p></section>
+  </main>
+  <div id="nfeModal" class="nfe-modal" hidden></div>
+  <div id="nfeToast" class="nfe-toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="runtime-config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="auth-guard.js"></script>
+  <script src="access-control.js"></script>
+  <script src="realtime-sync.js"></script>
+  <script src="theme.js"></script>
+  <script src="page-transition.js"></script>
+  <script src="nfe.js"></script>
+</body>
+</html>
