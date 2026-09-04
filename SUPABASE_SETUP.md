@@ -11,6 +11,9 @@ No **SQL Editor** do Supabase, execute as migrações históricas em ordem, term
 3. [017_notification_acknowledgements.sql](supabase/017_notification_acknowledgements.sql)
 4. [018_fiscal_nfe.sql](supabase/018_fiscal_nfe.sql)
 5. [019_nfe_investigation_history.sql](supabase/019_nfe_investigation_history.sql)
+6. [020_nfe_backup_settings.sql](supabase/020_nfe_backup_settings.sql)
+7. [021_fix_nfe_delete_audit.sql](supabase/021_fix_nfe_delete_audit.sql)
+8. [022_user_code_authentication.sql](supabase/022_user_code_authentication.sql)
 
 Para um banco novo, execute também as migrações `001` até `012` antes dessas duas. A migração 015 substitui o acesso público que a 014 havia criado: restaura o RLS por conta/perfil, mantém a mesma base corporativa compartilhada e preserva o Realtime já configurado.
 
@@ -26,6 +29,9 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sua-chave-publishable
 # Somente no servidor/Vercel: nunca inclua em supabase-config.js ou no frontend.
 SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
 ALDECKOT_BOOTSTRAP_ADMIN_NAME=Nome do administrador inicial
+# Código numérico usado para entrar no sistema (4 a 12 dígitos).
+ALDECKOT_BOOTSTRAP_ADMIN_CODE=1014
+# Somente identificador interno do Supabase Auth. Não é exibido nem usado para entrar.
 ALDECKOT_BOOTSTRAP_ADMIN_EMAIL=admin@empresa.com
 ALDECKOT_BOOTSTRAP_ADMIN_PASSWORD=uma-senha-forte-com-ao-menos-8-caracteres
 ```
@@ -40,7 +46,7 @@ Para desenvolvimento local, copie `.env.example` para `.env`, preencha os mesmos
 
 ## 3. Primeiro acesso administrativo
 
-Depois de publicar as variáveis e a migração 015, abra `login.html`. A tela cria o administrador inicial usando apenas as variáveis `ALDECKOT_BOOTSTRAP_ADMIN_*` caso ainda não exista um administrador ativo. Em seguida, entre com esse e-mail e senha.
+Depois de publicar as variáveis e as migrações até a 022, abra `login.html`. A tela cria ou corrige o administrador inicial usando apenas as variáveis `ALDECKOT_BOOTSTRAP_ADMIN_*`. Em seguida, entre com o **código de usuário numérico** e senha. O valor `ALDECKOT_BOOTSTRAP_ADMIN_EMAIL` permanece somente como identificador técnico privado do Supabase Auth.
 
 Não grave a senha inicial no projeto, em uma migração SQL ou no frontend. Após o primeiro acesso, ela pode ser alterada em **Configurações → Segurança**.
 
@@ -65,7 +71,7 @@ Abra a versão conectada usando um servidor HTTP ou o endereço publicado. `file
 
 | Recurso | Finalidade |
 | --- | --- |
-| `profiles` | Nome, e-mail, perfil e situação da conta vinculada ao Supabase Auth. |
+| `profiles` | Nome, código de usuário único, perfil e situação da conta vinculada ao Supabase Auth. |
 | `user_audit_logs` | Auditoria administrativa de aprovações, bloqueios, edições e exclusões. |
 | `api/auth-register.js` | Cadastro de novas solicitações pendentes. |
 | `api/auth-bootstrap.js` | Inicialização segura do primeiro administrador pelo servidor. |
@@ -75,3 +81,6 @@ Abra a versão conectada usando um servidor HTTP ou o endereço publicado. `file
 | `supabase/017_notification_acknowledgements.sql` | Reconhecimentos individuais da Central de Notificações, sincronizados em tempo real. |
 | `supabase/018_fiscal_nfe.sql` | Tabelas Fiscal NF-e, auditoria, backups, bucket privado `nfe-pdfs`, RLS, métricas e Realtime. |
 | `supabase/019_nfe_investigation_history.sql` | Histórico de PDVs sob investigação, solução auditada, RLS e Realtime. |
+| `supabase/020_nfe_backup_settings.sql` | Configuração, histórico e Realtime do backup automático da Central Fiscal NF-e. |
+| `supabase/021_fix_nfe_delete_audit.sql` | Corrige a auditoria de exclusão de NF-e e permite vários logs por ocorrência. |
+| `supabase/022_user_code_authentication.sql` | Migra perfis existentes para códigos únicos e habilita login por código de usuário. |

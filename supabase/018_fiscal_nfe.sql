@@ -69,9 +69,11 @@ declare
   target_details jsonb;
 begin
   if tg_op = 'DELETE' then
-    target_id := old.id;
+    -- O registro pai já está sendo removido. Mantemos a referência no JSON
+    -- para auditoria sem criar uma chave estrangeira inválida no histórico.
+    target_id := null;
     target_action := 'deleted';
-    target_details := jsonb_build_object('pdv', old.pdv, 'nfeNumber', old.nfe_number, 'reason', old.reason);
+    target_details := jsonb_build_object('occurrenceId', old.id, 'pdv', old.pdv, 'nfeNumber', old.nfe_number, 'reason', old.reason);
   elsif tg_op = 'INSERT' then
     target_id := new.id;
     target_action := 'created';

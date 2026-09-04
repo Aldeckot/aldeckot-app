@@ -1171,21 +1171,47 @@
       await events.record('nfe', 'delete', { occurrenceId: item.id, pdv: item.pdv, nfeNumber: item.nfeNumber, reason: item.reason });
     },
 
-    async backups() {
+    async backups(limit = 3) {
       await init();
-      return check(await client.from('nfe_backups').select('id, label, snapshot, created_at').order('created_at', { ascending: false }).limit(3));
+      return check(await client.from('nfe_backups').select('id, label, snapshot, source, created_at').order('created_at', { ascending: false }).limit(Math.min(limit, 3)));
     },
 
-    async createBackup(label = 'Backup Fiscal NF-e') {
+    async backupSnapshot() {
       await init();
       const [occurrences, resolutionResult] = await Promise.all([
         this.all(),
         client.from('nfe_investigation_resolutions').select('id, occurrence_id, solution, pc_replacement, nfe_paid_pos, resolved_by, resolved_at, created_at, updated_at')
       ]);
       const investigationResolutions = check(resolutionResult);
-      const row = check(await client.from('nfe_backups').insert({ label, snapshot: { occurrences, investigationResolutions } }).select().single());
+      return { occurrences, investigationResolutions };
+    },
+
+    async backupSettings() {
+      await init();
+      const setting = check(await client.from('nfe_backup_settings').select('automatic, frequency_days, updated_at').maybeSingle());
+      return setting || { automatic: false, frequency_days: 7, updated_at: null };
+    },
+
+    async setBackupAutomatic(automatic) {
+      await init();
+      return check(await client.from('nfe_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+
+    async createAutomaticBackupIfDue(settings = {}, latest = null) {
+      if (!settings.automatic) return null;
+      const frequencyDays = Math.max(1, Number(settings.frequency_days || 7));
+      const latestTime = latest?.created_at ? new Date(latest.created_at).getTime() : 0;
+      if (latestTime && Date.now() - latestTime < frequencyDays * 86400000) return null;
+      return this.createBackup('Backup automático Fiscal NF-e', 'automatic');
+    },
+
+    async createBackup(label = 'Backup Fiscal NF-e', source = 'manual') {
+      await init();
+      const snapshot = await this.backupSnapshot();
+      const row = check(await client.from('nfe_backups').insert({ label, source, snapshot }).select().single());
       const outdated = check(await client.from('nfe_backups').select('id').order('created_at', { ascending: false }).range(3, 1000));
       if (outdated.length) check(await client.from('nfe_backups').delete().in('id', outdated.map(backup => backup.id)));
+      await events.record('nfe', 'backup', { backupId: row.id, source });
       return row;
     },
 
@@ -1279,14 +1305,22 @@
       const session = await this.session();
       if (!session?.user) return { session: null, user: null, profile: null, isAdmin: false };
       const profile = check(await client.from('profiles')
-        .select('id, full_name, email, role, status, created_at, updated_at, last_sign_in_at')
+        .select('id, full_name, user_code, role, status, created_at, updated_at, last_sign_in_at')
         .eq('id', session.user.id).maybeSingle());
       return { session, user: session.user, profile, isAdmin: profile?.role === 'admin' && profile?.status === 'active' };
     },
 
-    async signIn(email, password) {
+    async signIn(userCode, password) {
       await init();
-      const { data, error } = await client.auth.signInWithPassword({ email: String(email || '').trim(), password: String(password || '') });
+      const response = await fetch('/api/auth-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userCode, password })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (payload.accountState === 'pending') return { accountState: 'pending' };
+        fail(payload.error || 'Não foi possível entrar.');
+      }
+      const { data, error } = await client.auth.setSession(payload.session || {});
       if (error) fail(error.message);
       return data;
     },
@@ -1347,7 +1381,7 @@
     async subscribe(onChange) {
       await init();
       let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'sync_events', 'notification_acknowledgements', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
+      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'nfe_backup_settings', 'sync_events', 'notification_acknowledgements', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
         channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
           try { onChange?.(payload); }
           catch (error) { console.warn('Falha ao processar uma atualização em tempo real.', error); }

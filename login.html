@@ -13,7 +13,7 @@
       <div class="auth-modal-heading"><img class="login-mascot mascot-dark" src="assets/mascot-dark.png" alt=""><img class="login-mascot mascot-light" src="assets/mascot-light-clean.png" alt=""><div><span>ALDECKOT</span><h1 id="signInTitle">Entrar na conta</h1></div></div>
       <p id="signInMessage" class="auth-message" role="status" hidden></p>
       <form id="signInForm" class="auth-form">
-        <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="seu@email.com"></label>
+        <label>Código de usuário<input name="userCode" inputmode="numeric" autocomplete="username" required minlength="4" maxlength="12" pattern="[0-9]+" placeholder="Ex.: 1014"></label>
         <label>Senha<input name="password" type="password" autocomplete="current-password" required placeholder="Sua senha"></label>
         <button class="auth-primary" type="submit">Entrar</button>
       </form>
@@ -25,7 +25,7 @@
       <p id="signUpMessage" class="auth-message" role="status" hidden></p>
       <form id="signUpForm" class="auth-form">
         <label>Nome completo<input name="fullName" autocomplete="name" required minlength="3" placeholder="Como deseja ser identificado"></label>
-        <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="seu@email.com"></label>
+        <label>Código de usuário<input name="userCode" inputmode="numeric" autocomplete="username" required minlength="4" maxlength="12" pattern="[0-9]+" placeholder="Crie um código numérico único"></label>
         <label>Senha<input name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="Ao menos 8 caracteres"></label>
         <label>Confirmar senha<input name="passwordConfirmation" type="password" autocomplete="new-password" required minlength="8" placeholder="Repita sua senha"></label>
         <button class="auth-primary" type="submit">Enviar solicitação</button>

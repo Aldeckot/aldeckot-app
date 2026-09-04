@@ -21,7 +21,8 @@
     event.preventDefault(); message(signInMessage); setBusy(signInModal, true);
     const values = Object.fromEntries(new FormData(signInForm));
     try {
-      await api().signIn(values.email, values.password);
+      const result = await api().signIn(values.userCode, values.password);
+      if (result?.accountState === 'pending') { showProcessing(); return; }
       const state = await api().state();
       if (state.profile?.status !== 'active') {
         await api().signOut();

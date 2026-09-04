@@ -135,6 +135,10 @@
     if (!root) return;
     const list = root.querySelector('[data-home-notification-list]');
     const count = notifications.length;
+    const visible = count > 0 && !dataError;
+    button.hidden = !visible;
+    button.setAttribute('aria-hidden', String(!visible));
+    if (!visible) closePanel();
     badge.hidden = !count;
     badge.textContent = count;
     button.setAttribute('aria-label', count ? `Abrir ${count} notificações prioritárias` : 'Abrir Central de Notificações');
@@ -182,6 +186,7 @@
 
   function togglePanel() {
     if (!panel) return;
+    if (!notifications.length || dataError) return closePanel();
     if (!panel.hidden) return closePanel();
     panel.hidden = false;
     panel.classList.add('is-open');
@@ -204,6 +209,8 @@
     button = root.querySelector('[data-home-notification-toggle]');
     panel = root.querySelector('[data-home-notification-panel]');
     badge = root.querySelector('[data-home-notification-badge]');
+    button.hidden = true;
+    button.setAttribute('aria-hidden', 'true');
     button.addEventListener('click', event => { event.stopPropagation(); togglePanel(); });
     root.querySelector('[data-home-notification-clear]').addEventListener('click', clearNotifications);
     document.addEventListener('click', event => {

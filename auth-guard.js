@@ -4,31 +4,36 @@
     const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
     return parts.length > 1 ? `${parts[0]} ${parts.at(-1)}` : (parts[0] || 'Usuário');
   };
+  const initials = name => String(name || 'U').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
+  const roleName = role => role === 'admin' ? 'Administrador' : 'Usuário padrão';
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 
   function renderHomeIdentity(profile) {
-    if (!document.body.classList.contains('home-page') || document.querySelector('[data-auth-home-identity]')) return;
-    const main = document.querySelector('.home-reference');
+    if (!document.body.classList.contains('home-page') || document.querySelector('[data-auth-home-account]')) return;
     const onlineStatus = document.querySelector('.home-page .online');
-    if (main) {
-      const identity = document.createElement('span');
-      identity.className = 'auth-home-identity';
-      identity.dataset.authHomeIdentity = 'true';
-      identity.textContent = shortName(profile.full_name);
-      identity.setAttribute('aria-label', 'Usuário conectado');
-      main.append(identity);
-    }
     if (onlineStatus) {
-      const button = document.createElement('button');
-      button.className = 'auth-home-config';
-      button.type = 'button';
-      button.textContent = 'Config';
-      button.title = 'Abrir Configurações';
-      button.setAttribute('aria-label', 'Abrir Configurações');
-      button.addEventListener('click', () => {
+      const account = document.createElement('section');
+      account.className = 'auth-home-account';
+      account.dataset.authHomeAccount = 'true';
+      account.setAttribute('aria-label', 'Conta conectada');
+      account.innerHTML = `<button class="auth-home-logout" type="button" data-auth-home-logout title="Sair da conta" aria-label="Sair da conta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2M3 12h11m-3-3 3 3-3 3"/></svg></button><button class="auth-home-account-profile" type="button" data-auth-home-settings title="Abrir Configurações"><span class="auth-home-avatar" aria-hidden="true">${escapeHtml(initials(profile.full_name))}</span><span class="auth-home-account-copy"><b>${escapeHtml(shortName(profile.full_name))}</b><small>${roleName(profile.role)}</small></span><svg class="auth-home-account-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 5 5 5 5-5"/></svg></button>`;
+      const openSettings = () => {
         if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate('settings.html');
         else window.location.href = 'settings.html';
+      };
+      account.querySelector('[data-auth-home-settings]')?.addEventListener('click', openSettings);
+      account.querySelector('[data-auth-home-logout]')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        if (button.disabled) return;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        try {
+          await window.AldeckotSupabase?.auth?.signOut();
+        } finally {
+          window.location.replace(loginUrl());
+        }
       });
-      onlineStatus.append(button);
+      onlineStatus.insertAdjacentElement('afterend', account);
     }
   }
 

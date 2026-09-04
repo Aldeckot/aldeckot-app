@@ -46,7 +46,13 @@
       chevronsLeft: '<path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/>',
       chevronLeft: '<path d="m14 17-5-5 5-5"/>',
       chevronRight: '<path d="m10 17 5-5-5-5"/>',
-      chevronsRight: '<path d="m6 17 5-5-5-5M13 17l5-5-5-5"/>'
+      chevronsRight: '<path d="m6 17 5-5-5-5M13 17l5-5-5-5"/>',
+      database: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>',
+      upload: '<path d="M12 21V10m0 0 4 4m-4-4-4 4M5 5v3h14V5"/>',
+      history: '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2"/>',
+      check: '<path d="m5 12 4.2 4.2L19 6.5"/>',
+      warning: '<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/>',
+      close: '<path d="m6 6 12 12M18 6 6 18"/>'
     };
     return `<svg class="nfe-svg" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.document}</svg>`;
   };
@@ -64,7 +70,8 @@
     error: '',
     modalFile: null,
     refreshTimer: 0,
-    investigationFilters: { pdv: '', operator: '', dateFrom: '', dateTo: '' }
+    investigationFilters: { pdv: '', operator: '', dateFrom: '', dateTo: '' },
+    backup: { history: [], automatic: false, pendingRestore: null, busy: false }
   };
   const root = document.getElementById('app');
   const modal = document.getElementById('nfeModal');
@@ -163,6 +170,10 @@
   }
 
   function render() {
+    const activeSearch = document.activeElement?.matches?.('[data-nfe-query]') ? {
+      start: document.activeElement.selectionStart,
+      end: document.activeElement.selectionEnd
+    } : null;
     const counts = visibleReasonCounts();
     const dominant = [...counts].sort((a, b) => b[1] - a[1])[0] || ['', 0];
     const canManage = isAdmin();
@@ -182,8 +193,9 @@
       : `<div class="nfe-alert-empty">${icon('alert')}<b>Nenhum PDV atingiu<br>o limite semanal.</b></div>`;
     root.innerHTML = `<header class="nfe-header">
       <span class="nfe-header-icon">${icon('document')}</span><div class="nfe-heading"><h1>Fiscal NF-e</h1><p>Central de Ocorrências NF-e • Liberação e monitoramento</p></div>
+      <span class="module-mascot-dock nfe-mascot-dock" data-module-mascot-dock aria-label="Mascote ALDECKOT"><img class="module-mascot-image" src="assets/mascot-dark.png" alt="" aria-hidden="true"><button class="nfe-icon-button module-notification-toggle" type="button" data-nfe-notifications title="Central de notificações" aria-label="Abrir Central de notificações" aria-expanded="false">${icon('bell')}<span class="module-notification-badge" hidden></span></button></span>
       <label class="nfe-global-search">${icon('search')}<input class="nfe-input" data-nfe-query value="${escape(state.filters.query)}" placeholder="Buscar NF-e, PDV, operador, fiscal…" autocomplete="off"><kbd>Ctrl + K</kbd></label>
-      <div class="nfe-header-actions"><span class="nfe-sync"><i></i>Tempo real</span><button class="nfe-icon-button" type="button" data-nfe-notifications title="Central de notificações" aria-label="Abrir Central de notificações">${icon('bell')}<em>•</em></button>${canManage ? `<button class="nfe-icon-button" type="button" data-nfe-backup title="Backup Fiscal" aria-label="Backup Fiscal">${icon('backup')}</button>` : ''}<button class="nfe-icon-button" type="button" data-nfe-home title="Voltar para Home" aria-label="Voltar para Home">${icon('home')}</button></div>
+      <div class="nfe-header-actions"><span class="nfe-sync"><i></i>Tempo real</span>${canManage ? `<button class="nfe-icon-button" type="button" data-nfe-backup title="Backup Fiscal" aria-label="Backup Fiscal">${icon('backup')}</button>` : ''}<button class="nfe-icon-button" type="button" data-nfe-home title="Voltar para Home" aria-label="Voltar para Home">${icon('home')}</button></div>
     </header>
     <div class="nfe-grid"><section class="nfe-workspace">
       <section class="nfe-metrics">${metric('Total de ocorrências', state.dashboard.total, 'Base corporativa', 'document', 'blue')}${metric('Registradas hoje', state.dashboard.today, 'Atualização em tempo real', 'calendar', 'blue')}${metric('No mês atual', state.dashboard.month, 'Histórico fiscal', 'bars', 'green')}${metric('Motivo mais recorrente', dominant[1], dominant[0] || 'Sem ocorrências', 'alert', 'gold')}</section>
@@ -199,7 +211,7 @@
   }
 
   function bindEvents() {
-    root.querySelectorAll('[data-nfe-home], [data-nfe-notifications]').forEach(button => button.addEventListener('click', () => go('index.html')));
+    root.querySelectorAll('[data-nfe-home]').forEach(button => button.addEventListener('click', () => go('index.html')));
     root.querySelector('[data-nfe-new]')?.addEventListener('click', () => openForm());
     root.querySelector('[data-nfe-backup]')?.addEventListener('click', openBackup);
     root.querySelector('[data-nfe-advanced]')?.addEventListener('click', () => { state.advancedOpen = !state.advancedOpen; render(); });
@@ -339,9 +351,12 @@
 
   function confirmDelete(item) {
     openModal(`<section class="nfe-dialog small"><header class="nfe-dialog-head"><div><p class="nfe-dialog-eyebrow">Ação irreversível</p><h2>Excluir esta ocorrência?</h2><p>A NF-e ${escape(item.nfeNumber)} será removida da Central. O PDF privado permanece somente para retenção de backup e o log de auditoria é preservado.</p></div><button class="nfe-dialog-close" type="button" data-nfe-close>×</button></header><footer class="nfe-modal-actions"><button class="nfe-action-button" type="button" data-nfe-close>Cancelar</button><button class="nfe-action-button danger" type="button" data-nfe-confirm-delete>Excluir ocorrência</button></footer></section>`);
-    modal.querySelector('[data-nfe-confirm-delete]').addEventListener('click', async () => {
+    modal.querySelector('[data-nfe-confirm-delete]').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Excluindo…';
       try { await api().remove(item); closeModal(); toast('Ocorrência excluída e registrada na auditoria.'); refresh(); }
-      catch (error) { toast(error.message || 'Não foi possível excluir a ocorrência.', true); }
+      catch (error) { button.disabled = false; button.textContent = 'Excluir ocorrência'; toast(error.message || 'Não foi possível excluir a ocorrência.', true); }
     });
   }
 
@@ -409,22 +424,178 @@
     });
   }
 
+  const backupDate = value => value ? new Date(value).toLocaleDateString('pt-BR') : '—';
+  const backupTime = value => value ? new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+  const backupSource = source => source === 'automatic' ? 'Automático' : source === 'local' ? 'Local' : 'Manual';
+
+  function setBackupBusy(button, label) {
+    if (state.backup.busy) return false;
+    state.backup.busy = true;
+    modal.querySelector('.nfe-backup-dialog')?.setAttribute('aria-busy', 'true');
+    modal.querySelectorAll('button').forEach(control => { control.disabled = true; });
+    if (button) button.innerHTML = `<span class="nfe-backup-spinner" aria-hidden="true"></span>${escape(label)}`;
+    return true;
+  }
+
+  function clearBackupBusy() {
+    state.backup.busy = false;
+    modal.querySelector('.nfe-backup-dialog')?.removeAttribute('aria-busy');
+    modal.querySelectorAll('button').forEach(control => { control.disabled = false; });
+  }
+
+  function nfeBackupHistory(history) {
+    if (!history.length) return `<div class="nfe-backup-history-empty">${icon('history')}<p>Seu histórico de backups aparecerá aqui.</p></div>`;
+    return history.map(backup => `<article class="nfe-backup-history-row"><div class="nfe-backup-history-date">${icon('calendar')}<span><b>${backupDate(backup.created_at)}</b><small>${backupTime(backup.created_at)}</small></span></div><span class="nfe-backup-source ${backup.source === 'automatic' ? 'automatic' : ''}">${escape(backupSource(backup.source))}</span><span class="nfe-backup-success">${icon('check')}Sucesso</span><button class="nfe-backup-history-restore" type="button" data-nfe-backup-restore="${escape(backup.id)}" title="Restaurar este backup" aria-label="Restaurar backup de ${backupDate(backup.created_at)}">${icon('history')}</button></article>`).join('');
+  }
+
+  function renderBackupHome() {
+    const { history, automatic } = state.backup;
+    const latest = history[0] || null;
+    const latestLabel = latest ? 'Backup realizado com sucesso' : 'Nenhum backup realizado';
+    const latestDescription = latest
+      ? latest.source === 'automatic' ? 'Backup automático' : 'Backup manual'
+      : 'Crie sua primeira cópia para proteger a Central Fiscal NF-e.';
+    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="Sistema de Backup Fiscal NF-e"><div class="nfe-backup-content"><header class="nfe-backup-header"><span class="nfe-backup-title-icon">${icon('backup')}</span><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do Fiscal NF-e</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><section class="nfe-backup-latest"><h3>Último backup</h3><div class="nfe-backup-latest-grid"><div class="nfe-backup-result ${latest ? 'success' : 'empty'}"><span class="nfe-backup-status-icon">${icon(latest ? 'check' : 'history')}</span><span><b>${latestLabel}</b><small>${latestDescription}</small></span></div><div class="nfe-backup-time">${icon('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="nfe-backup-auto-status" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}" aria-label="${automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="nfe-backup-actions"><h3>Ações</h3><div class="nfe-backup-action-grid"><button class="nfe-backup-action-card create" type="button" data-nfe-backup-action="create"><span>${icon('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa das ocorrências e dos históricos fiscais.</small></span></button><button class="nfe-backup-action-card restore" type="button" data-nfe-backup-action="restore"><span>${icon('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar uma cópia e recuperar os dados com segurança.</small></span></button></div></section><div class="nfe-backup-details-grid"><section class="nfe-backup-auto-panel"><h3>Backup automático</h3><button class="nfe-backup-switch-row" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}"><span class="nfe-backup-switch ${automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Cria uma cópia privada no Supabase a cada 7 dias quando um administrador utiliza o módulo.</small></span></button><label class="nfe-backup-frequency"><span>Frequência</span><output>${icon('calendar')}A cada 7 dias</output></label></section><section class="nfe-backup-history-panel"><h3>Histórico de backups</h3><div class="nfe-backup-history-list">${nfeBackupHistory(history)}</div></section></div><footer class="nfe-backup-footer"><div>${icon('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todas as ocorrências e soluções atuais da Central Fiscal.<br>Esta ação não poderá ser desfeita.</p></div><button class="nfe-backup-secondary" type="button" data-nfe-close>Fechar</button></footer></div></section>`);
+    bindBackupModal();
+  }
+
+  function renderBackupChoice(kind) {
+    const create = kind === 'create';
+    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="${create ? 'Criar' : 'Restaurar'} backup Fiscal NF-e"><div class="nfe-backup-content nfe-backup-choice"><header class="nfe-backup-header"><span class="nfe-backup-title-icon ${create ? '' : 'restore'}">${icon(create ? 'download' : 'upload')}</span><div><h2>${create ? 'Criar Backup' : 'Restaurar Backup'}</h2><p>${create ? 'Escolha onde deseja guardar a cópia dos dados.' : 'Escolha a origem do backup que deseja recuperar.'}</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><div class="nfe-backup-destination-grid"><button class="nfe-backup-destination" type="button" data-nfe-backup-action="${create ? 'create-local' : 'restore-local'}"><span>${icon(create ? 'download' : 'upload')}</span><b>Este computador</b><small>${create ? 'Baixa um arquivo JSON para você guardar localmente.' : 'Selecione um arquivo JSON salvo no computador.'}</small></button><button class="nfe-backup-destination network" type="button" data-nfe-backup-action="${create ? 'create-network' : 'restore-network'}"><span>${icon('database')}</span><b>Supabase</b><small>${create ? 'Guarda uma cópia privada e compartilhada no banco corporativo.' : 'Mostra as cópias privadas disponíveis no histórico.'}</small></button></div><footer class="nfe-backup-choice-footer"><button class="nfe-backup-secondary" type="button" data-nfe-backup-action="back">Voltar</button></footer></div></section>`);
+    bindBackupModal();
+  }
+
+  function renderNetworkRestoreChoice() {
+    const { history } = state.backup;
+    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="Selecionar backup Fiscal NF-e"><div class="nfe-backup-content"><header class="nfe-backup-header"><span class="nfe-backup-title-icon restore">${icon('upload')}</span><div><h2>Restaurar Backup</h2><p>Selecione uma cópia privada para continuar.</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><div class="nfe-backup-restore-list">${history.length ? history.map(backup => `<button class="nfe-backup-restore-option" type="button" data-nfe-backup-restore="${escape(backup.id)}"><span>${icon('calendar')}</span><span><b>${backupDate(backup.created_at)} — ${backupTime(backup.created_at)}</b><small>${escape(backupSource(backup.source))}</small></span><i>›</i></button>`).join('') : `<div class="nfe-backup-history-empty">${icon('history')}<p>Nenhum backup privado disponível para restaurar.</p></div>`}</div><footer class="nfe-backup-choice-footer"><button class="nfe-backup-secondary" type="button" data-nfe-backup-action="restore">Voltar</button></footer></div></section>`);
+    bindBackupModal();
+  }
+
+  function renderBackupConfirmation() {
+    const backup = state.backup.pendingRestore;
+    if (!backup) return renderBackupHome();
+    const count = Array.isArray(backup.snapshot?.occurrences) ? backup.snapshot.occurrences.length : 0;
+    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="Confirmar restauração do backup Fiscal NF-e"><div class="nfe-backup-content"><header class="nfe-backup-header"><span class="nfe-backup-title-icon restore">${icon('upload')}</span><div><h2>Confirmar restauração</h2><p>${escape(backup.label || 'Backup Fiscal NF-e')}</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><div class="nfe-backup-confirm-summary">${icon('calendar')}<span><b>${backup.created_at ? `${backupDate(backup.created_at)} — ${backupTime(backup.created_at)}` : 'Arquivo local selecionado'}</b><small>${number(count)} ocorrência${count === 1 ? '' : 's'} será${count === 1 ? '' : 'ão'} restaurada${count === 1 ? '' : 's'}</small></span></div><div class="nfe-backup-confirm-warning">${icon('warning')}<div><b>Atenção</b><p>A restauração substituirá todos os dados atuais do Fiscal NF-e pelos dados deste backup. Esta ação não poderá ser desfeita.</p></div></div><footer class="nfe-backup-choice-footer"><button class="nfe-backup-secondary" type="button" data-nfe-backup-action="restore">Cancelar</button><button class="nfe-backup-critical" type="button" data-nfe-backup-action="confirm-restore">Restaurar Backup</button></footer></div></section>`);
+    bindBackupModal();
+  }
+
+  function prepareBackupRestore(id) {
+    const backup = state.backup.history.find(entry => entry.id === id);
+    if (!backup) return toast('Este backup não está mais disponível. Atualize a Central Fiscal e tente novamente.', true);
+    state.backup.pendingRestore = backup;
+    renderBackupConfirmation();
+  }
+
+  async function createLocalBackup(button) {
+    if (!setBackupBusy(button, 'Criando backup…')) return;
+    try {
+      const createdAt = new Date().toISOString();
+      const snapshot = await api().backupSnapshot();
+      download(JSON.stringify({ application: 'ALDECKOT', module: 'nfe', version: 1, createdAt, snapshot }, null, 2), `aldeckot-fiscal-nfe-backup-${createdAt.slice(0, 10)}.json`, 'application/json');
+      closeModal();
+      toast('Backup local do Fiscal NF-e criado com sucesso.');
+    } catch (error) {
+      clearBackupBusy();
+      toast(error.message || 'Não foi possível criar o backup local.', true);
+    } finally { state.backup.busy = false; }
+  }
+
+  function restoreLocalBackup() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const payload = JSON.parse(String(reader.result || ''));
+          if (payload?.module !== 'nfe' || !Array.isArray(payload?.snapshot?.occurrences)) throw new Error('Formato inválido');
+          state.backup.pendingRestore = { id: `local-${Date.now()}`, label: file.name, source: 'local', created_at: payload.createdAt || '', snapshot: payload.snapshot };
+          renderBackupConfirmation();
+        } catch (error) { toast('Este arquivo não é um backup válido do Fiscal NF-e.', true); }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
+  async function createNetworkBackup(button) {
+    if (!setBackupBusy(button, 'Criando backup…')) return;
+    try {
+      await api().createBackup('Backup manual Fiscal NF-e', 'manual');
+      state.backup.busy = false;
+      toast('Backup Fiscal NF-e criado com sucesso.');
+      await openBackup();
+    } catch (error) {
+      clearBackupBusy();
+      toast(error.message || 'Não foi possível criar o backup no Supabase.', true);
+    } finally { state.backup.busy = false; }
+  }
+
+  async function confirmBackupRestore(button) {
+    const backup = state.backup.pendingRestore;
+    if (!backup || !setBackupBusy(button, 'Restaurando backup…')) return;
+    try {
+      await api().restoreBackup(backup);
+      state.backup.pendingRestore = null;
+      closeModal();
+      toast('Backup restaurado. A Central Fiscal foi atualizada.');
+      await refresh();
+    } catch (error) {
+      clearBackupBusy();
+      toast(error.message || 'Não foi possível restaurar o backup.', true);
+    } finally { state.backup.busy = false; }
+  }
+
+  async function toggleNfeAutomaticBackup(button) {
+    if (!setBackupBusy(button, state.backup.automatic ? 'Desativando…' : 'Ativando…')) return;
+    try {
+      await api().setBackupAutomatic(!state.backup.automatic);
+      state.backup.busy = false;
+      await openBackup();
+    } catch (error) {
+      clearBackupBusy();
+      toast(error.message || 'Não foi possível atualizar o backup automático.', true);
+    } finally { state.backup.busy = false; }
+  }
+
+  function bindBackupModal() {
+    modal.querySelectorAll('[data-nfe-backup-restore]').forEach(button => button.addEventListener('click', () => prepareBackupRestore(button.dataset.nfeBackupRestore)));
+    modal.querySelectorAll('[data-nfe-backup-action]').forEach(button => button.addEventListener('click', () => {
+      const action = button.dataset.nfeBackupAction;
+      if (action === 'create') renderBackupChoice('create');
+      if (action === 'restore') renderBackupChoice('restore');
+      if (action === 'back') renderBackupHome();
+      if (action === 'create-local') createLocalBackup(button);
+      if (action === 'create-network') createNetworkBackup(button);
+      if (action === 'restore-local') restoreLocalBackup();
+      if (action === 'restore-network') renderNetworkRestoreChoice();
+      if (action === 'confirm-restore') confirmBackupRestore(button);
+      if (action === 'toggle-auto') toggleNfeAutomaticBackup(button);
+    }));
+  }
+
   async function openBackup() {
     if (!isAdmin()) return;
     try {
-      const backups = await api().backups();
-      openModal(`<section class="nfe-dialog small"><header class="nfe-dialog-head"><div><p class="nfe-dialog-eyebrow">Sistema de backup</p><h2>Backup Fiscal NF-e</h2><p>O snapshot preserva os registros e referências dos PDFs privados.</p></div><button class="nfe-dialog-close" type="button" data-nfe-close>×</button></header><button class="nfe-action-button primary" type="button" data-nfe-create-backup>◫ Criar backup agora</button><section class="nfe-log-list">${backups.length ? backups.map(backup => `<div class="nfe-log"><i>◫</i><div><b>${escape(backup.label)}</b><small>${dateTime(backup.created_at)}</small></div><button class="nfe-mini-button" type="button" data-nfe-restore="${backup.id}">Restaurar</button></div>`).join('') : '<p class="nfe-empty" style="padding:15px">Nenhum backup criado ainda.</p>'}</section></section>`);
-      modal.querySelector('[data-nfe-create-backup]')?.addEventListener('click', async () => {
-        try { await api().createBackup(); toast('Backup Fiscal NF-e criado com sucesso.'); openBackup(); }
-        catch (error) { toast(error.message || 'Não foi possível criar o backup.', true); }
-      });
-      modal.querySelectorAll('[data-nfe-restore]').forEach(button => button.addEventListener('click', async () => {
-        const backup = backups.find(row => row.id === button.dataset.nfeRestore);
-        if (!backup || !window.confirm('Restaurar este backup substituirá as ocorrências atuais. Continuar?')) return;
-        try { await api().restoreBackup(backup); closeModal(); toast('Backup restaurado. A Central Fiscal foi atualizada.'); refresh(); }
-        catch (error) { toast(error.message || 'Não foi possível restaurar o backup.', true); }
-      }));
+      const [settings, backups] = await Promise.all([api().backupSettings(), api().backups()]);
+      const automatic = await api().createAutomaticBackupIfDue(settings, backups[0]);
+      const history = automatic ? await api().backups() : backups;
+      state.backup = { ...state.backup, history, automatic: Boolean(settings.automatic), pendingRestore: null, busy: false };
+      renderBackupHome();
     } catch (error) { toast(error.message || 'Não foi possível carregar os backups.', true); }
+  }
+
+  async function ensureAutomaticNfeBackup() {
+    if (!isAdmin()) return;
+    try {
+      const [settings, backups] = await Promise.all([api().backupSettings(), api().backups()]);
+      await api().createAutomaticBackupIfDue(settings, backups[0]);
+    } catch (error) {
+      console.warn('Não foi possível verificar o backup automático Fiscal NF-e.', error);
+    }
   }
 
   async function exportRows() {
@@ -460,15 +631,17 @@
       if (!window.AldeckotAuth?.session) return;
       await window.AldeckotSupabase?.init?.();
       await refresh();
+      void ensureAutomaticNfeBackup();
     } catch (error) {
       state.loading = false; state.error = error.message || 'Não foi possível iniciar o módulo.'; render(); window.AldeckotModuleStage?.reveal?.();
     }
   }
   window.addEventListener('aldeckot:realtime-change', event => {
-    if (!['nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups'].includes(event.detail?.table)) return;
+    if (!['nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'nfe_backup_settings'].includes(event.detail?.table)) return;
     window.clearTimeout(state.refreshTimer);
     state.refreshTimer = window.setTimeout(() => refresh({ quiet: true }), 180);
   });
+  window.AldeckotNfeOpenDetails = openDetails;
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modal.hidden) closeModal(); });
   initialize();
 })();

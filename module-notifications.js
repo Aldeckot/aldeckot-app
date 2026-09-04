@@ -39,28 +39,43 @@
     panel = root.querySelector('[data-module-notification-panel]');
   }
 
-  function headerActions() {
-    if (key === 'nfe') return null;
-    return document.querySelector(key === 'management' ? '.management-header-actions' : '.inventory-header-actions');
+  function moduleHeader() {
+    if (key === 'nfe') return document.querySelector('.nfe-header');
+    return document.querySelector(key === 'management' ? '.management-header' : '.inventory-header');
+  }
+
+  function ensureMascotDock() {
+    if (key === 'nfe') return document.querySelector('.nfe-mascot-dock');
+    const header = moduleHeader();
+    if (!header) return null;
+    let dock = header.querySelector('[data-module-mascot-dock]');
+    if (dock) return dock;
+    dock = document.createElement('span');
+    dock.className = `module-mascot-dock module-mascot-dock-${key}`;
+    dock.dataset.moduleMascotDock = 'true';
+    dock.setAttribute('aria-label', 'Mascote ALDECKOT');
+    dock.innerHTML = '<img class="module-mascot-image" src="assets/mascot-dark.png" alt="" aria-hidden="true">';
+    const heading = header.querySelector(key === 'management' ? '.management-heading' : '.inventory-heading');
+    if (heading) heading.insertAdjacentElement('afterend', dock);
+    else header.prepend(dock);
+    return dock;
   }
 
   function ensureToggle() {
     createRoot();
     let toggle = document.querySelector(key === 'nfe' ? '[data-nfe-notifications]' : '[data-module-notifications]');
     if (!toggle) {
-      const actions = headerActions();
-      if (!actions) return;
+      const dock = ensureMascotDock();
+      if (!dock) return;
       toggle = document.createElement('button');
       toggle.type = 'button';
-      toggle.className = key === 'management' ? 'management-action icon module-notification-toggle' : 'inventory-header-action module-notification-toggle';
+      toggle.className = 'module-notification-toggle module-mascot-notification';
       toggle.dataset.moduleNotifications = 'true';
       toggle.title = 'Central de notificações';
       toggle.setAttribute('aria-label', 'Abrir Central de notificações');
       toggle.setAttribute('aria-expanded', 'false');
       toggle.innerHTML = `${bell}<span class="module-notification-badge" hidden></span>`;
-      const sync = actions.querySelector('[data-management-action="sync"], [data-inv-action="sync"]');
-      if (sync) sync.insertAdjacentElement('beforebegin', toggle);
-      else actions.prepend(toggle);
+      dock.append(toggle);
     }
     toggle.dataset.moduleNotificationToggle = 'true';
     toggle.setAttribute('aria-controls', 'moduleNotificationsPanel');
@@ -80,6 +95,9 @@
   function updateToggle(toggle) {
     const badge = toggle.querySelector('.module-notification-badge');
     if (!badge) return;
+    const visible = notifications.length > 0 && !error;
+    toggle.hidden = !visible;
+    toggle.setAttribute('aria-hidden', String(!visible));
     badge.hidden = !notifications.length;
     badge.textContent = notifications.length;
     toggle.dataset.hasNotifications = String(Boolean(notifications.length));
@@ -123,6 +141,7 @@
 
   function togglePanel() {
     createRoot();
+    if (!notifications.length || error) return closePanel();
     if (!panel.hidden) return closePanel();
     panel.hidden = false;
     panel.classList.add('is-open');

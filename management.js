@@ -150,6 +150,20 @@
   function render() {
     const grouped = areas.map(area => [area, payload.items.filter(item => item.area === area)]);
     app.innerHTML = `${headerMarkup()}${toolbarMarkup()}<div class="management-layout"><section class="management-areas">${grouped.map(([area, items]) => areaMarkup(area, items)).join('')}</section><aside class="management-charts" aria-label="Gráficos da Gestão TI">${chartMarkup('Distribuição por Status', payload.items, 'status', statuses, statusColors)}${chartMarkup('Distribuição por Situação', payload.items, 'situation', situations, situationColors)}${chartMarkup('Distribuição por Limpeza', payload.items, 'cleaning', cleanings, cleaningColors)}</aside></div>`;
+    const mascotDock = app.querySelector('.management-header [data-module-mascot-dock]');
+    if (!mascotDock) {
+      const header = app.querySelector('.management-header');
+      const heading = header?.querySelector('.management-heading');
+      if (header) {
+        const dock = document.createElement('span');
+        dock.className = 'module-mascot-dock module-mascot-dock-management';
+        dock.dataset.moduleMascotDock = 'true';
+        dock.setAttribute('aria-label', 'Mascote ALDECKOT');
+        dock.innerHTML = '<img class="module-mascot-image" src="assets/mascot-dark.png" alt="" aria-hidden="true"><button class="module-notification-toggle module-mascot-notification" type="button" data-module-notifications title="Central de notificações" aria-label="Abrir Central de notificações" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="module-notification-badge" hidden></span></button>';
+        if (heading) heading.insertAdjacentElement('afterend', dock);
+        else header.prepend(dock);
+      }
+    }
     applyManagementFilters();
   }
 
@@ -162,18 +176,20 @@
     if (tab === 'peripherals') {
       const known = peripheralTypes.map(type => {
         const peripheral = (item.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type));
-        return [type, peripheral?.status || 'Não informado'];
-      });
+        return peripheral?.status ? [type, peripheral.status] : null;
+      }).filter(Boolean);
       const extras = (item.peripherals || [])
         .filter(entry => !peripheralTypes.some(type => normalize(entry.type || entry.tipo) === normalize(type)))
-        .map(entry => [entry.type || entry.tipo || 'Periférico', entry.status || 'Não informado']);
-      return `<div class="management-detail-grid">${[...known, ...extras].map(([type, value]) => detail(type, value)).join('')}</div>`;
+        .filter(entry => String(entry.status || '').trim())
+        .map(entry => [entry.type || entry.tipo || 'Periférico', entry.status]);
+      const peripherals = [...known, ...extras];
+      return peripherals.length ? `<div class="management-detail-grid">${peripherals.map(([type, value]) => detail(type, value)).join('')}</div>` : '<p class="management-last-sync">Nenhum periférico informado para este equipamento.</p>';
     }
-    if (tab === 'network') return `<div class="management-detail-grid">${detail('Endereço IP', item.ip)}${detail('Gateway', item.gateway)}${detail('Máscara', item.subnetMask)}${detail('Ping registrado', item.monitoring?.ping ? `${item.monitoring.ping} ms` : '')}${detail('Temperatura', item.monitoring?.temperature ? `${item.monitoring.temperature} °C` : '')}${detail('CPU registrada', item.monitoring?.cpu ? `${item.monitoring.cpu}%` : '')}${detail('RAM registrada', item.monitoring?.ram ? `${item.monitoring.ram}%` : '')}${detail('Disco registrado', item.monitoring?.disk ? `${item.monitoring.disk}%` : '')}${detail('Rede registrada', item.monitoring?.network ? `${item.monitoring.network}%` : '')}</div>`;
-    if (tab === 'location') return `<div class="management-detail-grid">${detail('Área', item.area)}${detail('Tipo', item.type)}${detail('Empresa', item.company)}${detail('Setor', item.sector)}${detail('Local', item.location)}</div>`;
+    if (tab === 'network') return `<div class="management-detail-grid">${detail('Endereço IP', item.ip)}${detail('Gateway', item.gateway)}${detail('Máscara', item.subnetMask)}${detail('CPU registrada', item.monitoring?.cpu ? `${item.monitoring.cpu}%` : '')}</div>`;
+    if (tab === 'location') return `<div class="management-detail-grid">${detail('Área', item.area)}${detail('Setor', item.sector)}${detail('Local', item.location)}</div>`;
     if (tab === 'operational') return `<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article><article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority || 'Estável')}</b></article><article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article><article class="management-operational-card" style="--operational-color:${cleaningColors[item.cleaning] || cleaningColors.Preventiva}"><i>Limpeza</i><b>${escape(item.cleaning)}</b></article></div>`;
     if (tab === 'history') return `<div class="management-log-head"><div><h3>Histórico</h3><p>Registros automáticos e manuais do equipamento.</p></div><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p><span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span></article>`).join('') : '<p class="management-last-sync">Nenhum log registrado para este equipamento.</p>'}</div>`;
-    return `<div class="management-detail-grid">${detail('TAG', item.tag)}${detail('Nº de série', item.serial)}${detail('Marca', item.brand)}${detail('Modelo', item.model)}${detail('Tipo', item.type)}${detail('Data de cadastro', item.registeredAt)}${detail('Última atualização', item.updatedAt ? dateTime(item.updatedAt) : '')}${detail('Observações', item.notes, true)}</div>`;
+    return `<div class="management-detail-grid">${detail('TAG', item.tag)}${detail('Nº de série', item.serial)}${detail('Marca', item.brand)}${detail('Modelo', item.model)}${detail('Data de cadastro', item.registeredAt)}${detail('Última atualização', item.updatedAt ? dateTime(item.updatedAt) : '')}${detail('Observações', item.notes, true)}</div>`;
   }
 
   function detailsModal(item) {
@@ -188,14 +204,14 @@
   const priorityField = value => `<label class="management-field management-priority-field" data-management-priority-field data-tone="${priorityTone(value)}"><span>Prioridade</span><div class="management-priority-select"><i></i><select name="priority" data-management-priority-choice>${optionList(priorities, priorities.includes(value) ? value : 'Estável')}</select></div></label>`;
 
   function formModal(item) {
-    const current = item || { equipment: '', status: 'Ativo', priority: 'Estável', situation: 'Em Uso', cleaning: 'Preventiva', area: state.modal?.area || 'Escritório', type: state.modal?.area || 'Escritório', monitoring: {}, peripherals: [] };
+    const current = item || { equipment: '', status: 'Ativo', priority: 'Estável', situation: 'Em Uso', cleaning: 'Preventiva', area: state.modal?.area || 'Escritório', monitoring: {}, peripherals: [] };
     const edit = Boolean(item);
     const peripheralValue = type => {
       const value = (current.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type))?.status || '';
       return value === 'Não informado' ? '' : value;
     };
     const peripheralFields = peripheralTypes.map(type => field(peripheralFieldName(type), type, peripheralValue(type))).join('');
-    return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar equipamento' : 'Adicionar equipamento'}</h2><p class="management-last-sync">Os dados são armazenados com segurança na Gestão TI.</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Identificação</h3>${field('equipment', 'Nome do equipamento', current.equipment, null, false, 'text', true)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('type', 'Tipo', current.type, areas)}${field('company', 'Empresa', current.company)}${field('sector', 'Setor', current.sector)}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${field('cleaning', 'Limpeza', current.cleaning, cleanings)}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar equipamento'}</button></footer></form></section>`;
+    return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar equipamento' : 'Adicionar equipamento'}</h2><p class="management-last-sync">Os dados são armazenados com segurança na Gestão TI.</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Identificação</h3>${field('equipment', 'Nome do equipamento', current.equipment, null, false, 'text', true)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('sector', 'Setor', current.sector)}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${field('cleaning', 'Limpeza', current.cleaning, cleanings)}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar equipamento'}</button></footer></form></section>`;
   }
 
   function deleteModal(item) {
@@ -431,7 +447,7 @@
     return {
       ...(current || {}), equipment: String(values.equipment || '').trim(), tag: String(values.tag || '').trim(), brand: String(values.brand || '').trim(), model: String(values.model || '').trim(), serial: String(values.serial || '').trim(),
       ip: String(values.ip || '').trim(), gateway: String(values.gateway || '').trim(), subnetMask: String(values.subnetMask || '').trim(), hostname: current?.hostname || '', operatingSystem: String(values.operatingSystem || '').trim(), osVersion: String(values.osVersion || '').trim(),
-      processor: String(values.processor || '').trim(), memory: String(values.memory || '').trim(), storage: String(values.storage || '').trim(), type: values.type, company: String(values.company || '').trim(), sector: String(values.sector || '').trim(),
+      processor: String(values.processor || '').trim(), memory: String(values.memory || '').trim(), storage: String(values.storage || '').trim(), type: current?.type || values.area || '', company: current?.company || '', sector: String(values.sector || '').trim(),
       location: String(values.location || '').trim(), responsible: current?.responsible || '', user: current?.user || '', notes: String(values.notes || '').trim(), status: values.status, priority: priorities.includes(values.priority) ? values.priority : 'Estável',
       situation: values.situation, cleaning: values.cleaning, area: values.area, isFixed: false, peripherals,
       monitoring: current?.monitoring || {},
@@ -752,5 +768,6 @@
     window.clearTimeout(managementRealtimeTimer);
     managementRealtimeTimer = window.setTimeout(load, 180);
   });
+  window.AldeckotManagementOpenDetails = openDetails;
   load();
 })();

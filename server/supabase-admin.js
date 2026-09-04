@@ -1,3 +1,5 @@
+const { randomUUID } = require('crypto');
+
 const readConfig = () => ({
   url: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
   publishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY,
@@ -8,6 +10,9 @@ const send = (response, status, payload) => response.status(status).json(payload
 const readBody = request => typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const normalizeName = value => String(value || '').trim().replace(/\s+/g, ' ');
+const normalizeUserCode = value => String(value || '').trim();
+const userCodeValid = value => /^\d{4,12}$/.test(String(value || ''));
+const createInternalAuthEmail = () => `user-${randomUUID()}@users.aldeckot.internal`;
 const passwordValid = value => typeof value === 'string' && value.length >= 8;
 
 const ensureConfig = response => {
@@ -42,7 +47,12 @@ const requestSupabase = async (config, path, options = {}) => {
 };
 
 const profileFor = async (config, userId) => {
-  const rows = await requestSupabase(config, `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,full_name,email,role,status`);
+  const rows = await requestSupabase(config, `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,full_name,user_code,email,role,status`);
+  return rows?.[0] || null;
+};
+
+const profileForUserCode = async (config, userCode) => {
+  const rows = await requestSupabase(config, `/rest/v1/profiles?user_code=eq.${encodeURIComponent(normalizeUserCode(userCode))}&select=id,full_name,user_code,email,role,status&limit=1`);
   return rows?.[0] || null;
 };
 
@@ -91,6 +101,6 @@ const audit = async (config, actorId, targetUserId, action, details = {}) => {
 };
 
 module.exports = {
-  audit, authenticate, ensureConfig, normalizeEmail, normalizeName, passwordValid,
-  profileFor, readBody, requestSupabase, send
+  audit, authenticate, createInternalAuthEmail, ensureConfig, normalizeEmail, normalizeName, normalizeUserCode, passwordValid,
+  profileFor, profileForUserCode, readBody, requestSupabase, send, userCodeValid
 };
