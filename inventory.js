@@ -44,6 +44,7 @@
   const readBackupMeta = () => ({ ...backupMeta });
   const writeBackupMeta = value => { backupMeta = { ...backupMeta, ...value }; };
   const backend = () => window.AldeckotSupabase;
+  const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const moduleApi = () => backend()?.[moduleConfig.key];
   const backupApi = () => backend()?.[moduleConfig.backupKey];
   const backendMessage = error => {
@@ -891,6 +892,8 @@
     const action = event.target.closest('[data-inv-action]');
     if (action) {
       const type = action.dataset.invAction;
+      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup', 'sync']);
+      if (restrictedActions.has(type) && !canManage()) { event.preventDefault(); return; }
       if (type === 'toggle-tables') { state.sidebarOpen = !state.sidebarOpen; state.tableMenu = null; state.tableMenuPosition = null; renderInventory(); }
       if (type === 'add-table') tableForm();
       if (type === 'add-item') itemForm();
@@ -948,8 +951,8 @@
     }
     const row = event.target.closest('[data-inv-item]'); if (row) { state.itemActionMenu = false; details(activeTable().items.find(item => item.id === row.dataset.invItem)); return; }
     if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
-    const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
-    const deleteItem = event.target.closest('[data-inv-delete-item]'); if (deleteItem && confirm('Excluir este equipamento?')) {
+    const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
+    const deleteItem = event.target.closest('[data-inv-delete-item]'); if (deleteItem && canManage() && confirm('Excluir este equipamento?')) {
       moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => alert(backendMessage(error)));
     }
   }, true);
@@ -965,6 +968,7 @@
     if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; applyInventoryFilters(); }
   });
   document.addEventListener('submit', event => {
+    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form]')) { event.preventDefault(); return; }
     if (event.target.matches('[data-inv-table-form]')) {
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.target)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.tableId;

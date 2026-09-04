@@ -3,6 +3,7 @@
   const modalNode = document.getElementById('managementModal');
   const toastNode = document.getElementById('managementToast');
   const restoreInput = document.getElementById('managementRestoreInput');
+  const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const route = new URLSearchParams(window.location.search);
   const statuses = ['Ativo', 'Reserva', 'Defeito', 'Manutenção', 'Desativado'];
   const situations = ['Em Sala', 'Em Uso', 'Estoque', 'Em Manutenção'];
@@ -699,6 +700,8 @@
       if (event.target === modalNode) { state.modal = null; renderModal(); }
       return;
     }
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'sync', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
     if (action === 'close') { state.modal = null; state.actionMenu = false; renderModal(); }
     if (action === 'details' && activeItem()) { state.modal = { type: 'details', id: activeItem().id }; state.tab = actionNode.dataset.managementReturnTab || 'operational'; state.actionMenu = false; renderModal(); }
@@ -747,6 +750,7 @@
     }
   });
   document.addEventListener('submit', event => {
+    if (!canManage() && event.target.matches('[data-management-form], [data-management-log-form]')) { event.preventDefault(); return; }
     if (event.target.matches('[data-management-form]')) { event.preventDefault(); saveFromForm(event.target); }
     if (event.target.matches('[data-management-log-form]')) { event.preventDefault(); saveLogFromForm(event.target); }
   });

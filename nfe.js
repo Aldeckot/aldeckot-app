@@ -300,6 +300,7 @@
 
   async function saveForm(event, existing) {
     event.preventDefault();
+    if (!isAdmin()) return toast('Seu perfil possui somente acesso de consulta.', true);
     const form = event.currentTarget;
     const submit = form.querySelector('[data-nfe-submit]');
     const values = Object.fromEntries(new FormData(form));
@@ -350,6 +351,7 @@
   }
 
   function confirmDelete(item) {
+    if (!isAdmin()) return toast('Seu perfil possui somente acesso de consulta.', true);
     openModal(`<section class="nfe-dialog small"><header class="nfe-dialog-head"><div><p class="nfe-dialog-eyebrow">Ação irreversível</p><h2>Excluir esta ocorrência?</h2><p>A NF-e ${escape(item.nfeNumber)} será removida da Central. O PDF privado permanece somente para retenção de backup e o log de auditoria é preservado.</p></div><button class="nfe-dialog-close" type="button" data-nfe-close>×</button></header><footer class="nfe-modal-actions"><button class="nfe-action-button" type="button" data-nfe-close>Cancelar</button><button class="nfe-action-button danger" type="button" data-nfe-confirm-delete>Excluir ocorrência</button></footer></section>`);
     modal.querySelector('[data-nfe-confirm-delete]').addEventListener('click', async event => {
       const button = event.currentTarget;
