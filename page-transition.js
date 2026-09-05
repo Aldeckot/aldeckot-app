@@ -130,6 +130,7 @@
     const target = destination instanceof URL ? destination : new URL(destination, window.location.href);
     if (target.href === window.location.href) return;
     isNavigating = true;
+    window.AldeckotLoading?.show('Abrindo módulo…');
     if (/\/index\.html$/i.test(target.pathname)) {
       storeHomeEntrance();
       target.searchParams.set('aldeckotTransition', 'home');
