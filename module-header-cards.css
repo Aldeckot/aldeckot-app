@@ -158,7 +158,20 @@ body.nfe-open .nfe-header-actions {
 .theme-light .module-header-summary-title { color: #1c3d59; }
 .theme-light .module-header-summary-description { color: #4b708e; }
 .theme-light .module-header-summary-tags span { border-color: #80a6bf91; background: #f6fbffb5; color: #29516e; }
-.theme-light .module-header-summary-art { transform: none; mix-blend-mode: multiply; filter: drop-shadow(0 6px 9px #38546d28); }
+/* No tema claro são usadas versões com alpha real para manter a ilustração
+   íntegra, sem retângulo preto, corte ou distorção. */
+.theme-light .module-header-summary-art {
+  /* A área vazia transparente da arte avança sobre o resumo; assim a parte
+     visível fica junto do título sem tocar textos, tags ou o mascote. */
+  transform: translateX(-68px);
+  mix-blend-mode: normal;
+  opacity: 1;
+  filter: drop-shadow(0 6px 9px #38546d28) saturate(1.12) contrast(1.04);
+}
+
+.theme-light .module-header-summary-art.management { background-image: url('assets/module-management-illustration-transparent.png'); }
+.theme-light .module-header-summary-art.control { background-image: url('assets/module-control-illustration-transparent.png'); }
+.theme-light .module-header-summary-art.flux { background-image: url('assets/module-flux-illustration-transparent.png'); }
 
 @media (max-width: 1120px) {
   body.nfe-open .nfe-header {

@@ -1,0 +1,205 @@
+/* Reforço visual do tema claro: mais contraste e superfícies menos translúcidas. */
+html[data-theme="light"],
+body.theme-light {
+  color-scheme: light;
+  --light-surface: rgba(242, 250, 255, .96);
+  --light-surface-alt: rgba(210, 232, 245, .94);
+  --light-line: rgba(95, 142, 177, .58);
+  --light-text: #153b59;
+  --light-muted: #466b87;
+  --light-shadow: 0 15px 34px rgba(35, 76, 108, .18);
+}
+
+/* Tela inicial. */
+body.theme-light.home-page .side {
+  background: linear-gradient(155deg, rgba(244, 250, 255, .96), rgba(212, 230, 243, .94));
+  border-right-color: var(--light-line);
+}
+
+body.theme-light.home-page main:before {
+  background: linear-gradient(90deg, rgba(224, 239, 247, .68), rgba(232, 244, 250, .54) 46%, rgba(218, 235, 246, .7)), url('assets/background-light-v2.png') center/cover no-repeat;
+}
+
+body.theme-light.home-page .side .module-nav-card {
+  border-color: rgba(var(--module-rgb), .84);
+  background: radial-gradient(ellipse at 100% 0%, rgba(var(--module-rgb), .38), transparent 48%), linear-gradient(98deg, rgba(249, 253, 255, .98), rgba(var(--module-rgb), .12));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .95), 0 8px 18px rgba(30, 73, 105, .15), 0 0 14px rgba(var(--module-rgb), .09);
+}
+
+body.theme-light.home-page .side .module-nav-card:hover,
+body.theme-light.home-page .side .module-nav-card:focus-visible {
+  border-color: var(--module);
+  box-shadow: inset 0 1px #fff, 0 0 0 1px rgba(var(--module-rgb), .16), 0 11px 24px rgba(var(--module-rgb), .2);
+}
+
+body.theme-light.home-page .home-calendar,
+body.theme-light.home-page .agenda-upcoming-panel,
+body.theme-light.home-page .agenda-today-panel,
+body.theme-light.home-page .home-recent-panel {
+  border-color: var(--light-line);
+  background: linear-gradient(145deg, rgba(251, 254, 255, .96), rgba(221, 237, 248, .92));
+  box-shadow: var(--light-shadow);
+}
+
+body.theme-light.home-page .agenda-task { background: #dceaf7; color: var(--light-text); }
+body.theme-light.home-page .agenda-task.event { background: #d6f0e1; color: #1f6348; }
+body.theme-light.home-page .agenda-task.task { background: #fff0da; color: #80521a; }
+body.theme-light.home-page .home-recent-item { border-color: rgba(107, 151, 183, .38); background: rgba(248, 252, 255, .92); }
+
+/* Inventário, Controle TI e Flux. */
+body.theme-light.inventory-open > .app {
+  background: linear-gradient(110deg, rgba(232, 244, 250, .82), rgba(225, 239, 248, .72) 50%, rgba(234, 245, 251, .84)), url('assets/background-light-v2.png') center/cover fixed no-repeat;
+}
+
+body.theme-light .inventory-header,
+body.theme-light .inventory-panel:not(.inventory-table-sidebar),
+body.theme-light .inv-dialog {
+  border-color: var(--light-line) !important;
+  background: linear-gradient(135deg, var(--light-surface), var(--light-surface-alt)) !important;
+  box-shadow: var(--light-shadow) !important;
+}
+
+body.theme-light .inventory-toolbar,
+body.theme-light .inventory-search,
+body.theme-light .inventory-filter,
+body.theme-light .inventory-header-action,
+body.theme-light .inventory-table-choice,
+body.theme-light .inventory-sidebar-toggle,
+body.theme-light .inventory-table-add,
+body.theme-light .inv-fields input,
+body.theme-light .inv-fields select,
+body.theme-light .inv-fields textarea,
+body.theme-light .inv-detail,
+body.theme-light .inv-choice-card {
+  border-color: rgba(101, 147, 179, .58) !important;
+  background: rgba(250, 253, 255, .95) !important;
+  color: var(--light-text) !important;
+}
+
+body.theme-light .inventory-data-wrap { background: rgba(234, 245, 251, .9) !important; }
+body.theme-light .inventory-data th { background: #d5e8f5 !important; color: #274c68 !important; }
+body.theme-light .inventory-data td { background: rgba(250, 253, 255, .9) !important; color: #1b405f !important; }
+body.theme-light .inventory-data tbody tr:hover td { background: #ddecf7 !important; }
+
+/* Igualar a especificidade das regras específicas do Inventário. */
+body.theme-light.inventory-open .inventory-header,
+body.theme-light.inventory-open .inventory-panel:not(.inventory-table-sidebar),
+body.theme-light.inventory-open .inv-dialog {
+  border-color: var(--light-line) !important;
+  background: linear-gradient(135deg, var(--light-surface), var(--light-surface-alt)) !important;
+  box-shadow: var(--light-shadow) !important;
+}
+
+body.theme-light.inventory-open .inventory-toolbar,
+body.theme-light.inventory-open .inventory-search,
+body.theme-light.inventory-open .inventory-filter,
+body.theme-light.inventory-open .inventory-header-action,
+body.theme-light.inventory-open .inventory-table-choice,
+body.theme-light.inventory-open .inventory-sidebar-toggle,
+body.theme-light.inventory-open .inventory-table-add {
+  border-color: rgba(101, 147, 179, .58) !important;
+  background: rgba(250, 253, 255, .95) !important;
+  color: var(--light-text) !important;
+}
+
+body.theme-light.inventory-open .inventory-data-wrap { background: rgba(234, 245, 251, .9) !important; }
+body.theme-light.inventory-open .inventory-data th { background: #d5e8f5 !important; color: #274c68 !important; }
+body.theme-light.inventory-open .inventory-data td { background: rgba(250, 253, 255, .9) !important; color: #1b405f !important; }
+body.theme-light.inventory-open .inventory-data tbody tr:hover td { background: #ddecf7 !important; }
+
+/* Gestão TI. */
+body.theme-light.management-open .management-header,
+body.theme-light.management-open .management-toolbar,
+body.theme-light.management-open .management-area,
+body.theme-light.management-open .management-chart,
+body.theme-light.management-open .management-modal-dialog {
+  border-color: var(--light-line) !important;
+  background: linear-gradient(135deg, var(--light-surface), var(--light-surface-alt)) !important;
+  box-shadow: var(--light-shadow) !important;
+}
+
+body.theme-light .management-search input,
+body.theme-light .management-filter,
+body.theme-light .management-field input,
+body.theme-light .management-field select,
+body.theme-light .management-field textarea,
+body.theme-light .management-summary-card,
+body.theme-light .management-detail,
+body.theme-light .management-operational-card,
+body.theme-light .management-form-section,
+body.theme-light .management-transfer-origin,
+body.theme-light .management-transfer-destination {
+  border-color: rgba(101, 147, 179, .56) !important;
+  background: rgba(250, 253, 255, .92) !important;
+  color: var(--light-text) !important;
+}
+
+body.theme-light .management-chart-legend span,
+body.theme-light .management-detail span,
+body.theme-light .management-history-item time,
+body.theme-light .management-summary-card small,
+body.theme-light .management-summary-card em { color: var(--light-muted) !important; }
+
+body.theme-light .mini-computer { border-color: rgba(92, 147, 165, .64) !important; background: linear-gradient(180deg, #eaf7fb, #c8e5ef) !important; }
+
+/* Fiscal NF-e. */
+body.theme-light.nfe-open {
+  --nfe-bg: #d8e8f1;
+  --nfe-panel: rgba(248, 253, 255, .95);
+  --nfe-panel-strong: rgba(238, 248, 253, .97);
+  --nfe-line: rgba(91, 140, 174, .62);
+  --nfe-text: #153b59;
+  --nfe-muted: #466d89;
+  --nfe-shadow: rgba(34, 75, 106, .2);
+}
+
+body.theme-light .nfe-header,
+body.theme-light .nfe-toolbar,
+body.theme-light .nfe-metric,
+body.theme-light .nfe-table-panel,
+body.theme-light .nfe-side-panel,
+body.theme-light .nfe-dialog {
+  border-color: var(--nfe-line);
+  background: linear-gradient(145deg, rgba(251, 254, 255, .97), rgba(220, 238, 248, .94));
+  box-shadow: var(--light-shadow);
+}
+
+body.theme-light .nfe-input,
+body.theme-light .nfe-select,
+body.theme-light .nfe-textarea,
+body.theme-light .nfe-detail,
+body.theme-light .nfe-upload,
+body.theme-light .nfe-action-button,
+body.theme-light .nfe-icon-button,
+body.theme-light .nfe-mini-button {
+  border-color: rgba(91, 140, 174, .64);
+  background: rgba(251, 254, 255, .96);
+  color: var(--light-text);
+}
+
+body.theme-light .nfe-table th { background: #d7e9f5; color: #274f6c; }
+body.theme-light .nfe-row:hover { background: #dcecf7; }
+body.theme-light .nfe-action-button.primary { border-color: #159fc8; background: linear-gradient(135deg, #0baeca, #3978eb); color: #fff; }
+body.theme-light .nfe-action-button.danger { border-color: #d96978; background: #fff0f2; color: #a13949; }
+
+/* Configurações e autenticação. */
+body.theme-light.settings-page .settings-workspace,
+body.theme-light.settings-page .settings-main,
+body.theme-light.settings-page .settings-sidebar {
+  border-color: var(--light-line);
+  box-shadow: var(--light-shadow);
+}
+
+body.theme-light.settings-page .settings-workspace { background: rgba(238, 249, 252, .96); }
+body.theme-light.settings-page .settings-main { background: linear-gradient(145deg, rgba(251, 254, 255, .97), rgba(225, 240, 248, .94)); }
+body.theme-light.settings-page .settings-sidebar { background: linear-gradient(160deg, rgba(247, 253, 255, .98), rgba(216, 235, 245, .95)); }
+body.theme-light.settings-page .overview-card,
+body.theme-light.settings-page .settings-panel-card,
+body.theme-light.settings-page .settings-detail,
+body.theme-light.settings-page .theme-preview,
+body.theme-light.settings-page .theme-choice,
+body.theme-light.settings-page .settings-note { border-color: rgba(108, 151, 182, .5); background: rgba(251, 254, 255, .94); }
+
+body.theme-light.login-page .login-wallpaper { background-image: linear-gradient(115deg, rgba(229, 244, 248, .82), rgba(211, 233, 240, .88)), url('assets/background-light-v2.png'); }
+body.theme-light.login-page .auth-modal,
+body.theme-light.login-page .request-processing { border-color: var(--light-line); background: linear-gradient(145deg, rgba(251, 254, 255, .97), rgba(222, 240, 247, .95)); box-shadow: 0 25px 70px rgba(33, 75, 103, .23); }

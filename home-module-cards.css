@@ -217,6 +217,18 @@
 .theme-switch:checked ~ .side .module-card-icon { background: linear-gradient(145deg, rgba(var(--module-rgb), .2), rgba(245, 251, 255, .72)); }
 .theme-switch:checked ~ .side .module-card-arrow { color: #1a405d; background: rgba(255, 255, 255, .72); }
 
+/* No tema claro, todas as artes usam transparência real para que as cores
+   permaneçam nítidas e não surja nenhum retângulo escuro atrás da imagem. */
+.theme-switch:checked ~ .side .module-card-art {
+  mix-blend-mode: normal;
+  opacity: 1;
+  filter: saturate(1.12) contrast(1.04);
+}
+
+.theme-switch:checked ~ .side .module-management .module-card-art { background-image: url('assets/module-management-illustration-transparent.png'); }
+.theme-switch:checked ~ .side .module-control .module-card-art { background-image: url('assets/module-control-illustration-transparent.png'); }
+.theme-switch:checked ~ .side .module-flux .module-card-art { background-image: url('assets/module-flux-illustration-transparent.png'); }
+
 @media (max-width: 1160px) {
   .home-page .app { grid-template-columns: minmax(290px, 330px) minmax(0, 1fr); }
   .home-page .module-card-copy small { display: block; }

@@ -16,6 +16,7 @@
   };
   const priorityMarker = /^\[\[aldeckot:priority:(urgent|periodic|normal)\]\]\r?\n?/;
   const missingPriorityColumn = error => /(?:priority.*(?:column|schema cache)|column.*priority)/i.test(error?.message || '');
+  const missingAgendaRetentionFunction = error => /(?:purge_expired_agenda_entries|function.*does not exist|schema cache)/i.test(error?.message || '');
   const splitLegacyPriority = notes => {
     const match = String(notes || '').match(priorityMarker);
     return { priority: match?.[1] || null, notes: String(notes || '').replace(priorityMarker, '') };
@@ -904,6 +905,10 @@
   const agenda = {
     async load() {
       await init();
+      const cleanup = await client.rpc('purge_expired_agenda_entries');
+      if (cleanup.error && !missingAgendaRetentionFunction(cleanup.error)) {
+        console.warn('Não foi possível remover os agendamentos expirados.', cleanup.error);
+      }
       let response = await client.from('agenda_entries')
         .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes')
         .order('due_date', { ascending: true })

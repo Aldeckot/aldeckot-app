@@ -182,9 +182,10 @@ body.inventory-open .inventory-toolbar{
   justify-content:flex-start;
 }
 body.inventory-open .inventory-toolbar .inventory-search-wrap{
-  flex:1 1 304px;
-  width:auto;
-  min-width:220px;
+  flex:0 0 280px;
+  width:280px;
+  min-width:0;
+  margin-right:12px;
 }
 body.inventory-open .inventory-toolbar .inventory-search,
 body.inventory-open .inventory-toolbar .inventory-filter{
@@ -193,7 +194,7 @@ body.inventory-open .inventory-toolbar .inventory-filter{
 }
 body.inventory-open .inventory-toolbar-create{
   flex:0 0 auto;
-  margin-left:0;
+  margin-left:79px;
   gap:9px;
 }
 body.inventory-open .inventory-toolbar-create .inventory-filter{
@@ -205,7 +206,8 @@ body.inventory-open .inventory-toolbar-table-actions{
 
 @media(max-width:900px){
   body.inventory-open .inventory-toolbar{width:100%;flex-wrap:wrap}
-  body.inventory-open .inventory-toolbar .inventory-search-wrap{flex:1 1 290px}
+  body.inventory-open .inventory-toolbar .inventory-search-wrap{flex:1 1 290px;width:auto;margin-right:0}
+  body.inventory-open .inventory-toolbar-create{margin-left:0}
   body.inventory-open .inventory-toolbar-table-actions{margin-left:0}
 }
 @media(max-width:620px){
