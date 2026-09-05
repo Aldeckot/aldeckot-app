@@ -151,15 +151,15 @@
 
   const moduleCardIcon = {
     inventory: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/><path d="M16.5 14.2h2.7v3.2h-2.7z"/></svg>',
-    management: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4.2"/><path d="M14.9 9.1 21 3l-2 6.1 2 2-6.1 6.1"/></svg>',
-    control: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M6.5 11.2h2l1.4-3.1 2.2 6 1.6-3h2.8"/></svg>',
+    management: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M6.5 11.2h2l1.4-3.1 2.2 6 1.6-3h2.8"/></svg>',
+    control: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4.2"/><path d="M14.9 9.1 21 3l-2 6.1 2 2-6.1 6.1"/></svg>',
     flux: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13M14 3l4 4-4 4M20 17H7M10 13l-4 4 4 4"/><rect x="2.5" y="4" width="3" height="6" rx="1"/><rect x="18.5" y="14" width="3" height="6" rx="1"/></svg>',
     nfe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8.5 12h7M8.5 16h7"/><path d="M4 7v12a2 2 0 0 0 2 2h8"/></svg>'
   };
   const moduleCards = [
     { id: 'inventory', title: 'Inventário', description: 'Controle de equipamentos, patrimônio e localização.', tags: ['Patrimônio', 'Localização', 'Status'] },
-    { id: 'management', title: 'Gestão TI', description: 'Central de manutenção e gestão de chamados.', tags: ['Manutenção', 'Chamados', 'Equipe'] },
-    { id: 'control', title: 'Controle TI', description: 'Monitoramento de PCs ativos em tempo real.', tags: ['Monitoramento', 'Status', 'Desempenho'] },
+    { id: 'management', title: 'Gestão TI', description: 'Monitoramento de PCs ativos em tempo real.', tags: ['Monitoramento', 'Status', 'Desempenho'] },
+    { id: 'control', title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.', tags: ['Manutenção', 'Chamados', 'Equipe'] },
     { id: 'flux', title: 'Flux', description: 'Envio e recebimento de equipamentos.', tags: ['Transferência', 'Recebimento', 'Histórico'] },
     { id: 'nfe', title: 'Fiscal NF-e', description: 'Registro e consulta de notas fiscais e cupons.', tags: ['NF-e', 'Cupom fiscal', 'Auditoria'] }
   ];

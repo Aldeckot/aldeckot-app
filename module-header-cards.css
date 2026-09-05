@@ -1,0 +1,215 @@
+/* Resumo visual reutilizado nos cabeçalhos dos módulos. */
+.module-header-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 205px) minmax(170px, 210px);
+  justify-content: start;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 64px;
+}
+
+.module-header-summary-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.module-header-summary-title {
+  margin: 0;
+  overflow: hidden;
+  color: #f4f9ff;
+  font-size: clamp(19px, 1.75vw, 27px);
+  font-weight: 800;
+  letter-spacing: -.65px;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-header-summary-description {
+  margin: 0;
+  overflow: hidden;
+  color: #b8cbe0;
+  font-size: clamp(10px, .82vw, 12px);
+  line-height: 1.25;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.module-header-summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.module-header-summary-tags span {
+  padding: 2px 5px;
+  border: 1px solid #57728c82;
+  border-radius: 999px;
+  background: #06182a91;
+  color: #d1e8f8;
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: .02em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.module-header-summary-art {
+  display: block;
+  width: 100%;
+  height: clamp(88px, 8vw, 120px);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  filter: drop-shadow(0 8px 12px #00000045);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transform: translateX(-78px);
+}
+
+.module-header-summary-art.inventory { background-image: url('assets/module-inventory-illustration.png'); }
+.module-header-summary-art.management { background-image: url('assets/module-control-illustration.png'); }
+.module-header-summary-art.control { background-image: url('assets/module-management-illustration.png'); }
+.module-header-summary-art.flux { background-image: url('assets/module-flux-illustration.png'); }
+.module-header-summary-art.nfe { background-image: url('assets/module-nfe-illustration.png'); }
+
+/* Inventário, Controle TI e Flux usam a mesma estrutura de cabeçalho. */
+body.inventory-open .inventory-header {
+  justify-content: flex-start;
+}
+
+body.inventory-open .inventory-header .module-header-summary {
+  flex: 0 1 420px;
+  max-width: 420px;
+}
+
+body.inventory-open .inventory-header .module-mascot-dock {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 76px;
+  margin: 0 24px 0 auto;
+}
+
+body.inventory-open .inventory-header .inventory-header-actions {
+  margin-left: 0 !important;
+}
+
+/* Gestão TI reserva uma faixa própria entre o resumo e as ações. */
+body.management-open .management-header {
+  justify-content: flex-start !important;
+}
+
+body.management-open .management-heading.module-header-summary {
+  display: grid !important;
+  grid-template-columns: minmax(0, 205px) minmax(170px, 210px);
+  align-items: center !important;
+  gap: 4px !important;
+  flex: 0 1 420px !important;
+  max-width: 420px;
+}
+
+body.management-open .management-header .module-mascot-dock {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 76px;
+  margin: 0 24px 0 auto;
+}
+
+body.management-open .management-header-actions {
+  margin-left: 12px !important;
+}
+
+/* Fiscal NF-e mantém a busca independente, sem invadir o resumo ou o mascote. */
+body.nfe-open .nfe-header {
+  grid-template-columns: minmax(300px, 480px) 70px minmax(250px, 400px) auto !important;
+  grid-template-areas: 'summary mascot search actions' !important;
+  gap: clamp(12px, 1.25vw, 18px) !important;
+}
+
+body.nfe-open .nfe-heading.module-header-summary {
+  grid-area: summary;
+  max-width: 480px;
+}
+
+body.nfe-open .nfe-mascot-dock {
+  grid-area: mascot;
+  grid-column: auto;
+  grid-row: auto;
+  width: 66px;
+  height: 70px;
+}
+
+body.nfe-open .nfe-global-search {
+  grid-area: search;
+  width: 100%;
+  max-width: 400px;
+  margin-left: 0 !important;
+}
+
+body.nfe-open .nfe-header-actions {
+  grid-area: actions;
+  margin-left: auto;
+}
+
+.theme-light .module-header-summary-title { color: #1c3d59; }
+.theme-light .module-header-summary-description { color: #4b708e; }
+.theme-light .module-header-summary-tags span { border-color: #80a6bf91; background: #f6fbffb5; color: #29516e; }
+.theme-light .module-header-summary-art { transform: none; mix-blend-mode: multiply; filter: drop-shadow(0 6px 9px #38546d28); }
+
+@media (max-width: 1120px) {
+  body.nfe-open .nfe-header {
+    grid-template-columns: minmax(250px, 1fr) 62px auto !important;
+    grid-template-areas: 'summary mascot actions' 'search search search' !important;
+  }
+
+  body.nfe-open .nfe-global-search { max-width: none; }
+}
+
+@media (max-width: 760px) {
+  .module-header-summary {
+    grid-template-columns: minmax(0, 1fr) 86px;
+    gap: 8px;
+    min-height: 54px;
+  }
+
+  .module-header-summary-art { height: 60px; transform: none; }
+  .module-header-summary-tags { display: none; }
+
+  body.inventory-open .inventory-header .module-mascot-dock,
+  body.management-open .management-header .module-mascot-dock {
+    flex-basis: 52px;
+    width: 52px;
+    height: 57px;
+    margin-right: 8px;
+  }
+
+  body.inventory-open .inventory-header .module-header-summary,
+  body.management-open .management-heading.module-header-summary { flex-basis: min(100%, 360px); }
+
+  body.nfe-open .nfe-header {
+    grid-template-columns: minmax(0, 1fr) 54px auto !important;
+    gap: 9px !important;
+  }
+
+  body.nfe-open .nfe-mascot-dock { width: 52px; height: 56px; }
+}
+
+@media (max-width: 560px) {
+  .module-header-summary { grid-template-columns: minmax(0, 1fr) 72px; }
+  .module-header-summary-art { height: 54px; }
+  .module-header-summary-description { font-size: 9px; }
+
+  body.inventory-open .inventory-header .module-mascot-dock,
+  body.management-open .management-header .module-mascot-dock { margin-left: 0; margin-right: 0; }
+
+  body.nfe-open .nfe-header {
+    grid-template-columns: minmax(0, 1fr) 50px !important;
+    grid-template-areas: 'summary mascot' 'search search' 'actions actions' !important;
+  }
+
+  body.nfe-open .nfe-header-actions { margin-left: 0; }
+}

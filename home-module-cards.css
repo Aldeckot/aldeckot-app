@@ -31,11 +31,11 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 30px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   width: 100%;
-  min-height: 74px;
-  padding: 9px 10px;
+  min-height: 78px;
+  padding: 8px 98px 8px 12px;
   overflow: hidden;
   text-align: left;
   color: #eff7ff;
@@ -65,15 +65,15 @@
 .home-page .nav .module-nav-card:active { transform: translateY(0) scale(.995); }
 
 .home-page .module-nav-card.module-inventory { --module: #31e99a; --module-rgb: 49, 233, 154; }
-.home-page .module-nav-card.module-management { --module: #249bff; --module-rgb: 36, 155, 255; }
-.home-page .module-nav-card.module-control { --module: #9a5cff; --module-rgb: 154, 92, 255; }
+.home-page .module-nav-card.module-management { --module: #9a5cff; --module-rgb: 154, 92, 255; }
+.home-page .module-nav-card.module-control { --module: #249bff; --module-rgb: 36, 155, 255; }
 .home-page .module-nav-card.module-flux { --module: #ff9d25; --module-rgb: 255, 157, 37; }
 .home-page .module-nav-card.module-nfe { --module: #20d8f2; --module-rgb: 32, 216, 242; }
 
 .home-page .module-card-icon {
   position: relative;
   z-index: 2;
-  display: grid !important;
+  display: none !important;
   place-items: center;
   width: 47px;
   height: 47px;
@@ -102,13 +102,14 @@
   display: grid !important;
   min-width: 0;
   gap: 2px;
-  padding: 0 8px 0 2px;
+  grid-column: 1;
+  padding: 0;
 }
 
 .home-page .module-card-copy b {
   overflow: hidden;
   color: #f7fbff;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.15;
   letter-spacing: -.01em;
   text-overflow: ellipsis;
@@ -119,7 +120,7 @@
   display: block;
   overflow: hidden;
   color: #b8cce0;
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 500;
   line-height: 1.22;
   text-overflow: ellipsis;
@@ -130,18 +131,18 @@
   display: flex !important;
   gap: 3px;
   min-width: 0;
-  margin-top: 3px;
+  margin-top: 5px;
 }
 
 .home-page .module-card-tags i {
   max-width: 74px;
   overflow: hidden;
-  padding: 2px 4px;
+  padding: 2px 5px;
   color: #d6e7f9;
   border: 1px solid rgba(190, 222, 248, .2);
   border-radius: 99px;
   background: rgba(5, 17, 28, .46);
-  font-size: 6.4px;
+  font-size: 7px;
   font-style: normal;
   font-weight: 700;
   letter-spacing: .02em;
@@ -154,29 +155,30 @@
 .home-page .module-card-art {
   position: absolute;
   z-index: 0;
-  inset: 0 12px 0 44%;
+  inset: 0 6px 0 auto;
+  width: 86px;
   display: block !important;
   pointer-events: none;
-  background-position: right center;
+  background-position: center;
   background-repeat: no-repeat;
-  background-size: auto 104%;
+  background-size: contain;
   mix-blend-mode: screen;
   opacity: .9;
   filter: saturate(1.18) contrast(1.08);
   transition: transform .35s ease, opacity .35s ease;
 }
 
-.home-page .module-nav-card:hover .module-card-art { transform: translateX(3px) scale(1.035); opacity: 1; }
+.home-page .module-nav-card:hover .module-card-art { transform: scale(1.045); opacity: 1; }
 .home-page .module-inventory .module-card-art { background-image: url('assets/module-inventory-illustration.png'); }
-.home-page .module-management .module-card-art { background-image: url('assets/module-management-illustration.png'); }
-.home-page .module-control .module-card-art { background-image: url('assets/module-control-illustration.png'); }
+.home-page .module-management .module-card-art { background-image: url('assets/module-control-illustration.png'); }
+.home-page .module-control .module-card-art { background-image: url('assets/module-management-illustration.png'); }
 .home-page .module-flux .module-card-art { background-image: url('assets/module-flux-illustration.png'); }
 .home-page .module-nfe .module-card-art { background-image: url('assets/module-nfe-illustration.png'); }
 
 .home-page .module-card-arrow {
   position: relative;
   z-index: 2;
-  display: grid !important;
+  display: none !important;
   place-items: center;
   width: 25px;
   height: 25px;
@@ -217,9 +219,9 @@
 
 @media (max-width: 1160px) {
   .home-page .app { grid-template-columns: minmax(290px, 330px) minmax(0, 1fr); }
-  .home-page .module-card-copy small { display: none; }
-  .home-page .module-card-tags { margin-top: 1px; }
-  .home-page .module-card-art { left: 48%; opacity: .65; }
+  .home-page .module-card-copy small { display: block; }
+  .home-page .module-card-tags { margin-top: 4px; }
+  .home-page .module-card-art { right: 6px; left: auto; opacity: .8; }
 }
 
 @media (max-width: 980px) {
@@ -228,10 +230,9 @@
   .home-page .side .theme-toggle { display: none; }
   .home-page .home-nav-label { font-size: 0; height: 10px; padding: 0; }
   .home-page .nav { gap: 10px; }
-  .home-page .nav .module-nav-card { display: grid; grid-template-columns: 1fr; min-height: 58px; padding: 5px; place-items: center; }
-  .home-page .module-card-icon { width: 43px; height: 43px; }
-  .home-page .module-card-icon svg { width: 24px; height: 24px; }
-  .home-page .module-card-copy, .home-page .module-card-art, .home-page .module-card-arrow { display: none !important; }
+  .home-page .nav .module-nav-card { display: grid; grid-template-columns: 1fr; min-height: 64px; padding: 4px; place-items: center; }
+  .home-page .module-card-icon, .home-page .module-card-copy, .home-page .module-card-arrow { display: none !important; }
+  .home-page .module-card-art { display: block !important; inset: 0; width: auto; background-position: center; background-size: contain; opacity: .95; }
 }
 
 @media (max-width: 650px) {
@@ -240,10 +241,11 @@
   .home-page .side .brand { display: none; }
   .home-page .home-nav-label { display: block; height: auto; padding: 0 3px 8px; font-size: 10px; }
   .home-page .nav { grid-template-columns: 1fr; gap: 7px; }
-  .home-page .nav .module-nav-card { grid-template-columns: 48px minmax(0, 1fr) 28px; min-height: 66px; place-items: unset; }
-  .home-page .module-card-copy, .home-page .module-card-arrow { display: grid !important; }
+  .home-page .nav .module-nav-card { grid-template-columns: minmax(0, 1fr); min-height: 72px; padding: 7px 82px 7px 10px; place-items: unset; }
+  .home-page .module-card-copy { display: grid !important; grid-column: 1; }
+  .home-page .module-card-arrow, .home-page .module-card-icon { display: none !important; }
   .home-page .module-card-copy small, .home-page .module-card-tags { display: none !important; }
-  .home-page .module-card-art { display: block !important; left: 51%; opacity: .47; }
+  .home-page .module-card-art { display: block !important; inset: 0 4px 0 auto; left: auto; width: 74px; background-position: center; background-size: contain; opacity: .82; }
   .home-page main { min-height: 72vh; }
 }
 

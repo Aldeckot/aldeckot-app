@@ -56,6 +56,7 @@
     };
     return `<svg class="nfe-svg" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.document}</svg>`;
   };
+  const nfeHeaderSummaryMarkup = () => `<div class="nfe-heading module-header-summary module-header-summary-nfe"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">Fiscal NF-e</h1><p class="module-header-summary-description">Registro e consulta de notas fiscais e cupons.</p><div class="module-header-summary-tags"><span>NF-e</span><span>Cupom fiscal</span><span>Auditoria</span></div></div><span class="module-header-summary-art nfe" aria-hidden="true"></span></div>`;
   const query = new URLSearchParams(window.location.search);
   const state = {
     page: 1,
@@ -124,7 +125,7 @@
       ? state.alerts.map(alert => `<article class="nfe-alert-card"><b>🚨 ${escape(alert.pdv)}</b><span>${number(alert.occurrences)} ocorrências nesta semana</span><small>Última: ${dateTime(alert.latestAt)}</small></article>`).join('')
       : '<p class="nfe-empty" style="padding:20px 4px">Nenhum PDV atingiu o limite semanal.</p>';
     root.innerHTML = `<header class="nfe-header">
-      <div class="nfe-header-icon">▧</div><div class="nfe-heading"><h1>Fiscal NF-e</h1><p>Central de Ocorrências NF-e · Liberação e monitoramento</p></div>
+      ${nfeHeaderSummaryMarkup()}
       <div class="nfe-header-actions"><span class="nfe-sync"><i></i>Tempo real</span><button class="nfe-icon-button" type="button" data-nfe-theme title="Alternar tema" aria-label="Alternar tema">◐</button><button class="nfe-icon-button" type="button" data-nfe-export="excel" title="Exportar Excel" aria-label="Exportar Excel">⇩</button><button class="nfe-icon-button" type="button" data-nfe-export="pdf" title="Exportar PDF" aria-label="Exportar PDF">▤</button>${canManage ? '<button class="nfe-icon-button" type="button" data-nfe-backup title="Backup Fiscal" aria-label="Backup Fiscal">◫</button>' : ''}<button class="nfe-icon-button" type="button" data-nfe-home title="Voltar para Home" aria-label="Voltar para Home">⌂</button></div>
     </header>
     <div class="nfe-grid"><section class="nfe-workspace">
@@ -192,7 +193,7 @@
       ? state.alerts.map(alert => `<article class="nfe-alert-card"><b>${icon('monitor')}${escape(alert.pdv)}</b><span>${number(alert.occurrences)} ocorrências nesta semana</span><small>Última: ${dateTime(alert.latestAt)}</small></article>`).join('')
       : `<div class="nfe-alert-empty">${icon('alert')}<b>Nenhum PDV atingiu<br>o limite semanal.</b></div>`;
     root.innerHTML = `<header class="nfe-header">
-      <span class="nfe-header-icon">${icon('document')}</span><div class="nfe-heading"><h1>Fiscal NF-e</h1><p>Central de Ocorrências NF-e • Liberação e monitoramento</p></div>
+      ${nfeHeaderSummaryMarkup()}
       <span class="module-mascot-dock nfe-mascot-dock" data-module-mascot-dock aria-label="Mascote ALDECKOT"><img class="module-mascot-image" src="assets/mascot-dark.png" alt="" aria-hidden="true"><button class="nfe-icon-button module-notification-toggle" type="button" data-nfe-notifications title="Central de notificações" aria-label="Abrir Central de notificações" aria-expanded="false">${icon('bell')}<span class="module-notification-badge" hidden></span></button></span>
       <label class="nfe-global-search">${icon('search')}<input class="nfe-input" data-nfe-query value="${escape(state.filters.query)}" placeholder="Buscar NF-e, PDV, operador, fiscal…" autocomplete="off"><kbd>Ctrl + K</kbd></label>
       <div class="nfe-header-actions"><span class="nfe-sync"><i></i>Tempo real</span>${canManage ? `<button class="nfe-icon-button" type="button" data-nfe-backup title="Backup Fiscal" aria-label="Backup Fiscal">${icon('backup')}</button>` : ''}<button class="nfe-icon-button" type="button" data-nfe-home title="Voltar para Home" aria-label="Voltar para Home">${icon('home')}</button></div>

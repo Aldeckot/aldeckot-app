@@ -529,6 +529,7 @@
     return {
       id: row.id,
       tableId: row.table_id,
+      terminal: payload.terminal || '',
       equipment: payload.equipment || payload.name || '',
       tag: payload.tag || '', brand: payload.brand || '', model: payload.model || '', serial: payload.serial || '',
       ip: payload.ip || '', gateway: payload.gateway || payload.gatway || '', subnetMask: payload.subnetMask || payload.mask || payload.mascara || '', hostname: payload.hostname || '', operatingSystem: payload.operatingSystem || '', osVersion: payload.osVersion || '',
@@ -550,7 +551,7 @@
   };
 
   const managementRecordPayload = (item = {}, activityDescription = '') => ({
-    equipment: String(item.equipment || '').trim(), tag: String(item.tag || '').trim(), brand: String(item.brand || '').trim(), model: String(item.model || '').trim(), serial: String(item.serial || '').trim(),
+    terminal: String(item.terminal || '').trim(), equipment: String(item.equipment || '').trim(), tag: String(item.tag || '').trim(), brand: String(item.brand || '').trim(), model: String(item.model || '').trim(), serial: String(item.serial || '').trim(),
     ip: String(item.ip || '').trim(), gateway: String(item.gateway || '').trim(), subnetMask: String(item.subnetMask || '').trim(), hostname: String(item.hostname || '').trim(), operatingSystem: String(item.operatingSystem || '').trim(), osVersion: String(item.osVersion || '').trim(),
     processor: String(item.processor || '').trim(), memory: String(item.memory || '').trim(), storage: String(item.storage || '').trim(),
     type: item.type || 'Escritório', company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
@@ -579,7 +580,7 @@
         table,
         items: withoutDuplicateItems(
           rows.map(managementItemFromRow),
-          ['equipment', 'model', 'brand', 'ip', 'hostname', 'area', 'sector', 'status', 'situation', 'cleaning', 'notes']
+          ['terminal', 'equipment', 'model', 'brand', 'ip', 'hostname', 'area', 'sector', 'status', 'situation', 'cleaning', 'notes']
         )
       };
     },
@@ -587,11 +588,27 @@
     async save(item, existingId, activityDescription) {
       const table = await this.ensureTable();
       const payload = managementRecordPayload(item, activityDescription);
-      const result = existingId
-        ? await client.from('module_records').update({ payload, position: 0 }).eq('id', existingId).select('id, table_id, payload, position, created_at, updated_at').single()
-        : await client.from('module_records').insert({ table_id: table.id, payload, position: 0 }).select('id, table_id, payload, position, created_at, updated_at').single();
+      let result;
+      if (existingId) {
+        // Um terminal fixo nunca muda de posição ao receber manutenção ou uma edição.
+        result = await client.from('module_records').update({ payload }).eq('id', existingId).select('id, table_id, payload, position, created_at, updated_at').single();
+      } else {
+        const rows = check(await client.from('module_records').select('position').eq('table_id', table.id).order('position', { ascending: false }).limit(1));
+        const position = Number(rows[0]?.position || 0) + 1;
+        result = await client.from('module_records').insert({ table_id: table.id, payload, position }).select('id, table_id, payload, position, created_at, updated_at').single();
+      }
       const saved = check(result);
       return managementItemFromRow(saved);
+    },
+
+    async transfer(sourceId, destinationId) {
+      await init();
+      if (!sourceId || !destinationId || sourceId === destinationId) fail('Selecione um terminal de destino diferente.');
+      check(await client.rpc('management_transfer_terminal', {
+        p_source_id: sourceId,
+        p_destination_id: destinationId
+      }));
+      return this.load();
     },
 
     async replaceAll(items) {
@@ -612,6 +629,7 @@
       await init();
       const row = check(await client.from('module_records').select('id, table_id, payload, module_tables(name)').eq('id', id).single());
       const payload = row.payload || {};
+      if (Boolean(payload.isFixed)) fail('Terminais fixos não podem ser excluídos.');
       check(await client.from('module_records').delete().eq('id', id));
       const table = Array.isArray(row.module_tables) ? row.module_tables[0] : row.module_tables;
       await events.record('management', 'delete', {

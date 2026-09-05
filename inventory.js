@@ -24,6 +24,16 @@
     statusDefault: 'Ativo', situationDefault: 'Normal', situationLabel: 'Situação', situationChart: 'Distribuição por Situação',
     tablePlaceholder: 'Ex.: Equipamentos TI, Estoque…', emptyText: 'Selecione uma tabela na lateral', emptyCreateText: 'Crie uma tabela para começar a organizar os equipamentos.'
   };
+  const moduleHeader = controlMode ? {
+    title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.',
+    tags: ['Manutenção', 'Chamados', 'Equipe'], art: 'control'
+  } : fluxMode ? {
+    title: 'Flux', description: 'Envio e recebimento de equipamentos.',
+    tags: ['Transferência', 'Recebimento', 'Histórico'], art: 'flux'
+  } : {
+    title: 'Inventário', description: 'Controle de equipamentos, patrimônio e localização.',
+    tags: ['Patrimônio', 'Localização', 'Status'], art: 'inventory'
+  };
   const statuses = moduleConfig.statuses;
   const situations = moduleConfig.situations;
   const cleanings = moduleConfig.cleanings || [];
@@ -47,6 +57,7 @@
   const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const moduleApi = () => backend()?.[moduleConfig.key];
   const backupApi = () => backend()?.[moduleConfig.backupKey];
+  const moduleHeaderSummaryMarkup = () => `<div class="inventory-heading module-header-summary module-header-summary-${moduleHeader.art}"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">${moduleHeader.title}</h1><p class="module-header-summary-description">${moduleHeader.description}</p><div class="module-header-summary-tags">${moduleHeader.tags.map(tag => `<span>${tag}</span>`).join('')}</div></div><span class="module-header-summary-art ${moduleHeader.art}" aria-hidden="true"></span></div>`;
   const backendMessage = error => {
     const message = error?.message || 'Não foi possível comunicar com o Supabase.';
     if (controlMode && /control_(items|item_logs|backups|backup_settings)/i.test(message)) return 'O banco ainda não possui a estrutura do Controle TI. Execute o arquivo supabase/003_control_ti.sql no SQL Editor do Supabase.';
@@ -390,9 +401,12 @@
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Sincronizar módulo" aria-label="Sincronizar módulo" class="inventory-header-action" data-inv-action="sync"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-4L4 9m0-5v5h5M4 13a8 8 0 0 0 14 4l2-2m0 5v-5h-5"/></svg></button><span class="inventory-sync" aria-live="polite">Sincronizado <i></i></span><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg viewBox="0 0 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4m0 3v4m0 3v4"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
       ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyMarkup()}</main>`}</div></div>`;
+    const inventoryHeader = document.querySelector('.inventory-header');
+    const previousHeading = inventoryHeader?.querySelector('.inventory-heading');
+    if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = moduleHeaderSummaryMarkup();
     const mascotDock = document.querySelector('.inventory-header [data-module-mascot-dock]');
     if (!mascotDock) {
-      const header = document.querySelector('.inventory-header');
+      const header = inventoryHeader;
       const heading = header?.querySelector('.inventory-heading');
       if (header) {
         const dock = document.createElement('span');
@@ -409,8 +423,6 @@
     ensureFilterEmptyRow(table);
     applyInventoryFilters();
     if (controlMode || fluxMode) {
-      const heading = document.querySelector('.inventory-heading');
-      if (heading) heading.querySelector('div:last-child').innerHTML = `<h1>${moduleConfig.title}</h1><p>${moduleConfig.subtitle}</p>`;
       const chartTitles = document.querySelectorAll('.inventory-charts .inventory-chart h3');
       if (chartTitles[1]) chartTitles[1].textContent = moduleConfig.situationChart;
       const emptyText = document.querySelector('.inventory-empty-content p');
