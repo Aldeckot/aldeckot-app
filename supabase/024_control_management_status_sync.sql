@@ -36,6 +36,7 @@ as $$
 declare
   management_status text;
   matched_record record;
+  existing_logs jsonb;
   next_payload jsonb;
   previous_status text;
 begin
@@ -67,6 +68,22 @@ begin
       matched_record.payload,
       '{status}',
       to_jsonb(management_status),
+      true
+    );
+    existing_logs := case
+      when jsonb_typeof(matched_record.payload -> 'logs') = 'array'
+        then matched_record.payload -> 'logs'
+      else '[]'::jsonb
+    end;
+    next_payload := jsonb_set(
+      next_payload,
+      '{logs}',
+      existing_logs || jsonb_build_array(jsonb_build_object(
+        'id', gen_random_uuid()::text,
+        'at', timezone('utc', now()),
+        'text', format('Status atualizado pelo Controle TI: %s → %s.', previous_status, management_status),
+        'source', 'Controle TI'
+      )),
       true
     );
     next_payload := jsonb_set(
