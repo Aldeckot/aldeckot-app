@@ -93,17 +93,8 @@
     @media(max-width:430px){.home-recent-log{width:100%;padding:8px 0 0;border-top:1px solid #6381a04d;border-left:0}.home-recent-log b{white-space:normal}}
   </style>
   <style>
-    /* Mantém a saudação da tela inicial legível em duas linhas distintas. */
-    @media (min-width:1200px){
-      .home-reference{
-        grid-template-columns:minmax(360px,1fr) minmax(220px,250px) minmax(260px,300px);
-        column-gap:10px;
-      }
-      .home-reference .home-intro h2,
-      .home-reference .home-intro p{
-        white-space:nowrap;
-      }
-    }
+    /* A tela inicial abre diretamente nos painéis operacionais. */
+    .home-page .home-intro{display:none}
   </style>
   <link rel="stylesheet" href="inventory.css">
   <link rel="stylesheet" href="mascot.css">
