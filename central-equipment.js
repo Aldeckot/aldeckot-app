@@ -289,7 +289,7 @@
     const data = modalState?.data;
     const JsPdf = window.jspdf?.jsPDF;
     if (!data) return;
-    if (!JsPdf) return window.alert('O gerador de PDF não foi carregado. Verifique sua conexão e tente novamente.');
+    if (!JsPdf) return window.AldeckotMessage.show('O gerador de PDF não foi carregado. Verifique sua conexão e tente novamente.');
     const doc = new JsPdf({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
     const width = doc.internal.pageSize.getWidth();
     const height = doc.internal.pageSize.getHeight();

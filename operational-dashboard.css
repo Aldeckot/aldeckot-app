@@ -1,0 +1,50 @@
+/* A Central de Operações é uma continuação visual dos itens atualizados. */
+.home-operations-slot{margin-top:12px}
+.operations-panel{position:relative;display:grid;gap:10px;padding:13px 0 0;border-top:1px solid #4e789064;background:transparent;min-width:0}
+.operations-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.operations-heading>div{display:flex;align-items:center;gap:9px;min-width:0}
+.operations-heading>div>span{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border:1px solid #27cce9;border-radius:9px;background:#0a4160;color:#71efff;font-size:16px;box-shadow:inset 0 1px #ffffff18}
+.operations-heading h2{margin:0;color:#f0f7ff;font-size:13px;letter-spacing:-.15px}
+.operations-heading p{margin:2px 0 0;color:#9db9d9;font-size:10px}
+.operations-refresh{flex:0 0 auto;padding:6px 9px;border:1px solid #286aa0;border-radius:8px;background:#0a2947;color:#b5e9ff;font-size:9px;font-weight:800;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.operations-refresh:hover,.operations-refresh:focus-visible{border-color:#37d6ef;background:#10466d;outline:0;transform:translateY(-1px)}
+.operations-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.operations-metric{display:grid;align-content:start;min-height:76px;padding:9px 10px;border:1px solid #32668d;border-radius:10px;background:#0a1a2da8;color:#eaf6ff;text-align:left;transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.operations-metric:hover,.operations-metric:focus-visible{border-color:#48cbe8;background:#0d2945;box-shadow:0 7px 16px #0003;outline:0;transform:translateY(-2px)}
+.operations-metric:disabled{cursor:default;filter:saturate(.45);opacity:.62}
+.operations-metric:disabled:hover{border-color:inherit;background:#0a1a2da8;box-shadow:none;transform:none}
+.operations-metric small,.operations-metric span{display:block;overflow:hidden;color:#9bb8d8;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+.operations-metric strong{display:block;margin:5px 0 3px;color:#effaff;font-size:22px;line-height:1}
+.operations-metric.active{border-color:#259e78}.operations-metric.active strong{color:#58f3ad}
+.operations-metric.warn{border-color:#a87a29}.operations-metric.warn strong{color:#ffc95d}
+.operations-metric.info{border-color:#287eb5}.operations-metric.info strong{color:#63d7ff}
+.operations-metric.violet{border-color:#7452bd}.operations-metric.violet strong{color:#bf94ff}
+.operations-loading{margin:0;color:#9ec6e9;font-size:11px}
+.operations-target-picker{position:fixed;z-index:900;inset:0;display:grid;place-items:center;padding:18px;background:#020914b8;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.operations-target-dialog{width:min(470px,100%);padding:18px;border:1px solid #2e91c3;border-radius:15px;background:linear-gradient(145deg,#0d2540,#071527);box-shadow:0 25px 65px #000b;color:#eff9ff}
+.operations-target-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.operations-target-dialog header small{display:block;color:#4edff6;font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.operations-target-dialog h3{margin:4px 0 0;font-size:17px;letter-spacing:-.3px}
+.operations-target-dialog header button{display:grid;place-items:center;width:30px;height:30px;border:1px solid #467a9e;border-radius:8px;background:#102d4a;color:#e5f8ff;font-size:20px;line-height:1}
+.operations-target-dialog>p{margin:12px 0;color:#a5c5dd;font-size:11px}
+.operations-target-list{display:grid;gap:8px}
+.operations-target-list button{display:grid;gap:4px;width:100%;padding:11px 12px;border:1px solid #315d80;border-radius:9px;background:#0b1d33;color:#f1fbff;text-align:left;transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.operations-target-list button:hover,.operations-target-list button:focus-visible{border-color:#45d7ee;background:#103657;outline:0;transform:translateY(-1px)}
+.operations-target-list b{font-size:12px}.operations-target-list span{color:#9cc5e0;font-size:10px}
+
+@keyframes operations-table-update{0%{filter:brightness(1)}40%{filter:brightness(1.14);box-shadow:0 0 25px #20cfe842}100%{filter:brightness(1)}}
+@keyframes operations-item-update{0%{opacity:.35;transform:translateY(7px) scale(.98)}60%{opacity:1;transform:translateY(-2px) scale(1.015)}100%{opacity:1;transform:translateY(0) scale(1)}}
+.operations-panel.is-updating{animation:operations-table-update .9s ease-out both}
+.operations-panel.is-updating .operations-metric{animation:operations-item-update .52s cubic-bezier(.2,.8,.2,1) both}
+.operations-panel.is-updating .operations-metric:nth-child(2){animation-delay:.07s}.operations-panel.is-updating .operations-metric:nth-child(3){animation-delay:.14s}.operations-panel.is-updating .operations-metric:nth-child(4){animation-delay:.21s}
+
+.theme-switch:checked~main .operations-panel{border-color:#7fa8be88}
+.theme-switch:checked~main .operations-heading h2,.theme-switch:checked~main .operations-metric{color:#183957}
+.theme-switch:checked~main .operations-heading p,.theme-switch:checked~main .operations-metric small,.theme-switch:checked~main .operations-metric span{color:#547594}
+.theme-switch:checked~main .operations-metric{border-color:#9ec9e3;background:#f8fcffcf}
+.theme-switch:checked~main .operations-metric:hover,.theme-switch:checked~main .operations-metric:focus-visible{background:#fff;border-color:#55b6d3}
+.theme-switch:checked~main .operations-metric:disabled:hover{background:#f8fcffcf;border-color:#9ec9e3}
+
+@media(max-width:650px){.operations-panel{padding-top:11px}.operations-heading p{display:none}.operations-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.operations-metric{min-height:71px}.operations-metric strong{font-size:20px}}
+@media(max-width:430px){.operations-heading{align-items:flex-start}.operations-refresh{padding:6px 7px}.operations-metric{padding:8px}.operations-metric small,.operations-metric span{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.operations-panel.is-updating,.operations-panel.is-updating .operations-metric{animation:none}}

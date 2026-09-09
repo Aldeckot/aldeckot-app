@@ -16,6 +16,8 @@
   };
   const priorityMarker = /^\[\[aldeckot:priority:(urgent|periodic|normal)\]\]\r?\n?/;
   const missingPriorityColumn = error => /(?:priority.*(?:column|schema cache)|column.*priority)/i.test(error?.message || '');
+  const missingAgendaCompletionColumn = error => /(?:is_completed|completed_at).*?(?:column|schema cache)|(?:column|schema cache).*?(?:is_completed|completed_at)/i.test(error?.message || '');
+  const missingAgendaCompletionFunction = error => /(?:set_agenda_(?:task|entry)_completion|function.*does not exist|schema cache)/i.test(error?.message || '');
   const missingAgendaRetentionFunction = error => /(?:purge_expired_agenda_entries|function.*does not exist|schema cache)/i.test(error?.message || '');
   const splitLegacyPriority = notes => {
     const match = String(notes || '').match(priorityMarker);
@@ -910,12 +912,17 @@
         console.warn('Não foi possível remover os agendamentos expirados.', cleanup.error);
       }
       let response = await client.from('agenda_entries')
-        .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes')
+        .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes, is_completed, completed_at')
         .order('due_date', { ascending: true })
         .order('due_time', { ascending: true });
-      if (missingPriorityColumn(response.error)) {
+      const priorityUnavailable = missingPriorityColumn(response.error);
+      const completionUnavailable = missingAgendaCompletionColumn(response.error);
+      if (priorityUnavailable || completionUnavailable) {
+        const columns = ['id', 'kind', 'title', 'due_date', 'due_time', 'reminder_minutes', 'notes'];
+        if (!priorityUnavailable) columns.push('priority');
+        if (!completionUnavailable) columns.push('is_completed', 'completed_at');
         response = await client.from('agenda_entries')
-          .select('id, kind, title, due_date, due_time, reminder_minutes, notes')
+          .select(columns.join(', '))
           .order('due_date', { ascending: true })
           .order('due_time', { ascending: true });
       }
@@ -928,7 +935,9 @@
         time: row.due_time ? row.due_time.slice(0, 5) : '',
         reminder: row.reminder_minutes,
         priority: splitLegacyPriority(row.notes).priority || row.priority || 'normal',
-        notes: splitLegacyPriority(row.notes).notes
+        notes: splitLegacyPriority(row.notes).notes,
+        completed: Boolean(row.is_completed),
+        completedAt: row.completed_at || null
       }));
     },
 
@@ -960,6 +969,19 @@
     async remove(id) {
       await init();
       check(await client.from('agenda_entries').delete().eq('id', id));
+    },
+
+    async setCompleted(id, completed) {
+      await init();
+      const result = await client.rpc('set_agenda_entry_completion', {
+        p_entry_id: id,
+        p_completed: Boolean(completed)
+      }).single();
+      if (missingAgendaCompletionFunction(result.error)) {
+        fail('A conclusão de tarefas e eventos precisa das migrações 028 e 029 no banco de dados.');
+      }
+      const row = check(result);
+      return { id: row.id, completed: Boolean(row.is_completed), completedAt: row.completed_at || null };
     }
   };
 
@@ -1287,6 +1309,94 @@
     }
   };
 
+  const auditReports = {
+    async activity({ period, cutoff } = {}) {
+      await init();
+      const match = /^(\d{4})-(\d{2})$/.exec(String(period || ''));
+      if (!match) fail('Informe um mês válido para a auditoria.');
+      const year = Number(match[1]); const month = Number(match[2]);
+      if (month < 1 || month > 12) fail('Informe um mês válido para a auditoria.');
+      const periodStart = `${match[1]}-${match[2]}-01`;
+      const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+      const safeCutoff = /^\d{4}-\d{2}-\d{2}$/.test(String(cutoff || '')) ? String(cutoff) : nextMonth;
+      const exclusiveEnd = new Date(`${safeCutoff}T00:00:00Z`);
+      exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+      const rangeEnd = exclusiveEnd.toISOString();
+      const rangeStart = `${periodStart}T00:00:00.000Z`;
+      if (safeCutoff < periodStart || safeCutoff >= nextMonth) fail('A data de corte precisa pertencer ao mês selecionado.');
+      const fetchAll = async createRequest => {
+        const rows = []; const batchSize = 1000;
+        for (let from = 0; ; from += batchSize) {
+          const page = check(await createRequest().range(from, from + batchSize - 1));
+          rows.push(...page);
+          if (page.length < batchSize) return rows;
+        }
+      };
+      const [agendaRows, activityRows] = await Promise.all([
+        fetchAll(() => client.from('agenda_entries')
+          .select('id, kind, title, due_date, due_time, priority, notes, completed_at')
+          .eq('is_completed', true)
+          .gte('completed_at', rangeStart)
+          .lt('completed_at', rangeEnd)
+          .order('completed_at', { ascending: false })),
+        fetchAll(() => client.from('sync_events')
+          .select('id, module, operation, details, created_at')
+          .in('operation', ['create', 'update', 'delete', 'log'])
+          .gte('created_at', rangeStart)
+          .lt('created_at', rangeEnd)
+          .order('created_at', { ascending: false }))
+      ]);
+      const agendaEntries = agendaRows.map(row => ({
+        id: row.id, kind: row.kind, title: row.title, dueDate: row.due_date, dueTime: row.due_time,
+        priority: row.priority || splitLegacyPriority(row.notes).priority || 'normal', completedAt: row.completed_at
+      }));
+      const activities = activityRows.map(row => ({
+        id: row.id, module: row.module, operation: row.operation, details: row.details || {}, occurredAt: row.created_at
+      }));
+      return { periodStart, cutoff: safeCutoff, agendaEntries, activities };
+    },
+
+    async list() {
+      await init();
+      return check(await client.from('monthly_audit_reports')
+        .select('id, period_start, cutoff_date, status, summary, pdf_path, pdf_name, pdf_size, generated_at, finalized_at')
+        .order('period_start', { ascending: false })
+        .order('cutoff_date', { ascending: false }));
+    },
+
+    async save({ periodStart, cutoff, finalized, summary, pdf }) {
+      await init();
+      if (!(pdf instanceof Blob) || !pdf.size) fail('Não foi possível preparar o PDF da auditoria.');
+      const month = String(periodStart || '').slice(0, 7);
+      const fileName = `auditoria-${month}-${cutoff}.pdf`;
+      const path = `${month.slice(0, 4)}/${month.slice(5, 7)}/${fileName}`;
+      const { error: uploadError } = await client.storage.from('audit-reports').upload(path, pdf, {
+        contentType: 'application/pdf', upsert: true
+      });
+      if (uploadError) fail(uploadError.message);
+      const { data: userData, error: userError } = await client.auth.getUser();
+      if (userError) fail(userError.message);
+      return check(await client.from('monthly_audit_reports').upsert({
+        period_start: periodStart,
+        cutoff_date: cutoff,
+        status: finalized ? 'finalized' : 'draft',
+        summary: summary || {},
+        pdf_path: path,
+        pdf_name: fileName,
+        pdf_size: pdf.size,
+        generated_by: userData.user?.id || null
+      }, { onConflict: 'period_start,cutoff_date' }).select().single());
+    },
+
+    async download(report, download = true) {
+      await init();
+      const options = download ? { download: report.pdf_name || true } : {};
+      const { data, error } = await client.storage.from('audit-reports').createSignedUrl(report.pdf_path, 120, options);
+      if (error) fail(error.message);
+      return data?.signedUrl || '';
+    }
+  };
+
   const notificationAcknowledgements = {
     async list() {
       await init();
@@ -1327,9 +1437,16 @@
     async state() {
       const session = await this.session();
       if (!session?.user) return { session: null, user: null, profile: null, isAdmin: false };
-      const profile = check(await client.from('profiles')
-        .select('id, full_name, user_code, role, status, created_at, updated_at, last_sign_in_at')
-        .eq('id', session.user.id).maybeSingle());
+      let response = await client.from('profiles')
+        .select('id, full_name, user_code, role, status, module_permissions, created_at, updated_at, last_sign_in_at')
+        .eq('id', session.user.id).maybeSingle();
+      if (response.error && /module_permissions/i.test(response.error.message || '')) {
+        response = await client.from('profiles')
+          .select('id, full_name, user_code, role, status, created_at, updated_at, last_sign_in_at')
+          .eq('id', session.user.id).maybeSingle();
+      }
+      const profile = check(response);
+      if (profile && !profile.module_permissions) profile.module_permissions = {};
       return { session, user: session.user, profile, isAdmin: profile?.role === 'admin' && profile?.status === 'active' };
     },
 
@@ -1404,7 +1521,7 @@
     async subscribe(onChange) {
       await init();
       let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'nfe_backup_settings', 'sync_events', 'notification_acknowledgements', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
+      ['profiles', 'module_tables', 'inventory_items', 'inventory_item_logs', 'agenda_entries', 'module_records', 'control_items', 'control_item_logs', 'flux_items', 'flux_item_logs', 'nfe_occurrences', 'nfe_occurrence_logs', 'nfe_investigation_resolutions', 'nfe_backups', 'nfe_backup_settings', 'sync_events', 'monthly_audit_reports', 'notification_acknowledgements', 'equipment_identity_conflict_resolutions', 'inventory_backups', 'inventory_backup_settings', 'control_backups', 'control_backup_settings', 'flux_backups', 'flux_backup_settings', 'management_backups', 'management_backup_settings'].forEach(table => {
         channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
           try { onChange?.(payload); }
           catch (error) { console.warn('Falha ao processar uma atualização em tempo real.', error); }
@@ -1414,6 +1531,54 @@
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Canal de atualizações em tempo real indisponível:', status);
       });
       return () => client.removeChannel(channel);
+    }
+  };
+
+  const operations = {
+    identityConflictKey(conflict = {}) {
+      return ['identity', conflict.identity_kind, conflict.identity_value, conflict.conflict_type]
+        .map(value => String(value || '').trim().toLocaleLowerCase('pt-BR'))
+        .join(':');
+    },
+
+    async dashboard() {
+      await init();
+      const response = await client.rpc('operational_dashboard');
+      if (response.error && /operational_dashboard|does not exist/i.test(response.error.message || '')) return null;
+      return check(response) || null;
+    },
+
+    async identityConflicts() {
+      await init();
+      const response = await client.rpc('equipment_identity_conflicts');
+      if (response.error && /equipment_identity_conflicts|does not exist/i.test(response.error.message || '')) return [];
+      return check(response) || [];
+    },
+
+    async resolveIdentityConflict(conflict = {}) {
+      await init();
+      const conflictKey = this.identityConflictKey(conflict);
+      if (!conflictKey || conflictKey === 'identity:::') fail('Conflito de conciliação inválido.');
+      const response = await client.from('equipment_identity_conflict_resolutions').insert({
+        conflict_key: conflictKey,
+        identity_kind: String(conflict.identity_kind || ''),
+        identity_value: String(conflict.identity_value || ''),
+        conflict_type: String(conflict.conflict_type || '')
+      });
+      if (response.error && response.error.code !== '23505') fail(response.error.message);
+    },
+
+    async backupHealth() {
+      const sources = [
+        ['inventory', backups], ['management', managementBackups], ['control', controlBackups], ['flux', fluxBackups]
+      ];
+      const results = await Promise.all(sources.map(async ([module, source]) => {
+        try {
+          const [latest, settings] = await Promise.all([source.latest?.() || source.list?.(1).then(rows => rows[0] || null), source.settings?.() || Promise.resolve({ automatic: false })]);
+          return { module, latest, automatic: Boolean(settings?.automatic), updatedAt: settings?.updated_at || null, ok: true };
+        } catch (error) { return { module, latest: null, automatic: false, updatedAt: null, ok: false, error: error.message || 'Indisponível' }; }
+      }));
+      return results;
     }
   };
 
@@ -1479,5 +1644,5 @@
     }
   };
 
-  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, nfe, agenda, backups, managementBackups, controlBackups, fluxBackups, events, notificationAcknowledgements, central };
+  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, nfe, agenda, backups, managementBackups, controlBackups, fluxBackups, events, auditReports, notificationAcknowledgements, operations, central };
 })();

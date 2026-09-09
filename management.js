@@ -32,7 +32,7 @@
   const priorityColors = { Alta: '#ff6674', 'Média': '#ffce59', 'Estável': '#3de5d3' };
   const areaIcons = { 'Escritório': '⌂', Estoque: '▦', 'Frente de Loja': '◉' };
   let payload = { table: null, items: [] };
-  let state = { query: '', status: '', situation: '', modal: null, tab: 'operational', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
+  let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'operational', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
   let toastTimer;
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -91,7 +91,11 @@
   function itemMatchesFilters(item) {
     const search = normalize(state.query);
     const haystack = [item.terminal, item.equipment, item.tag, item.ip, item.sector, item.model, item.operatingSystem, item.hostname, item.user].map(normalize).join(' ');
-    return (!search || haystack.includes(search)) && (!state.status || item.status === state.status) && (!state.situation || item.situation === state.situation);
+    const maintenanceOpen = ['em manutencao', 'manutencao', 'defeito'].includes(normalize(item.status));
+    return (!search || haystack.includes(search))
+      && (!state.status || item.status === state.status)
+      && (!state.situation || item.situation === state.situation)
+      && (state.operation !== 'maintenance-open' || maintenanceOpen);
   }
 
   function filteredItems() {
@@ -127,7 +131,7 @@
   }
 
   function toolbarMarkup() {
-    const clearVisible = state.query || state.status || state.situation;
+    const clearVisible = state.query || state.status || state.situation || state.operation;
     return `<section class="management-toolbar" aria-label="Filtros da Gestão TI"><label class="management-search">${svg('search', 16)}<input data-management-query placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}" autocomplete="off"></label><span class="management-filter-wrap" data-management-filter-wrap="status" style="--filter-color:${state.status ? statusColors[state.status] : '#607990'}"><select class="management-filter" data-management-status aria-label="Filtrar por status"><option value="">Status</option>${statuses.map(status => `<option value="${escape(status)}" ${state.status === status ? 'selected' : ''}>${escape(status)}</option>`).join('')}</select></span><span class="management-filter-wrap" data-management-filter-wrap="situation" style="--filter-color:${state.situation ? situationColors[state.situation] : '#607990'}"><select class="management-filter" data-management-situation aria-label="Filtrar por situação"><option value="">Situação</option>${situations.map(value => `<option value="${escape(value)}" ${state.situation === value ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select></span><button class="management-clear" type="button" data-management-action="clear-filters" ${clearVisible ? '' : 'hidden'}>Limpar filtros</button></section>`;
   }
 
@@ -157,7 +161,7 @@
     if (status && status.value !== state.status) status.value = state.status;
     if (situation && situation.value !== state.situation) situation.value = state.situation;
     const clear = app.querySelector('[data-management-action="clear-filters"]');
-    if (clear) clear.hidden = !(state.query || state.status || state.situation);
+    if (clear) clear.hidden = !(state.query || state.status || state.situation || state.operation);
     const statusWrap = app.querySelector('[data-management-filter-wrap="status"]');
     const situationWrap = app.querySelector('[data-management-filter-wrap="situation"]');
     statusWrap?.style.setProperty('--filter-color', state.status ? statusColors[state.status] : '#607990');
@@ -802,7 +806,7 @@
     if (action === 'edit-log' && activeItem()) { state.modal = { type: 'log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'delete-log' && activeItem()) { state.modal = { type: 'delete-log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'confirm-delete-log') deleteLog();
-    if (action === 'clear-filters') { state.query = ''; state.status = ''; state.situation = ''; applyManagementFilters(); }
+    if (action === 'clear-filters') { state.query = ''; state.status = ''; state.situation = ''; state.operation = ''; applyManagementFilters(); }
     if (action === 'sync') syncModule();
     if (action === 'retry') { app.innerHTML = '<section class="management-loading"><i></i><p>Conectando à Gestão TI…</p></section>'; load(); }
     if (action === 'home') {
@@ -831,8 +835,8 @@
     if (event.target.matches('[data-management-transfer-query]')) { state.transferQuery = event.target.value; applyTransferSearch(); }
   });
   document.addEventListener('change', event => {
-    if (event.target.matches('[data-management-status]')) { state.status = event.target.value; applyManagementFilters(); }
-    if (event.target.matches('[data-management-situation]')) { state.situation = event.target.value; applyManagementFilters(); }
+    if (event.target.matches('[data-management-status]')) { state.status = event.target.value; state.operation = ''; applyManagementFilters(); }
+    if (event.target.matches('[data-management-situation]')) { state.situation = event.target.value; state.operation = ''; applyManagementFilters(); }
     if (event.target.matches('[data-management-priority-choice]')) {
       event.target.closest('[data-management-priority-field]')?.setAttribute('data-tone', priorityTone(event.target.value));
     }

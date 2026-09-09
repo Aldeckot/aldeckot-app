@@ -203,3 +203,136 @@ body.theme-light.settings-page .settings-note { border-color: rgba(108, 151, 182
 body.theme-light.login-page .login-wallpaper { background-image: linear-gradient(115deg, rgba(229, 244, 248, .82), rgba(211, 233, 240, .88)), url('assets/background-light-v2.png'); }
 body.theme-light.login-page .auth-modal,
 body.theme-light.login-page .request-processing { border-color: var(--light-line); background: linear-gradient(145deg, rgba(251, 254, 255, .97), rgba(222, 240, 247, .95)); box-shadow: 0 25px 70px rgba(33, 75, 103, .23); }
+
+/* Tema claro translúcido: reduz o branco intenso e deixa o cenário aparecer. */
+html[data-theme="light"],
+body.theme-light {
+  --light-surface: rgba(207, 220, 228, .72);
+  --light-surface-alt: rgba(174, 193, 205, .62);
+  --light-line: rgba(93, 126, 149, .58);
+  --light-text: #163b55;
+  --light-muted: #4b6d83;
+  --light-shadow: 0 16px 34px rgba(42, 67, 84, .16);
+}
+
+body.theme-light.home-page .side {
+  background: linear-gradient(155deg, rgba(210, 221, 228, .74), rgba(170, 190, 202, .64));
+}
+
+body.theme-light.home-page main:before {
+  background: linear-gradient(90deg, rgba(171, 190, 202, .4), rgba(194, 209, 218, .28) 46%, rgba(158, 180, 194, .43)), url('assets/background-light-v2.png') center/cover no-repeat;
+}
+
+body.theme-light.home-page .side .module-nav-card {
+  background: radial-gradient(ellipse at 100% 0%, rgba(var(--module-rgb), .3), transparent 48%), linear-gradient(98deg, rgba(218, 226, 231, .72), rgba(var(--module-rgb), .11));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .5), 0 8px 18px rgba(30, 52, 69, .12), 0 0 14px rgba(var(--module-rgb), .08);
+}
+
+body.theme-light.home-page .home-calendar,
+body.theme-light.home-page .agenda-upcoming-panel,
+body.theme-light.home-page .agenda-today-panel,
+body.theme-light.home-page .home-recent-panel {
+  background: linear-gradient(145deg, rgba(214, 225, 232, .74), rgba(179, 197, 208, .62));
+  backdrop-filter: blur(16px) saturate(105%);
+  -webkit-backdrop-filter: blur(16px) saturate(105%);
+}
+
+body.theme-light.home-page .home-recent-item { background: rgba(220, 229, 235, .62); }
+
+body.theme-light.inventory-open > .app {
+  background: linear-gradient(110deg, rgba(170, 191, 202, .42), rgba(194, 208, 216, .31) 50%, rgba(161, 183, 197, .44)), url('assets/background-light-v2.png') center/cover fixed no-repeat;
+}
+
+body.theme-light.inventory-open .inventory-header,
+body.theme-light.inventory-open .inventory-panel:not(.inventory-table-sidebar),
+body.theme-light.inventory-open .inv-dialog,
+body.theme-light.management-open .management-header,
+body.theme-light.management-open .management-toolbar,
+body.theme-light.management-open .management-area,
+body.theme-light.management-open .management-chart,
+body.theme-light.management-open .management-modal-dialog {
+  background: linear-gradient(135deg, rgba(211, 222, 229, .72), rgba(167, 187, 199, .6)) !important;
+  box-shadow: var(--light-shadow) !important;
+  backdrop-filter: blur(17px) saturate(106%);
+  -webkit-backdrop-filter: blur(17px) saturate(106%);
+}
+
+body.theme-light.inventory-open .inventory-toolbar,
+body.theme-light.inventory-open .inventory-search,
+body.theme-light.inventory-open .inventory-filter,
+body.theme-light.inventory-open .inventory-header-action,
+body.theme-light.inventory-open .inventory-table-choice,
+body.theme-light.inventory-open .inventory-sidebar-toggle,
+body.theme-light.inventory-open .inventory-table-add,
+body.theme-light .inv-fields input,
+body.theme-light .inv-fields select,
+body.theme-light .inv-fields textarea,
+body.theme-light .inv-detail,
+body.theme-light .inv-choice-card,
+body.theme-light .management-search input,
+body.theme-light .management-filter,
+body.theme-light .management-field input,
+body.theme-light .management-field select,
+body.theme-light .management-field textarea,
+body.theme-light .management-summary-card,
+body.theme-light .management-detail,
+body.theme-light .management-operational-card,
+body.theme-light .management-form-section,
+body.theme-light .management-transfer-origin,
+body.theme-light .management-transfer-destination {
+  background: rgba(220, 229, 235, .67) !important;
+}
+
+body.theme-light.inventory-open .inventory-data-wrap { background: rgba(173, 194, 206, .42) !important; }
+body.theme-light.inventory-open .inventory-data th { background: rgba(180, 200, 212, .7) !important; }
+body.theme-light.inventory-open .inventory-data td { background: rgba(224, 232, 237, .54) !important; }
+body.theme-light.inventory-open .inventory-data tbody tr:hover td { background: rgba(193, 212, 223, .7) !important; }
+
+body.theme-light.nfe-open {
+  --nfe-bg: #b9cad4;
+  --nfe-panel: rgba(211, 222, 229, .71);
+  --nfe-panel-strong: rgba(185, 202, 212, .67);
+  --nfe-line: rgba(87, 119, 141, .59);
+  --nfe-shadow: rgba(37, 59, 75, .16);
+  background: linear-gradient(110deg, rgba(163, 184, 197, .42), rgba(195, 209, 218, .3)), url('assets/background-light.png') center/cover fixed;
+}
+
+body.theme-light .nfe-header,
+body.theme-light .nfe-toolbar,
+body.theme-light .nfe-metric,
+body.theme-light .nfe-table-panel,
+body.theme-light .nfe-side-panel,
+body.theme-light .nfe-dialog {
+  background: linear-gradient(145deg, rgba(214, 224, 230, .72), rgba(175, 193, 204, .61));
+  backdrop-filter: blur(17px) saturate(106%);
+  -webkit-backdrop-filter: blur(17px) saturate(106%);
+}
+
+body.theme-light .nfe-input,
+body.theme-light .nfe-select,
+body.theme-light .nfe-textarea,
+body.theme-light .nfe-detail,
+body.theme-light .nfe-upload,
+body.theme-light .nfe-action-button,
+body.theme-light .nfe-icon-button,
+body.theme-light .nfe-mini-button { background: rgba(221, 230, 235, .68); }
+body.theme-light .nfe-table th { background: rgba(182, 201, 212, .73); }
+body.theme-light .nfe-row:hover { background: rgba(189, 209, 220, .65); }
+
+body.theme-light.settings-page .settings-workspace { background: rgba(190, 205, 214, .68); }
+body.theme-light.settings-page .settings-main { background: linear-gradient(145deg, rgba(213, 224, 230, .7), rgba(173, 191, 202, .59)); }
+body.theme-light.settings-page .settings-sidebar { background: linear-gradient(160deg, rgba(211, 222, 228, .72), rgba(169, 188, 200, .62)); }
+body.theme-light.settings-page .overview-card,
+body.theme-light.settings-page .settings-panel-card,
+body.theme-light.settings-page .settings-detail,
+body.theme-light.settings-page .theme-preview,
+body.theme-light.settings-page .theme-choice,
+body.theme-light.settings-page .settings-note {
+  background: rgba(216, 226, 232, .68);
+  backdrop-filter: blur(15px) saturate(105%);
+  -webkit-backdrop-filter: blur(15px) saturate(105%);
+}
+
+body.theme-light.login-page .login-wallpaper { background-image: linear-gradient(115deg, rgba(170, 191, 202, .52), rgba(186, 204, 214, .55)), url('assets/background-light-v2.png'); }
+body.theme-light.login-page .auth-modal,
+body.theme-light.login-page .request-processing { background: linear-gradient(145deg, rgba(216, 226, 232, .75), rgba(175, 193, 204, .66)); }

@@ -1,7 +1,11 @@
 const { ensureConfig, normalizeEmail, normalizeName, normalizeUserCode, passwordValid, requestSupabase, send, userCodeValid } = require('../server/supabase-admin');
+const { allowRequest } = require('../server/rate-limit');
 
 module.exports = async (request, response) => {
   if (request.method !== 'POST') return send(response, 405, { error: 'Método não permitido.' });
+  if (!allowRequest(request, response, { namespace: 'auth-bootstrap', limit: 3, windowMs: 60 * 60_000 })) {
+    return send(response, 429, { error: 'Muitas tentativas de configuração. Aguarde antes de tentar novamente.' });
+  }
   const config = ensureConfig(response);
   if (!config) return;
   try {

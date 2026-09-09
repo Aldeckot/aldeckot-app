@@ -7,18 +7,21 @@
   <title>Configurações do Sistema — ALDECKOT</title>
   <script>document.documentElement.classList.add('aldeckot-module-booting', 'auth-pending');</script>
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="settings-reconciliation.css?v=20260908">
   <link rel="stylesheet" href="settings-overrides.css">
+  <link rel="stylesheet" href="settings-redesign.css">
+  <link rel="stylesheet" href="official-logo.css?v=20260908-layout1">
   <link rel="stylesheet" href="auth-ui.css">
   <link rel="stylesheet" href="page-transition.css">
   <link rel="stylesheet" href="light-theme-vivid.css">
   <link rel="stylesheet" href="loading-indicator.css">
+  <link rel="stylesheet" href="system-messages.css?v=20260909-1">
 </head>
 <body class="settings-page">
   <main class="settings-workspace">
     <aside class="settings-sidebar" aria-label="Navegação das configurações">
       <a class="settings-brand" href="index.html" aria-label="Voltar para a Home do ALDECKOT">
-        <span class="brand-mark" aria-hidden="true">A</span>
-        <span><b>ALDECKOT</b><small>Sistema de Gestão</small></span>
+        <img class="official-logo-image" src="assets/aldeckot-logo.svg" alt="ALDECKOT — Sistema de Gestão">
       </a>
 
       <nav class="settings-navigation" aria-label="Seções das configurações">
@@ -30,10 +33,16 @@
         <button class="settings-nav-item" data-settings-tab="integrations" type="button"><span class="nav-symbol">⌘</span>Integrações</button>
         <button class="settings-nav-item" data-settings-tab="notifications" type="button"><span class="nav-symbol">♧</span>Notificações</button>
         <button class="settings-nav-item" data-settings-tab="backup" type="button"><span class="nav-symbol">↥</span>Backup</button>
-        <button class="settings-nav-item" data-settings-tab="audit" type="button"><span class="nav-symbol">▤</span>Auditoria</button>
+        <button class="settings-nav-item" data-settings-tab="audit" data-admin-only hidden type="button"><span class="nav-symbol">▤</span>Auditoria</button>
       </nav>
 
       <div class="settings-sidebar-bottom">
+        <button id="sidebarProfileButton" class="settings-sidebar-profile" type="button" title="Abrir credenciais da conta">
+          <span class="sidebar-profile-avatar" id="sidebarProfileAvatar">AD</span><span><b id="sidebarProfileName">Conta conectada</b><small id="sidebarProfileRole">Administrador</small></span><i>›</i>
+        </button>
+        <button id="settingsThemeToggle" class="settings-theme-control" type="button" aria-pressed="false">
+          <span class="settings-theme-icon" aria-hidden="true">☾</span><span><b id="settingsThemeName">Modo Escuro</b><small>Alternar aparência</small></span><i class="settings-theme-switch" aria-hidden="true"></i>
+        </button>
         <div class="secure-note"><span class="secure-note-icon">✦</span><div><b>Ambiente seguro</b><span>Dados protegidos por conta.</span></div></div>
         <a class="sidebar-home" href="index.html"><span>⌂</span>Voltar à Home</a>
         <button id="logoutButton" class="sidebar-logout" type="button"><span>⇥</span>Sair da conta</button>
@@ -47,19 +56,17 @@
           <div><h1>Configurações do Sistema</h1><p>Central de Administração e Segurança</p></div>
         </div>
         <div class="settings-topbar-actions">
-          <label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Buscar configurações…" autocomplete="off"></label>
+          <label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Buscar configurações…" autocomplete="off"><kbd>Ctrl + K</kbd></label>
           <span class="online-indicator"><i></i>Sistema online</span>
-          <div class="admin-avatar" id="settingsAvatar" title="Conta conectada">AD</div>
-          <button id="restoreSettingsButton" class="top-action secondary" type="button">Restaurar</button>
-          <button id="saveSettingsButton" class="top-action primary" type="button">Salvar</button>
+          <button id="settingsProfileButton" class="settings-profile-menu" type="button" title="Abrir credenciais da conta"><span class="admin-avatar" id="settingsAvatar">AD</span><span><b id="settingsProfileName">Conta conectada</b><small id="settingsProfileRole">Administrador</small></span><i>⌄</i></button>
         </div>
       </header>
 
       <section class="settings-overview" aria-label="Resumo do sistema">
-        <article class="overview-card online"><span class="overview-icon">⌁</span><div><small>Sistema</small><strong>Online</strong><p>Serviços operando normalmente</p></div><i class="card-pulse" aria-hidden="true"></i></article>
-        <article class="overview-card database"><span class="overview-icon">▣</span><div><small>Banco de dados</small><strong>Conectado</strong><p>Supabase PostgreSQL</p></div></article>
-        <article class="overview-card users"><span class="overview-icon">♧</span><div><small>Usuários ativos</small><strong id="activeUsersMetric">—</strong><p id="activeUsersHint">Verificando acessos</p></div></article>
-        <article class="overview-card backup"><span class="overview-icon">↥</span><div><small>Último backup</small><strong>Monitorado</strong><p>Consulte os módulos para detalhes</p></div></article>
+        <button class="overview-card online" data-settings-open="general" type="button"><span class="overview-icon">⌁</span><div><small>Sistema</small><strong>Online</strong><p>Serviços operando normalmente</p></div><i class="card-pulse" aria-hidden="true"></i><em>›</em></button>
+        <button class="overview-card database" data-settings-open="integrations" type="button"><span class="overview-icon">▣</span><div><small>Banco de dados</small><strong>Conectado</strong><p>Supabase PostgreSQL</p></div><em>›</em></button>
+        <button class="overview-card users" data-settings-open="users" type="button"><span class="overview-icon">♧</span><div><small>Usuários ativos</small><strong id="activeUsersMetric">—</strong><p id="activeUsersHint">Verificando acessos</p></div><em>›</em></button>
+        <button class="overview-card backup" data-settings-open="backup" type="button"><span class="overview-icon">↥</span><div><small>Último backup</small><strong>Monitorado</strong><p>Concluído e atualizado</p></div><em>›</em></button>
       </section>
 
       <div id="settingsContent" class="settings-content" aria-live="polite"></div>
@@ -68,14 +75,17 @@
   </main>
   <input id="themeSwitch" class="theme-switch-native" type="checkbox" aria-label="Ativar tema claro">
   <div id="settingsModal" class="settings-modal" hidden></div>
+  <script src="error-monitor.js"></script>
   <script src="loading-indicator.js"></script>
+  <script src="system-messages.js?v=20260909-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="runtime-config.js"></script>
-  <script src="supabase-client.js"></script>
+  <script src="supabase-client.js?v=20260908-reconciliation1"></script>
   <script src="auth-guard.js"></script>
   <script src="theme.js"></script>
   <script src="page-transition.js"></script>
-  <script src="settings.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="settings.js?v=20260908-reconciliation1"></script>
 </body>
 </html>

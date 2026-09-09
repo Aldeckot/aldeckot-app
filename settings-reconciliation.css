@@ -1,0 +1,5 @@
+/* Conciliação de equipamentos */
+.settings-action.resolve{border-color:#37b982;color:#a7ffd0}
+.settings-action.resolve:hover{background:#123f32}
+.settings-action:disabled{cursor:wait;filter:grayscale(.25);opacity:.72}
+.theme-light .settings-action.resolve:hover{background:#dff6e9}

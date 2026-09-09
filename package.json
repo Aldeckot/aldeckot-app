@@ -1,0 +1,20 @@
+{
+  "name": "aldeckot-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ALDECKOT — Sistema corporativo de gestão de equipamentos e operações.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "serve": "node scripts/local-preview-server.mjs",
+    "build:config": "node scripts/generate-supabase-config.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "check:project": "node scripts/check-project.mjs",
+    "test": "node --test",
+    "verify": "npm run check:project && npm test",
+    "verify:rls": "node scripts/verify-rls.mjs",
+    "verify:backups": "node scripts/verify-backups.mjs",
+    "verify:supabase": "node scripts/verify-supabase.mjs"
+  }
+}

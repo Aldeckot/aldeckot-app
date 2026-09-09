@@ -4,7 +4,8 @@
     management: 'Gestão TI',
     control: 'Controle TI',
     flux: 'Flux',
-    nfe: 'Fiscal NF-e'
+    nfe: 'Fiscal NF-e',
+    operations: 'Central de Operações'
   })[module] || 'Módulo';
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -22,6 +23,7 @@
   let badge;
   let notifications = [];
   let allNotifications = [];
+  let operationalNotifications = [];
   let dismissed = new Set();
   let acknowledgementsLoaded = false;
   let dataError = false;
@@ -93,13 +95,37 @@
       .sort((first, second) => second.weight - first.weight || second.age - first.age);
   }
 
+  function operationNotifications(alerts = []) {
+    return alerts.map(alert => ({
+      item: {
+        id: `operations-${alert.id}`,
+        module: 'operations',
+        equipment: alert.title || 'Alerta operacional',
+        updatedAt: new Date().toISOString()
+      },
+      level: alert.level || 'Média',
+      weight: alert.urgent ? 420 : 170,
+      age: 0,
+      urgent: Boolean(alert.urgent),
+      updatedAt: '',
+      description: alert.description || 'Há uma atualização operacional que precisa de atenção.',
+      targetUrl: alert.targetUrl || 'index.html',
+      stateKey: `operations:${alert.id}:${alert.count || 0}`,
+      acknowledgeable: false
+    }));
+  }
+
   const notificationKey = notification => {
+    if (notification.stateKey) return notification.stateKey;
     const item = notification.item;
     const identity = item.id || item.tag || item.serial || item.equipment;
     return `${item.module}:${identity}:${normalize(item.status)}:${normalize(item.priority)}:${item.updatedAt || item.createdAt || item.date || ''}`;
   };
   const showCurrentNotifications = () => {
-    notifications = allNotifications.filter(notification => !dismissed.has(notificationKey(notification))).slice(0, 4);
+    notifications = [...operationalNotifications, ...allNotifications]
+      .filter(notification => !notification.acknowledgeable || !dismissed.has(notificationKey(notification)))
+      .sort((first, second) => second.weight - first.weight || Number(second.urgent) - Number(first.urgent))
+      .slice(0, 6);
   };
 
   async function hydrateAcknowledgements(force = false) {
@@ -113,6 +139,7 @@
 
   function acknowledge(notification) {
     if (!notification) return;
+    if (notification.acknowledgeable === false) return;
     const key = notificationKey(notification);
     dismissed.add(key);
     showCurrentNotifications();
@@ -158,17 +185,22 @@
     }
     list.innerHTML = notifications.map((notification, index) => {
       const item = notification.item;
-      const identifiers = item.module === 'nfe'
+      const identifiers = item.module === 'operations'
+        ? 'Indicador consolidado em tempo real'
+        : item.module === 'nfe'
         ? `Ocorrências na semana: ${notification.item ? String(notification.description).match(/\d+/)?.[0] || '4+' : '4+'}`
         : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas');
-      const urgency = notification.urgent ? `<span class="home-notification-urgent" aria-label="Alerta urgente">${item.module === 'nfe' ? '⚠ Investigar PDV' : '🚨 Sem resposta'}</span>` : '';
+      const urgency = notification.urgent ? `<span class="home-notification-urgent" aria-label="Alerta urgente">${item.module === 'nfe' ? '⚠ Investigar PDV' : item.module === 'operations' ? '⚠ Ação necessária' : '🚨 Sem resposta'}</span>` : '';
       return `<button class="home-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-home-notification-item="${index}" data-level="${notification.level.toLowerCase()}" data-urgent="${notification.urgent}"><span class="home-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${notification.level}</em></span><span class="home-notification-description">${escape(notification.description)}</span>${urgency}<span class="home-notification-module">${escape(moduleInfo(item.module))}<i>›</i></span></button>`;
     }).join('');
     list.querySelectorAll('[data-home-notification-item]').forEach(item => item.addEventListener('click', () => {
       const notification = notifications[Number(item.dataset.homeNotificationItem)];
       acknowledge(notification);
       closePanel();
-      if (notification?.item?.module === 'nfe') {
+      if (notification?.targetUrl) {
+        if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(notification.targetUrl);
+        else window.location.href = notification.targetUrl;
+      } else if (notification?.item?.module === 'nfe') {
         const target = `nfe.html?pdv=${encodeURIComponent(notification.item.pdv || '')}`;
         if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(target);
         else window.location.href = target;
@@ -195,7 +227,7 @@
   }
 
   function clearNotifications() {
-    [...notifications].forEach(acknowledge);
+    notifications.filter(notification => notification.acknowledgeable !== false).forEach(acknowledge);
   }
 
   function mount() {
@@ -204,7 +236,7 @@
     root = document.createElement('section');
     root.className = 'home-notification-center';
     root.dataset.homeNotifications = 'true';
-    root.innerHTML = `<button class="home-notification-toggle" type="button" data-home-notification-toggle aria-expanded="false" aria-controls="homeNotificationsPanel">${bell}<span data-home-notification-badge hidden></span></button><section class="home-notification-panel" id="homeNotificationsPanel" data-home-notification-panel hidden><header><div><p>Central de Notificações</p><h2>Equipamentos e ocorrências</h2></div><div class="home-notification-head-actions"><span data-home-notification-count>Carregando alertas…</span><button class="home-notification-clear" type="button" data-home-notification-clear title="Limpar notificações">×</button></div></header><div class="home-notification-list" data-home-notification-list><div class="home-notification-loading"><i></i>Verificando equipamentos…</div></div></section>`;
+    root.innerHTML = `<button class="home-notification-toggle" type="button" data-home-notification-toggle aria-expanded="false" aria-controls="homeNotificationsPanel">${bell}<span data-home-notification-badge hidden></span></button><section class="home-notification-panel" id="homeNotificationsPanel" data-home-notification-panel hidden><header><div><p>Central de Notificações</p><h2>Equipamentos, ocorrências e operações</h2></div><div class="home-notification-head-actions"><span data-home-notification-count>Carregando alertas…</span><button class="home-notification-clear" type="button" data-home-notification-clear title="Limpar notificações">×</button></div></header><div class="home-notification-list" data-home-notification-list><div class="home-notification-loading"><i></i>Verificando equipamentos…</div></div></section>`;
     anchor.insertAdjacentElement('afterend', root);
     button = root.querySelector('[data-home-notification-toggle]');
     panel = root.querySelector('[data-home-notification-panel]');
@@ -220,11 +252,22 @@
   }
 
   mount();
+  if (window.AldeckotOperationalAlerts) {
+    operationalNotifications = operationNotifications(window.AldeckotOperationalAlerts);
+    showCurrentNotifications();
+    render();
+  }
   window.addEventListener('aldeckot:home-data', async event => {
     dataError = Boolean(event.detail?.error);
     allNotifications = dataError ? [] : importantNotifications(event.detail || {});
     try { await hydrateAcknowledgements(); }
     catch (error) { console.warn('Não foi possível carregar os alertas reconhecidos.', error); }
+    showCurrentNotifications();
+    render();
+  });
+  window.addEventListener('aldeckot:operational-alerts', event => {
+    window.AldeckotOperationalAlerts = event.detail?.alerts || [];
+    operationalNotifications = operationNotifications(window.AldeckotOperationalAlerts);
     showCurrentNotifications();
     render();
   });

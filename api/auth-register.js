@@ -1,7 +1,11 @@
 const { createInternalAuthEmail, ensureConfig, normalizeName, normalizeUserCode, passwordValid, readBody, requestSupabase, send, userCodeValid } = require('../server/supabase-admin');
+const { allowRequest } = require('../server/rate-limit');
 
 module.exports = async (request, response) => {
   if (request.method !== 'POST') return send(response, 405, { error: 'Método não permitido.' });
+  if (!allowRequest(request, response, { namespace: 'auth-register', limit: 4, windowMs: 15 * 60_000 })) {
+    return send(response, 429, { error: 'Muitas solicitações de cadastro. Aguarde alguns minutos antes de tentar novamente.' });
+  }
   const config = ensureConfig(response);
   if (!config) return;
   const { fullName, userCode, password } = readBody(request);

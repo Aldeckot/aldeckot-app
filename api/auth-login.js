@@ -1,9 +1,13 @@
 const { ensureConfig, normalizeUserCode, passwordValid, profileForUserCode, requestSupabase, send, userCodeValid } = require('../server/supabase-admin');
+const { allowRequest } = require('../server/rate-limit');
 
 const invalidCredentials = response => send(response, 401, { error: 'Código de usuário ou senha inválidos.' });
 
 module.exports = async (request, response) => {
   if (request.method !== 'POST') return send(response, 405, { error: 'Método não permitido.' });
+  if (!allowRequest(request, response, { namespace: 'auth-login', limit: 8, windowMs: 15 * 60_000 })) {
+    return send(response, 429, { error: 'Muitas tentativas de acesso. Aguarde alguns minutos antes de tentar novamente.' });
+  }
   const config = ensureConfig(response);
   if (!config) return;
   const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});

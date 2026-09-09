@@ -2,6 +2,16 @@ const { audit, authenticate, normalizeName, normalizeUserCode, passwordValid, pr
 
 const validRole = value => ['admin', 'standard'].includes(value);
 const validStatus = value => ['pending', 'active', 'blocked'].includes(value);
+const permissionModules = new Set(['inventory', 'management', 'control', 'flux', 'nfe']);
+const permissionActions = new Set(['create', 'update', 'delete', 'backup']);
+const normalizePermissions = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([module]) => permissionModules.has(String(module).toLowerCase()))
+    .map(([module, actions]) => [String(module).toLowerCase(), Object.fromEntries(Object.entries(actions || {})
+      .filter(([action, enabled]) => permissionActions.has(String(action).toLowerCase()) && enabled === true)
+      .map(([action]) => [String(action).toLowerCase(), true]))]));
+};
 
 module.exports = async (request, response) => {
   const context = await authenticate(request, response, { admin: true });
@@ -9,8 +19,15 @@ module.exports = async (request, response) => {
 
   if (request.method === 'GET') {
     try {
+      const loadProfiles = async () => {
+        try { return await requestSupabase(context.config, '/rest/v1/profiles?select=id,full_name,user_code,role,status,module_permissions,created_at,updated_at,last_sign_in_at&order=created_at.desc'); }
+        catch (error) {
+          if (!/module_permissions/i.test(`${error.message} ${JSON.stringify(error.body || {})}`)) throw error;
+          return requestSupabase(context.config, '/rest/v1/profiles?select=id,full_name,user_code,role,status,created_at,updated_at,last_sign_in_at&order=created_at.desc');
+        }
+      };
       const [profiles, auditRows, authRecords] = await Promise.all([
-        requestSupabase(context.config, '/rest/v1/profiles?select=id,full_name,user_code,role,status,created_at,updated_at,last_sign_in_at&order=created_at.desc'),
+        loadProfiles(),
         requestSupabase(context.config, '/rest/v1/user_audit_logs?select=id,actor_id,target_user_id,action,details,created_at&order=created_at.desc&limit=30'),
         requestSupabase(context.config, '/auth/v1/admin/users?per_page=1000&page=1')
       ]);
@@ -73,6 +90,10 @@ module.exports = async (request, response) => {
     const role = body.role ?? target.role;
     const status = body.action === 'approve' ? 'active' : (body.status ?? target.status);
     const password = body.password || '';
+    if (body.modulePermissions !== undefined && !Object.prototype.hasOwnProperty.call(target, 'module_permissions')) {
+      return send(response, 409, { error: 'Execute a migração 031 antes de configurar permissões por módulo.' });
+    }
+    const modulePermissions = body.modulePermissions === undefined ? (target.module_permissions || {}) : normalizePermissions(body.modulePermissions);
     if (targetId === context.user.id && (role !== 'admin' || status !== 'active')) {
       return send(response, 400, { error: 'Use outra conta administradora para alterar seu próprio perfil ou bloqueio.' });
     }
@@ -84,10 +105,10 @@ module.exports = async (request, response) => {
     await requestSupabase(context.config, `/auth/v1/admin/users/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(authPayload) });
     await requestSupabase(context.config, `/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({ display_name: cleanName, full_name: cleanName, user_code: cleanUserCode, role, status })
+      body: JSON.stringify({ display_name: cleanName, full_name: cleanName, user_code: cleanUserCode, role, status, ...(Object.prototype.hasOwnProperty.call(target, 'module_permissions') ? { module_permissions: modulePermissions } : {}) })
     });
     const action = body.action === 'approve' ? 'user_approved' : (status === 'blocked' && target.status !== 'blocked' ? 'user_blocked' : (status === 'active' && target.status === 'blocked' ? 'user_unblocked' : 'user_updated'));
-    await audit(context.config, context.user.id, targetId, action, { changedName: cleanName !== target.full_name, changedUserCode: cleanUserCode !== target.user_code, changedRole: role !== target.role, changedStatus: status !== target.status, changedPassword: Boolean(password) });
+    await audit(context.config, context.user.id, targetId, action, { changedName: cleanName !== target.full_name, changedUserCode: cleanUserCode !== target.user_code, changedRole: role !== target.role, changedStatus: status !== target.status, changedPassword: Boolean(password), changedModulePermissions: JSON.stringify(modulePermissions) !== JSON.stringify(target.module_permissions || {}) });
     return send(response, 200, { message: 'Usuário atualizado.' });
   } catch (error) {
     const duplicate = /already|exists|registered|duplicate/i.test(`${error.message} ${JSON.stringify(error.body || {})}`);

@@ -1,0 +1,26 @@
+name: Qualidade do ALDECKOT
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Validar código e migrações
+        run: npm run verify
+      - name: Conferir sequência das migrações
+        run: npm run check:migrations

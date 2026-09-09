@@ -61,7 +61,7 @@
       const next = event.detail.record;
       if (next.status !== 'active') {
         api.auth.signOut().catch(() => {}).finally(() => window.location.replace(loginUrl(next.status || 'pending')));
-      } else if (next.role !== state.profile.role) {
+      } else if (next.role !== state.profile.role || JSON.stringify(next.module_permissions || {}) !== JSON.stringify(state.profile.module_permissions || {})) {
         window.location.reload();
       }
     });

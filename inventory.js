@@ -49,7 +49,7 @@
   let backupBusy = false;
   let initialized = false;
   const moduleRoute = new URLSearchParams(window.location.search);
-  let state = { active: moduleRoute.get('table'), pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  let state = { active: moduleRoute.get('table'), pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
 
   const readBackupMeta = () => ({ ...backupMeta });
   const writeBackupMeta = value => { backupMeta = { ...backupMeta, ...value }; };
@@ -117,9 +117,17 @@
     if (source.includes('regular')) return 'Regular';
     return 'Não realizada';
   };
+  const matchesOperation = item => {
+    const status = comparable(item.status);
+    if (state.operation === 'inventory-active') return status === 'ativo';
+    if (state.operation === 'maintenance-open') return status === 'em manutencao' || status === 'manutencao' || status === 'defeito';
+    if (state.operation === 'transfers-open') return status === 'pendente' || status === 'em transito';
+    return true;
+  };
   const matchesActiveFilters = item => JSON.stringify(item).toLowerCase().includes(state.query.toLowerCase())
     && (!state.status || item.status === state.status)
-    && (!state.situation || item.situation === state.situation);
+    && (!state.situation || item.situation === state.situation)
+    && matchesOperation(item);
   const normalizeLogs = logs => (Array.isArray(logs) ? logs : []).map(logEntry => {
     if (typeof logEntry === 'string') return { at: 'Backup antigo', text: logEntry };
     return {
@@ -619,7 +627,7 @@
       closeModal();
       await reloadInventory();
       renderInventory();
-    } catch (error) { alert(backendMessage(error)); }
+    } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
   }
   function download(content, name, type) { const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type })); link.download = name; link.click(); URL.revokeObjectURL(link.href); }
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
@@ -627,11 +635,11 @@
 
   function exportPdf() {
     const table = activeTable();
-    if (!table) { alert('Selecione uma tabela para exportá-la em PDF.'); return; }
+    if (!table) { window.AldeckotMessage.show('Selecione uma tabela para exportá-la em PDF.'); return; }
     if (fluxMode) {
       const rows = table.items.map(item => `<tr><td>${escape(item.movement)}</td><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.serial)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${escape(item.senderResponsible)}</td><td>${escape(item.receiverResponsible)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td>${escape(item.shippingType)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="16" class="empty">Nenhuma movimentação cadastrada nesta tabela.</td></tr>';
       const popup = window.open('', '_blank', 'width=1280,height=860');
-      if (!popup) { alert('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
+      if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
       popup.document.open();
       popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A3 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:6px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:10px;padding-bottom:7px}h1{font-size:17px;margin:0 0 3px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:6px;letter-spacing:.1px;padding:5px 2px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:4px 2px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:7px;color:#647386}</style></head><body><header><h1>ALDECKOT · FLUX</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} movimentação(ões) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Movimentação</th><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>TAG</th><th>Nº Série</th><th>Remetente</th><th>Destino</th><th>Responsável Envio</th><th>Responsável Recebimento</th><th>Envio</th><th>Recebimento</th><th>Tipo</th><th>Motivo</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de envio e recebimento</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
       popup.document.close();
@@ -640,7 +648,7 @@
     if (controlMode) {
       const rows = table.items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.sector)}</td><td>${dateValue(item.entryDate)}</td><td>${dateValue(item.exitDate)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Nenhum equipamento cadastrado nesta tabela.</td></tr>';
       const popup = window.open('', '_blank', 'width=1280,height=860');
-      if (!popup) { alert('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
+      if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
       popup.document.open();
       popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:7px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:12px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:7px;letter-spacing:.15px;padding:6px 3px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:5px 3px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:8px;color:#647386}</style></head><body><header><h1>ALDECKOT · CONTROLE TI</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} item(ns) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>Nº Série</th><th>TAG</th><th>Setor</th><th>Entrada</th><th>Saída</th><th>Limpeza</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de Manutenção</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
       popup.document.close();
@@ -648,7 +656,7 @@
     }
     const rows = table.items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.status)}</td><td>${escape(item.situation)}</td><td>${escape(item.cleaning || 'Não realizada')}</td><td>${escape(item.date || '—')}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhum equipamento cadastrado nesta tabela.</td></tr>';
     const popup = window.open('', '_blank', 'width=1280,height=860');
-    if (!popup) { alert('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
+    if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
     popup.document.open();
     popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:9px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:14px;padding-bottom:10px}h1{font-size:20px;margin:0 0 4px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:8px;letter-spacing:.2px;padding:8px 5px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:7px 5px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:8px;color:#647386}@media print{footer{position:fixed}}</style></head><body><header><h1>ALDECKOT · INVENTÁRIO</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} item(ns) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>Nº Série</th><th>TAG</th><th>Status</th><th>Situação</th><th>Limpeza</th><th>Data</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de Equipamentos</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
     popup.document.close();
@@ -736,7 +744,7 @@
     const payload = { application: 'ALDECKOT', module: moduleConfig.backupModule, version: 1, createdAt: now.toISOString(), data: clone(data) };
     download(JSON.stringify(payload, null, 2), `aldeckot-${moduleConfig.backupFile}-backup-${now.toISOString().slice(0, 10)}.json`, 'application/json');
     writeBackupMeta({ last: formattedNow(), lastAt: now.toISOString(), lastSource: 'local' });
-    closeModal(); renderInventory(); alert('Backup local criado com sucesso.');
+    closeModal(); renderInventory(); window.AldeckotMessage.show('Backup local criado com sucesso.');
     backupBusy = false;
   }
 
@@ -753,7 +761,7 @@
           converted = normalizeImportedBackup(payload);
         } catch (error) {
           console.warn(`Backup do ${moduleConfig.backupName} rejeitado:`, error);
-          alert(`Este arquivo não é um backup válido do ${moduleConfig.backupName}.`);
+          window.AldeckotMessage.show(`Este arquivo não é um backup válido do ${moduleConfig.backupName}.`);
           return;
         }
         const createdAt = payload.createdAt || payload.timestamp;
@@ -771,17 +779,17 @@
       const row = await backupApi().create(clone(data), `Backup manual do ${moduleConfig.backupName}`, 'network');
       const meta = readBackupMeta();
       writeBackupMeta({ last: new Date(row.created_at).toLocaleString('pt-BR'), lastAt: row.created_at, lastSource: row.source, history: [row, ...meta.history.filter(backup => backup.id !== row.id)].slice(0, 3) });
-      closeModal(); renderInventory(); alert('Backup criado com sucesso.');
+      closeModal(); renderInventory(); window.AldeckotMessage.show('Backup criado com sucesso.');
     } catch (error) {
       console.error(`Falha ao criar backup do ${moduleConfig.backupName}:`, error);
       clearBackupBusy();
-      alert('Não foi possível criar o backup. Verifique sua conexão e tente novamente.');
+      window.AldeckotMessage.show('Não foi possível criar o backup. Verifique sua conexão e tente novamente.');
     } finally { backupBusy = false; }
   }
 
   function prepareNetworkRestore(backupId) {
     const backup = readBackupMeta().history.find(entry => entry.id === backupId);
-    if (!backup) { alert(`Este backup não está mais disponível. Atualize o ${moduleConfig.backupName} e tente novamente.`); return; }
+    if (!backup) { window.AldeckotMessage.show(`Este backup não está mais disponível. Atualize o ${moduleConfig.backupName} e tente novamente.`); return; }
     pendingRestore = { snapshot: backup.snapshot, label: `Backup ${backupSource(backup.source).toLowerCase()}`, dateLabel: `${backupDate(backup.created_at)} — ${backupTime(backup.created_at)}`, legacy: false };
     backupRestoreConfirmation();
   }
@@ -794,11 +802,11 @@
       const restoredLegacy = pendingRestore.legacy;
       pendingRestore = null;
       closeModal(); renderInventory();
-      alert(restoredLegacy ? 'Backup antigo importado e convertido com sucesso.' : 'Backup restaurado com sucesso.');
+      window.AldeckotMessage.show(restoredLegacy ? 'Backup antigo importado e convertido com sucesso.' : 'Backup restaurado com sucesso.');
     } catch (error) {
       console.error(`Falha ao restaurar backup do ${moduleConfig.backupName}:`, error);
       clearBackupBusy();
-      alert('Não foi possível restaurar o backup. Verifique sua conexão e tente novamente.');
+      window.AldeckotMessage.show('Não foi possível restaurar o backup. Verifique sua conexão e tente novamente.');
     } finally { backupBusy = false; }
   }
 
@@ -813,7 +821,7 @@
     } catch (error) {
       console.error('Falha ao atualizar backup automático:', error);
       clearBackupBusy();
-      alert('Não foi possível atualizar o backup automático. Tente novamente.');
+      window.AldeckotMessage.show('Não foi possível atualizar o backup automático. Tente novamente.');
     } finally { backupBusy = false; }
   }
 
@@ -827,7 +835,7 @@
       if (document.body.contains(label)) { label.dataset.syncing = 'false'; label.innerHTML = 'Sincronizado <i></i>'; button?.classList.remove('is-syncing'); renderInventory(); }
     } catch (error) {
       if (document.body.contains(label)) { label.dataset.syncing = 'false'; label.innerHTML = 'Falha na sincronização <i></i>'; button?.classList.remove('is-syncing'); }
-      alert(backendMessage(error));
+      window.AldeckotMessage.show(backendMessage(error));
     }
   }
 
@@ -872,7 +880,7 @@
     const button = event.target.closest && event.target.closest('#nav button');
     if (button && button.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); }
   }, true);
-  document.addEventListener('click', event => {
+  document.addEventListener('click', async event => {
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
     if (!event.target.closest('.inventory-table-action-menu-wrap') && state.tableActionMenu) {
@@ -893,11 +901,11 @@
     const editTable = event.target.closest('[data-inv-edit-table]'); if (editTable) { event.stopPropagation(); state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove(); tableForm(data.tables.find(table => table.id === editTable.dataset.invEditTable)); return; }
     const deleteTable = event.target.closest('[data-inv-delete-table]'); if (deleteTable) {
       state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove();
-      if (confirm('Excluir esta tabela e todos os seus itens?')) {
+      if (await window.AldeckotMessage.confirm('Excluir esta tabela e todos os seus itens?', { title: 'Excluir tabela', confirmText: 'Excluir' })) {
         moduleApi().deleteTable(deleteTable.dataset.invDeleteTable).then(async () => {
           if (state.active === deleteTable.dataset.invDeleteTable) state.active = null;
           await reloadInventory(); closeModal(); renderInventory();
-        }).catch(error => alert(backendMessage(error)));
+        }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
       }
       return;
     }
@@ -914,10 +922,10 @@
       if (type === 'delete-active-table') {
         state.tableActionMenu = false;
         const table = activeTable();
-        if (table && confirm(`Excluir a tabela “${table.name}” e todos os seus itens?`)) {
+        if (table && await window.AldeckotMessage.confirm(`Excluir a tabela “${table.name}” e todos os seus itens?`, { title: 'Excluir tabela', confirmText: 'Excluir' })) {
           moduleApi().deleteTable(table.id).then(async () => {
             state.active = null; await reloadInventory(); renderInventory();
-          }).catch(error => alert(backendMessage(error)));
+          }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
         return;
       }
@@ -935,10 +943,10 @@
       }
       if (type === 'delete-log') {
         const itemId = action.dataset.invLogItem;
-        if (confirm('Excluir este registro do histórico?')) {
+        if (await window.AldeckotMessage.confirm('Excluir este registro do histórico?', { title: 'Excluir registro', confirmText: 'Excluir' })) {
           moduleApi().deleteLog(action.dataset.invLogId).then(async () => {
             await reloadInventory(); closeModal(); const item = activeTable()?.items.find(entry => entry.id === itemId); if (item) details(item);
-          }).catch(error => alert(backendMessage(error)));
+          }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
       }
       if (type === 'export-pdf') exportPdf();
@@ -964,8 +972,10 @@
     const row = event.target.closest('[data-inv-item]'); if (row) { state.itemActionMenu = false; details(activeTable().items.find(item => item.id === row.dataset.invItem)); return; }
     if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
     const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
-    const deleteItem = event.target.closest('[data-inv-delete-item]'); if (deleteItem && canManage() && confirm('Excluir este equipamento?')) {
-      moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => alert(backendMessage(error)));
+    const deleteItem = event.target.closest('[data-inv-delete-item]');
+    if (deleteItem && canManage()) {
+      const confirmed = await window.AldeckotMessage.confirm('Excluir este equipamento?', { title: 'Excluir equipamento', confirmText: 'Excluir' });
+      if (confirmed) moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
   }, true);
   document.addEventListener('input', event => { if (event.target.matches('[data-inv-search]')) { state.query = event.target.value; applyInventoryFilters(); } });
@@ -976,8 +986,8 @@
     if (event.target.matches('[data-inv-priority-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('priority', event.target.value));
     if (event.target.matches('[data-inv-movement-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('movement', event.target.value));
     if (event.target.matches('[data-inv-shipping-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('shipping', event.target.value));
-    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; applyInventoryFilters(); }
-    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; applyInventoryFilters(); }
   });
   document.addEventListener('submit', event => {
     if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form]')) { event.preventDefault(); return; }
@@ -985,7 +995,7 @@
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.target)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.tableId;
       const request = id ? moduleApi().updateTable(id, values) : moduleApi().createTable(values);
-      request.then(async table => { state.active = table.id; state.sidebarOpen = false; await reloadInventory(); closeModal(); renderInventory(); }).catch(error => alert(backendMessage(error)));
+      request.then(async table => { state.active = table.id; state.sidebarOpen = false; await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
     if (event.target.matches('[data-inv-item-form]')) { event.preventDefault(); saveItem(event.target); }
     if (event.target.matches('[data-inv-log-form]')) {
@@ -995,7 +1005,7 @@
       const request = logId ? moduleApi().updateLog(logId, message) : moduleApi().addLog(itemId, message);
       request.then(async () => {
         await reloadInventory(); closeModal(); const item = activeTable()?.items.find(entry => entry.id === itemId); if (item) details(item);
-      }).catch(error => alert(backendMessage(error)));
+      }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
   });
 })();

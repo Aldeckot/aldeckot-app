@@ -47,13 +47,25 @@ const requestSupabase = async (config, path, options = {}) => {
 };
 
 const profileFor = async (config, userId) => {
-  const rows = await requestSupabase(config, `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,full_name,user_code,email,role,status`);
-  return rows?.[0] || null;
+  try {
+    const rows = await requestSupabase(config, `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,full_name,user_code,email,role,status,module_permissions`);
+    return rows?.[0] || null;
+  } catch (error) {
+    if (!/module_permissions/i.test(`${error.message} ${JSON.stringify(error.body || {})}`)) throw error;
+    const rows = await requestSupabase(config, `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,full_name,user_code,email,role,status`);
+    return rows?.[0] || null;
+  }
 };
 
 const profileForUserCode = async (config, userCode) => {
-  const rows = await requestSupabase(config, `/rest/v1/profiles?user_code=eq.${encodeURIComponent(normalizeUserCode(userCode))}&select=id,full_name,user_code,email,role,status&limit=1`);
-  return rows?.[0] || null;
+  try {
+    const rows = await requestSupabase(config, `/rest/v1/profiles?user_code=eq.${encodeURIComponent(normalizeUserCode(userCode))}&select=id,full_name,user_code,email,role,status,module_permissions&limit=1`);
+    return rows?.[0] || null;
+  } catch (error) {
+    if (!/module_permissions/i.test(`${error.message} ${JSON.stringify(error.body || {})}`)) throw error;
+    const rows = await requestSupabase(config, `/rest/v1/profiles?user_code=eq.${encodeURIComponent(normalizeUserCode(userCode))}&select=id,full_name,user_code,email,role,status&limit=1`);
+    return rows?.[0] || null;
+  }
 };
 
 const authenticate = async (request, response, { admin = false, active = true } = {}) => {

@@ -28,6 +28,14 @@
     normal: { label: 'Normal', icon: '📋' }
   };
   const priorityOf = event => priorityInfo[event.priority] || priorityInfo.normal;
+  const isCompleted = event => Boolean(event.completed);
+  const overdueEntries = () => read().filter(event => event.date && event.date < iso(new Date()) && !isCompleted(event));
+  const overdueDismissalKey = () => `aldeckot-overdue-reminders-${iso(new Date())}`;
+  const dismissedOverdueIds = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(overdueDismissalKey()) || '[]')); }
+    catch { return new Set(); }
+  };
+  const saveDismissedOverdueIds = ids => localStorage.setItem(overdueDismissalKey(), JSON.stringify([...ids]));
 
   function nextEvent(events) {
     const now = new Date();
@@ -96,7 +104,6 @@
   }
 
   function renderPanels() {
-    const now = new Date();
     const events = read();
     const upcoming = events.filter(event => event.date >= iso(today))
       .sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`))
@@ -111,7 +118,12 @@
         panel.innerHTML = '';
         return;
       }
-      panel.innerHTML = `<div class="agenda-panel-heading"><h3>Tarefas de hoje</h3><span>${today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span></div><div class="agenda-today-list">${todays.map(event => `<button class="agenda-task ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><div class="agenda-task-line"><b>${safe(event.title)}</b><i class="agenda-priority" title="${priorityOf(event).label}" aria-label="${priorityOf(event).label}">${priorityOf(event).icon}</i></div><span>${safe(event.time || 'Sem horário')} · ${event.kind === 'task' ? 'Tarefa' : 'Evento'}</span></button>`).join('')}</div>`;
+      const completedEntries = todays.filter(isCompleted).length;
+      panel.innerHTML = `<div class="agenda-panel-heading"><div><h3>Tarefas e eventos de hoje</h3><small>${todays.length ? `${completedEntries} de ${todays.length} concluído${todays.length === 1 ? '' : 's'}` : 'Nenhum compromisso'}</small></div><span>${today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span></div><div class="agenda-today-list">${todays.map(event => {
+        const completed = isCompleted(event);
+        const isTask = event.kind === 'task';
+        return `<article class="agenda-today-item ${isTask ? 'is-task' : 'is-event'} ${completed ? 'is-completed' : ''}"><label class="agenda-completion" title="${completed ? 'Marcar como pendente' : 'Marcar como concluído'}"><input type="checkbox" data-agenda-complete="${safe(event.id)}" ${completed ? 'checked' : ''} aria-label="${completed ? 'Marcar como pendente' : 'Marcar como concluído'}"><span aria-hidden="true"></span></label><button type="button" class="agenda-task ${isTask ? 'task' : 'event'}" data-agenda-details="${safe(event.id)}"><div class="agenda-task-line"><b>${safe(event.title)}</b><i class="agenda-priority" title="${priorityOf(event).label}" aria-label="${priorityOf(event).label}">${priorityOf(event).icon}</i></div><span><em class="agenda-task-state">${completed ? 'Concluído' : 'Pendente'}</em> · ${safe(event.time || 'Sem horário')} · ${isTask ? 'Tarefa' : 'Evento'}</span></button></article>`;
+      }).join('')}</div>`;
     });
   }
 
@@ -119,6 +131,22 @@
     ensurePanels();
     document.querySelectorAll('.home-calendar').forEach(renderWidget);
     renderPanels();
+    renderOverdueReminder();
+  }
+
+  function renderOverdueReminder() {
+    document.querySelector('.agenda-overdue-reminder')?.remove();
+    const entries = overdueEntries();
+    const dismissed = dismissedOverdueIds();
+    const visible = entries.filter(entry => !dismissed.has(entry.id));
+    if (!visible.length) return;
+    const first = visible[0];
+    const total = visible.length;
+    const card = document.createElement('aside');
+    card.className = 'agenda-overdue-reminder';
+    card.setAttribute('role', 'alert');
+    card.innerHTML = `<button type="button" class="agenda-overdue-close" data-agenda-overdue-close aria-label="Dispensar lembrete até amanhã">×</button><div class="agenda-overdue-icon" aria-hidden="true">!</div><div class="agenda-overdue-content"><b>${total === 1 ? 'Há 1 pendência aguardando conclusão' : `Há ${total} pendências aguardando conclusão`}</b><span>${safe(first.title)}${total > 1 ? ` e mais ${total - 1}` : ''} · ${safe(first.kind === 'task' ? 'Tarefa' : 'Evento')} de ${new Date(`${first.date}T12:00`).toLocaleDateString('pt-BR')}</span><button type="button" data-agenda-overdue-open="${safe(first.id)}">Ver pendência${total > 1 ? 's' : ''}</button></div>`;
+    document.body.appendChild(card);
   }
 
   function formatShort(event) {
@@ -247,6 +275,18 @@
       openForm(null, read().find(item => item.id === edit.dataset.agendaEdit));
       return;
     }
+    const overdueOpen = event.target.closest('[data-agenda-overdue-open]');
+    if (overdueOpen) {
+      openDetails(read().find(item => item.id === overdueOpen.dataset.agendaOverdueOpen));
+      return;
+    }
+    if (event.target.closest('[data-agenda-overdue-close]')) {
+      const dismissed = dismissedOverdueIds();
+      overdueEntries().forEach(item => dismissed.add(item.id));
+      saveDismissedOverdueIds(dismissed);
+      renderOverdueReminder();
+      return;
+    }
     if (event.target.closest('[data-agenda-close]')) {
       closeModal();
       return;
@@ -256,10 +296,27 @@
       backend().agenda.remove(modal.dataset.editId).then(() => {
         write(read().filter(item => item.id !== modal.dataset.editId));
         closeModal(); renderAll();
-      }).catch(error => alert(error.message || 'Não foi possível excluir o agendamento.'));
+      }).catch(error => window.AldeckotMessage.show(error.message || 'Não foi possível excluir o agendamento.'));
       return;
     }
     if (event.target.closest('[data-agenda-reminder-close]')) document.querySelector('.agenda-reminder')?.remove();
+  });
+
+  document.addEventListener('change', event => {
+    const completion = event.target.closest('[data-agenda-complete]');
+    if (!completion) return;
+    const entry = read().find(item => item.id === completion.dataset.agendaComplete);
+    if (!entry) return;
+    const completed = completion.checked;
+    completion.disabled = true;
+    backend().agenda.setCompleted(entry.id, completed).then(updated => {
+      write(read().map(item => item.id === updated.id ? { ...item, completed: updated.completed, completedAt: updated.completedAt } : item));
+      renderAll();
+    }).catch(error => {
+      completion.checked = !completed;
+      completion.disabled = false;
+      window.AldeckotMessage.show(error.message || 'Não foi possível atualizar a conclusão.');
+    });
   });
 
   document.addEventListener('submit', event => {
@@ -279,7 +336,7 @@
       write(next);
       view = new Date(`${saved.date}T12:00`);
       closeModal(); renderAll();
-    }).catch(error => alert(error.message || 'Não foi possível salvar o agendamento.'));
+    }).catch(error => window.AldeckotMessage.show(error.message || 'Não foi possível salvar o agendamento.'));
   });
 
   async function bootstrapAgenda() {

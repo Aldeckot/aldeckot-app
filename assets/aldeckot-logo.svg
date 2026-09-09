@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 246 76" role="img" aria-labelledby="title desc">
+  <title id="title">ALDECKOT</title>
+  <desc id="desc">ALDECKOT — Sistema de Gestão</desc>
+  <defs>
+    <linearGradient id="azure" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22e4f4"/>
+      <stop offset="1" stop-color="#1386f4"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b189ff"/>
+      <stop offset="1" stop-color="#664df0"/>
+    </linearGradient>
+    <linearGradient id="deep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15558f"/>
+      <stop offset="1" stop-color="#0d2e63"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(2 5)">
+    <path d="M10 62 20 10h29l15 22-28 30Z" fill="url(#azure)"/>
+    <path d="m39 62 24-38 19 6-10 32H49Z" fill="url(#violet)"/>
+    <path d="m20 10 29 0 16 22-12 17-12-9-15 22H10Z" fill="url(#deep)" opacity=".72"/>
+    <path d="m42 16 12 6-23 34-12-6Z" fill="#061c4e" opacity=".96"/>
+    <path d="m58 40 11-13 6 4-12 17-13 0Z" fill="#cad2ff" opacity=".5"/>
+  </g>
+  <text x="92" y="37" fill="#e8f5ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="1.1">ALDECKOT</text>
+  <text x="93" y="55" fill="#61baff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="700" letter-spacing=".45">Sistema de Gestão</text>
+</svg>

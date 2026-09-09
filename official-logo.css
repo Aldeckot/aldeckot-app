@@ -1,0 +1,91 @@
+/* Identidade visual oficial ALDECKOT. */
+.official-logo-image{display:block;width:100%;height:auto}
+
+/* Configurações usam a marca completa; a Home mantém o nome animado original. */
+.home-page .brand{padding:0 11px!important}
+.settings-brand .official-logo-image{width:178px;filter:drop-shadow(0 4px 9px #0005)}
+
+/* Home: marca, mascote e sino ocupam áreas independentes no topo lateral. */
+@media (min-width:981px){
+  body.home-page .side::after{top:16px;left:auto;right:48px;width:84px;height:104px}
+  .home-page .home-notification-center{top:35px;left:auto;right:37px}
+}
+
+/* Marca de retorno nos cabeçalhos: símbolo oficial e o nome animado da Home. */
+@keyframes aldeckot-header-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.system-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0 2px 7px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.system-header-brand-mark {
+  display: block;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 52px;
+  overflow: hidden;
+}
+
+.system-header-brand-mark .official-logo-image {
+  width: 164px;
+  max-width: none;
+  filter: drop-shadow(0 4px 9px #0006);
+}
+
+.system-header-brand-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1;
+}
+
+.system-header-brand-copy b {
+  display: block;
+  background: linear-gradient(90deg, #27d6ef, #726aff);
+  background-size: 180% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  white-space: nowrap;
+  animation: aldeckot-header-gradient 5.5s ease-in-out infinite;
+}
+
+.system-header-brand-copy small {
+  color: #9db6cb;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.system-header-brand:hover .system-header-brand-mark .official-logo-image {
+  filter: drop-shadow(0 4px 11px #28d9ff99);
+}
+
+.system-header-brand:focus-visible {
+  border-radius: 9px;
+  outline: 2px solid #25cdfb;
+  outline-offset: 3px;
+}
+
+.theme-light .system-header-brand-copy small { color: #416882; }
+
+@media(max-width:760px){
+  .settings-brand .official-logo-image { width: 158px; }
+  .system-header-brand { gap: 0; padding-left: 3px; }
+  .system-header-brand-mark { flex-basis: 50px; width: 50px; height: 48px; }
+  .system-header-brand-copy { display: none; }
+}

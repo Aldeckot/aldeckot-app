@@ -1,5 +1,7 @@
 (() => {
   const releaseHomeRender = window.AldeckotHomeStage?.hold?.('recent-items');
+  let finishHomeData;
+  window.AldeckotHomeDataReady = new Promise(resolve => { finishHomeData = resolve; });
   let homeRenderReleased = false;
   const completeHomeRender = () => {
     if (homeRenderReleased) return;
@@ -72,13 +74,15 @@
     const panel = document.querySelector('[data-home-recent-items]');
     if (!panel) return;
     if (!items.length) {
-      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p>`;
+      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p><div class="home-operations-slot" data-home-operations-slot></div>`;
+      window.dispatchEvent(new CustomEvent('aldeckot:home-recent-rendered'));
       return;
     }
-    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div>`;
+    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div><div class="home-operations-slot" data-home-operations-slot></div>`;
     panel.querySelectorAll('[data-home-recent-target]').forEach(button => {
       button.addEventListener('click', () => openRecentItem(button.dataset.homeRecentTarget));
     });
+    window.dispatchEvent(new CustomEvent('aldeckot:home-recent-rendered'));
   }
 
   async function loadRecentItems() {
@@ -86,8 +90,14 @@
     const api = window.AldeckotSupabase;
     try {
       await (window.AldeckotAuthReady || Promise.resolve());
-      if (!window.AldeckotAuth?.session) return;
+      if (!window.AldeckotAuth?.session) {
+        window.AldeckotHomeData = { error: true };
+        finishHomeData(window.AldeckotHomeData);
+        return;
+      }
       if (!panel || !api) {
+        window.AldeckotHomeData = { error: true };
+        finishHomeData(window.AldeckotHomeData);
         renderRecentItems([]);
         return;
       }
@@ -105,7 +115,10 @@
       const control = controlResult.status === 'fulfilled' ? controlResult.value : { tables: [] };
       const flux = fluxResult.status === 'fulfilled' ? fluxResult.value : { tables: [] };
       const nfeAlerts = nfeAlertResult.status === 'fulfilled' ? nfeAlertResult.value : [];
-      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { inventory, management, control, flux, nfeAlerts } }));
+      const sharedHomeData = { inventory, management, control, flux, nfeAlerts };
+      window.AldeckotHomeData = sharedHomeData;
+      finishHomeData(sharedHomeData);
+      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: sharedHomeData }));
       const storedEvents = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
       const activityEvents = (storedEvents || []).map(eventEntry).filter(Boolean);
       const updatedKeys = new Set(activityEvents.map(itemKey));
@@ -121,7 +134,9 @@
       renderRecentItems(recentItems);
     } catch (error) {
       console.warn('Atualizações recentes indisponíveis:', error.message || error);
-      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: { error: true } }));
+      window.AldeckotHomeData = { error: true };
+      finishHomeData(window.AldeckotHomeData);
+      window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: window.AldeckotHomeData }));
       renderRecentItems([]);
     } finally {
       completeHomeRender();
@@ -146,7 +161,7 @@
     else if (module === 'control') navigateTo('control.html');
     else if (module === 'flux') navigateTo('flux.html');
     else if (module === 'nfe') navigateTo('nfe.html');
-    else window.alert('A interface deste módulo será conectada às tabelas próprias do Supabase na próxima etapa.');
+    else window.AldeckotMessage.show('A interface deste módulo será conectada às tabelas próprias do Supabase na próxima etapa.');
   };
 
   const moduleCardIcon = {
@@ -185,7 +200,7 @@
     recentPanel.className = 'home-recent-panel';
     recentPanel.dataset.homeRecentItems = 'true';
     recentPanel.setAttribute('aria-live', 'polite');
-    recentPanel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Carregando atualizações…</p></div></div>`;
+    recentPanel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Carregando atualizações…</p></div></div><div class="home-operations-slot" data-home-operations-slot></div>`;
     homeReference.appendChild(recentPanel);
     loadRecentItems();
   } else completeHomeRender();

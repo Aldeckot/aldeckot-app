@@ -65,8 +65,8 @@
     total: 0,
     dashboard: { total: 0, today: 0, month: 0, reasons: {} },
     alerts: [],
-    filters: { query: '', reason: '', pdv: query.get('pdv') || '', operator: '', dateFrom: '', dateTo: '' },
-    advancedOpen: Boolean(query.get('pdv')),
+    filters: { query: '', reason: '', pdv: query.get('pdv') || '', operator: '', dateFrom: query.get('dateFrom') || '', dateTo: query.get('dateTo') || '' },
+    advancedOpen: Boolean(query.get('pdv') || query.get('dateFrom') || query.get('dateTo')),
     loading: true,
     error: '',
     modalFile: null,
@@ -634,6 +634,8 @@
       if (!window.AldeckotAuth?.session) return;
       await window.AldeckotSupabase?.init?.();
       await refresh();
+      const pendingItem = query.get('item');
+      if (pendingItem) await openDetails(pendingItem);
       void ensureAutomaticNfeBackup();
     } catch (error) {
       state.loading = false; state.error = error.message || 'Não foi possível iniciar o módulo.'; render(); window.AldeckotModuleStage?.reveal?.();
