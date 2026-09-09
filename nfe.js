@@ -310,6 +310,7 @@
     if (selected && (selected.type !== 'application/pdf' && !/\.pdf$/i.test(selected.name) || selected.size > 10485760)) return toast('Envie um PDF válido com até 10 MB.', true);
     submit.disabled = true;
     submit.textContent = selected ? 'Enviando PDF…' : 'Salvando…';
+    const finishSave = window.AldeckotLoading?.beginSave?.(existing ? 'Salvando alterações…' : 'Registrando NF-e…');
     let uploadedPath = '';
     let saved = false;
     try {
@@ -322,18 +323,18 @@
       }
       const occurredAt = new Date(`${values.date}T${values.time}`).toISOString();
       const payload = { operator: values.operator, operatorCode: values.operatorCode, fiscal: values.fiscal, occurredAt, pdv: values.pdv, nfeNumber: values.nfeNumber, reason: values.reason, notes: values.notes, pdfPath: documentData.path, pdfName: documentData.name, pdfSize: documentData.size };
-      if (existing) await api().update(existing.id, payload);
-      else await api().create(payload);
+      const savedItem = existing ? await api().update(existing.id, payload) : await api().create(payload);
       saved = true;
       closeModal();
+      await refresh();
+      await openDetails(savedItem.id);
       toast(existing ? 'Ocorrência NF-e atualizada e auditada.' : 'Nova NF-e registrada e sincronizada.');
-      refresh();
     } catch (error) {
       if (uploadedPath && !saved) api().discardPdf(uploadedPath).catch(() => {});
       toast(error.message || 'Não foi possível salvar a ocorrência.', true);
       submit.disabled = false;
       submit.textContent = existing ? 'Salvar alterações' : 'Registrar NF-e';
-    }
+    } finally { await finishSave?.(); }
   }
 
   async function openDetails(id) {

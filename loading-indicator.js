@@ -66,7 +66,17 @@
     return Promise.resolve(promise).finally(() => end(token));
   }
 
-  window.AldeckotLoading = { show: begin, hide: end, track };
+  function beginSave(message = 'Salvando informações…', minimumDuration = 260) {
+    const startedAt = Date.now();
+    const token = begin(message);
+    return async () => {
+      const remaining = Math.max(0, Number(minimumDuration) - (Date.now() - startedAt));
+      if (remaining) await new Promise(resolve => window.setTimeout(resolve, remaining));
+      end(token);
+    };
+  }
+
+  window.AldeckotLoading = { show: begin, hide: end, track, beginSave };
 
   const startup = begin('Preparando sistema…');
   window.addEventListener('load', () => window.setTimeout(() => end(startup), 260), { once: true });

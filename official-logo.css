@@ -71,10 +71,6 @@
   white-space: nowrap;
 }
 
-.system-header-brand:hover .system-header-brand-mark .official-logo-image {
-  filter: drop-shadow(0 4px 11px #28d9ff99);
-}
-
 .system-header-brand:focus-visible {
   border-radius: 9px;
   outline: 2px solid #25cdfb;

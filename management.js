@@ -520,6 +520,7 @@
     next.logs = [uniqueLog(description), ...(next.logs || [])];
     const submit = form.querySelector('[type="submit"]');
     submit.disabled = true; submit.textContent = 'Salvando…';
+    const finishSave = window.AldeckotLoading?.beginSave?.(previous ? 'Salvando alterações…' : 'Adicionando terminal…');
     try {
       const saved = await window.AldeckotSupabase.management.save(next, previous?.id, description);
       const index = payload.items.findIndex(item => item.id === saved.id);
@@ -535,7 +536,7 @@
       console.error('Falha ao salvar equipamento da Gestão TI:', error);
       submit.disabled = false; submit.textContent = previous ? 'Salvar alterações' : 'Adicionar equipamento';
       notify(error?.message || 'Não foi possível salvar o equipamento.');
-    }
+    } finally { await finishSave?.(); }
   }
 
   async function transferActive(form) {

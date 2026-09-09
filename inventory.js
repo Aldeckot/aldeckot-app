@@ -572,7 +572,7 @@
   function details(item) {
     if (controlMode) { controlDetails(item); return; }
     if (fluxMode) { fluxDetails(item); return; }
-    const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['status', 'Status'], ['priority', 'Prioridade'], ['situation', 'Situação'], ['cleaning', 'Tipo de Limpeza'], ['date', 'Atualizado'], ['notes', 'Observações']];
+    const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['sector', 'Setor'], ['location', 'Local'], ['status', 'Status'], ['priority', 'Prioridade'], ['situation', 'Situação'], ['cleaning', 'Tipo de Limpeza'], ['date', 'Atualizado'], ['notes', 'Observações']];
     const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : (item[key] || '—'))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
@@ -622,12 +622,19 @@
 
   async function saveItem(form) {
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    const submit = form.querySelector('[type="submit"]'); const originalLabel = submit?.textContent; const finishSave = window.AldeckotLoading?.beginSave?.(old ? 'Salvando alterações…' : 'Adicionando item…');
+    if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
     try {
-      await moduleApi().saveItem(table.id, item, id || null, updateLogMessage(old, item));
+      const saved = await moduleApi().saveItem(table.id, item, id || null, updateLogMessage(old, item));
       closeModal();
       await reloadInventory();
       renderInventory();
-    } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      const updatedItem = activeTable()?.items.find(entry => entry.id === saved.id);
+      if (updatedItem) details(updatedItem);
+    } catch (error) {
+      if (submit) { submit.disabled = false; submit.textContent = originalLabel; }
+      window.AldeckotMessage.show(backendMessage(error));
+    } finally { await finishSave?.(); }
   }
   function download(content, name, type) { const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type })); link.download = name; link.click(); URL.revokeObjectURL(link.href); }
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
