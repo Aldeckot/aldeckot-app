@@ -1,0 +1,16 @@
+/* Em celulares, a operação é priorizada sobre visualizações gráficas. */
+@media (max-width: 720px) {
+  .inventory-charts,
+  .management-charts {
+    display: none !important;
+  }
+
+  .nfe-metric footer svg,
+  .nfe-metric-mark {
+    display: none !important;
+  }
+
+  .nfe-metric footer {
+    justify-content: flex-start;
+  }
+}

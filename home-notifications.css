@@ -20,3 +20,17 @@
 @keyframes home-notification-urgent-chip{0%,100%{filter:brightness(1);transform:scale(1)}50%{filter:brightness(1.18);transform:scale(1.025)}}
 @keyframes home-notification-bell{0%,66%,100%{transform:rotate(0)}72%{transform:rotate(-13deg)}78%{transform:rotate(12deg)}84%{transform:rotate(-8deg)}90%{transform:rotate(5deg)}96%{transform:rotate(0)}}
 @media(prefers-reduced-motion:reduce){.home-notification-item.is-urgent,.home-notification-urgent,.home-notification-center[data-has-urgent="true"] .home-notification-toggle svg{animation:none!important}}
+
+/* Na área de trabalho, a Central usa o espaço livre ao centro da Home. */
+@media (min-width:981px){
+  .home-notification-panel{
+    top:25px;
+    left:clamp(318px,23.3vw,340px);
+    width:min(480px,calc(100vw - 560px));
+    max-height:calc(100dvh - 40px);
+    overflow-y:auto;
+    transform-origin:top left;
+  }
+  .home-notification-list{gap:6px;margin-top:9px}
+  .home-notification-item{gap:5px;padding:9px}
+}

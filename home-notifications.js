@@ -125,7 +125,8 @@
     notifications = [...operationalNotifications, ...allNotifications]
       .filter(notification => !notification.acknowledgeable || !dismissed.has(notificationKey(notification)))
       .sort((first, second) => second.weight - first.weight || Number(second.urgent) - Number(first.urgent))
-      .slice(0, 6);
+      // A Central prioriza os avisos mais importantes sem sobrecarregar a Home.
+      .slice(0, 5);
   };
 
   async function hydrateAcknowledgements(force = false) {
