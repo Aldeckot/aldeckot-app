@@ -82,6 +82,16 @@ test('os cards de resumo das configurações aparecem apenas na seção geral', 
   assert.match(settings, /overview\.hidden = name !== 'general'/);
 });
 
+test('os modais de equipamentos e PCs não fecham ao clicar no fundo', () => {
+  const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+
+  assert.match(inventory, /node\.addEventListener\('click', event => \{\s*if \(event\.target !== node\) return;\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
+  assert.doesNotMatch(management, /event\.target === modalNode\) \{ state\.modal = null; renderModal\(\); \}/);
+  assert.match(inventory, /data-inv-close/);
+  assert.match(management, /data-management-action="close"/);
+});
+
 test('as notificações dos módulos priorizam equipamentos que exigem ação', () => {
   const notifications = readFileSync(resolve(root, 'module-notifications.js'), 'utf8');
   const styles = readFileSync(resolve(root, 'module-notifications.css'), 'utf8');

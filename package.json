@@ -1,6 +1,6 @@
 {
   "name": "aldeckot-app",
-  "version": "2.0.12",
+  "version": "2.0.13",
   "private": true,
   "description": "ALDECKOT — Sistema corporativo de gestão de equipamentos e operações.",
   "engines": {

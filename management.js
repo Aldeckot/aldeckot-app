@@ -792,10 +792,7 @@
     if (tab) { state.tab = tab.dataset.managementTab; renderModal(); return; }
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
-    if (!action) {
-      if (event.target === modalNode) { state.modal = null; renderModal(); }
-      return;
-    }
+    if (!action) return;
     const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }

@@ -501,6 +501,11 @@
     const node = document.createElement('div');
     node.className = 'inv-modal';
     node.innerHTML = `<div class="inv-dialog ${dialogClass}${glowClass}"${glowStyle}>${content}</div>`;
+    node.addEventListener('click', event => {
+      if (event.target !== node) return;
+      event.preventDefault();
+      event.stopPropagation();
+    });
     document.body.appendChild(node);
     return node;
   }
