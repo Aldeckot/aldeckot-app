@@ -11,6 +11,15 @@
   const priorities = ['Alta', 'Média', 'Estável'];
   const areas = ['Escritório', 'Estoque', 'Frente de Loja'];
   const peripheralTypes = ['Impressora', 'Pin Pad', 'Gaveta', 'Balança', 'Monitor', 'Teclado', 'Leitor'];
+  const peripheralTagRules = {
+    Impressora: { pattern: /^IMPR[0-9]+$/, source: 'IMPR[0-9]+', example: 'IMPR000' },
+    Leitor: { pattern: /^EAN[0-9]+$/, source: 'EAN[0-9]+', example: 'EAN000' },
+    Gaveta: { pattern: /^GVT[0-9]+$/, source: 'GVT[0-9]+', example: 'GVT000' },
+    'Pin Pad': { pattern: /^PP[0-9]+$/, source: 'PP[0-9]+', example: 'PP000' },
+    Balança: { pattern: /^BAL[0-9]+$/, source: 'BAL[0-9]+', example: 'BAL000' },
+    Monitor: { pattern: /^MON[0-9]+$/, source: 'MON[0-9]+', example: 'MON000' },
+    Teclado: { pattern: /^TEC[0-9]+$/, source: 'TEC[0-9]+', example: 'TEC000' }
+  };
   const areaColors = { 'Escritório': '#4ea8ff', Estoque: '#f6bd55', 'Frente de Loja': '#47dd9b' };
   const statusPresentation = {
     Ativo: { color: '#19ff72', icon: 'wifi' },
@@ -87,6 +96,15 @@
   };
   const uniqueLog = text => ({ id: `management-log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: new Date().toISOString(), text });
   const peripheralFieldName = type => `peripheral-${normalize(type).replace(/\s+/g, '-')}`;
+  const peripheralTag = value => String(value || '').trim().toUpperCase();
+  const isValidPeripheralTag = (type, value) => {
+    const tag = peripheralTag(value);
+    return !tag || Boolean(peripheralTagRules[type]?.pattern.test(tag));
+  };
+  const peripheralField = (type, value = '') => {
+    const rule = peripheralTagRules[type];
+    return `<label class="management-field"><span>${escape(type)} <small>TAG ${escape(rule.example)}</small></span><input name="${peripheralFieldName(type)}" value="${escape(value)}" placeholder="${escape(rule.example)}" pattern="${escape(rule.source)}" data-management-peripheral-input="${escape(type)}" autocomplete="off" spellcheck="false"></label>`;
+  };
 
   function itemMatchesFilters(item) {
     const search = normalize(state.query);
@@ -200,7 +218,7 @@
     if (tab === 'peripherals') {
       const known = peripheralTypes.map(type => {
         const peripheral = (item.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type));
-        return peripheral?.status ? [type, peripheral.status] : null;
+        return peripheral?.status && isValidPeripheralTag(type, peripheral.status) ? [type, peripheralTag(peripheral.status)] : null;
       }).filter(Boolean);
       const extras = (item.peripherals || [])
         .filter(entry => !peripheralTypes.some(type => normalize(entry.type || entry.tipo) === normalize(type)))
@@ -256,9 +274,9 @@
       : 'Registro adicionado manualmente; ele poderá ser excluído quando necessário.';
     const peripheralValue = type => {
       const value = (current.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type))?.status || '';
-      return value === 'Não informado' ? '' : value;
+      return isValidPeripheralTag(type, value) ? peripheralTag(value) : '';
     };
-    const peripheralFields = peripheralTypes.map(type => field(peripheralFieldName(type), type, peripheralValue(type))).join('');
+    const peripheralFields = peripheralTypes.map(type => peripheralField(type, peripheralValue(type))).join('');
     return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar terminal' : 'Adicionar terminal'}</h2><p class="management-last-sync">${formHint}</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Terminal e computador</h3>${field('terminal', 'Nome do terminal', current.terminal, null, false, 'text', true)}${field('equipment', 'Nome do computador instalado', current.equipment)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('sector', 'Setor', current.sector)}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${field('cleaning', 'Limpeza', current.cleaning, cleanings)}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar terminal'}</button></footer></form></section>`;
   }
 
@@ -488,7 +506,7 @@
     const values = Object.fromEntries(new FormData(form));
     const current = activeItem();
     const knownPeripherals = peripheralTypes.map((type, index) => {
-      const status = String(values[peripheralFieldName(type)] || '').trim() || 'Não informado';
+      const status = peripheralTag(values[peripheralFieldName(type)]) || 'Não informado';
       const previous = (current?.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type));
       return { id: previous?.id || `peripheral-${Date.now()}-${index}`, type, status };
     }).filter(peripheral => peripheral.status !== 'Não informado');
@@ -512,7 +530,24 @@
     return changes.length ? `Alterações na Gestão TI — ${changes.join('; ')}.` : 'Dados técnicos revisados na Gestão TI.';
   }
 
+  function validatePeripheralFields(form) {
+    const inputs = [...form.querySelectorAll('[data-management-peripheral-input]')];
+    const invalid = inputs.find(input => {
+      const type = input.dataset.managementPeripheralInput;
+      input.value = peripheralTag(input.value);
+      const valid = isValidPeripheralTag(type, input.value);
+      input.setCustomValidity(valid ? '' : `Informe a TAG no formato ${peripheralTagRules[type]?.example || 'correto'}.`);
+      return !valid;
+    });
+    if (!invalid) return true;
+    invalid.reportValidity();
+    invalid.focus();
+    notify(`Use o formato ${peripheralTagRules[invalid.dataset.managementPeripheralInput]?.example || 'correto'} para este periférico.`);
+    return false;
+  }
+
   async function saveFromForm(form) {
+    if (!validatePeripheralFields(form) || !form.reportValidity()) return;
     const previous = activeItem();
     const next = makeItem(form);
     if (!next.terminal) { notify('Informe o nome do terminal.'); return; }
@@ -837,6 +872,11 @@
   document.addEventListener('input', event => {
     if (event.target.matches('[data-management-query]')) { state.query = event.target.value; applyManagementFilters(); }
     if (event.target.matches('[data-management-transfer-query]')) { state.transferQuery = event.target.value; applyTransferSearch(); }
+    if (event.target.matches('[data-management-peripheral-input]')) {
+      const type = event.target.dataset.managementPeripheralInput;
+      event.target.value = peripheralTag(event.target.value);
+      event.target.setCustomValidity(isValidPeripheralTag(type, event.target.value) ? '' : `Informe a TAG no formato ${peripheralTagRules[type]?.example || 'correto'}.`);
+    }
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-management-status]')) { state.status = event.target.value; state.operation = ''; applyManagementFilters(); }

@@ -43,6 +43,66 @@
       return true;
     });
   };
+  const normalizedText = value => String(value || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+  const managementPeripheralRules = [
+    { type: 'Impressora', pattern: /^IMPR[0-9]+$/ },
+    { type: 'Leitor', pattern: /^EAN[0-9]+$/ },
+    { type: 'Gaveta', pattern: /^GVT[0-9]+$/ },
+    { type: 'Pin Pad', pattern: /^PP[0-9]+$/ },
+    { type: 'Balança', pattern: /^BAL[0-9]+$/ },
+    { type: 'Monitor', pattern: /^MON[0-9]+$/ },
+    { type: 'Teclado', pattern: /^TEC[0-9]+$/ }
+  ];
+  const inventoryPeripheralAssignment = item => {
+    const tag = String(item?.tag || '').trim().toUpperCase();
+    const location = String(item?.location || '').trim();
+    if (!tag || ['-', '***'].includes(tag)) return { state: 'no-tag' };
+    const rule = managementPeripheralRules.find(entry => entry.pattern.test(tag));
+    if (!rule) return { state: 'unsupported-tag', tag, location };
+    if (!location) return { state: 'no-location', type: rule.type, tag };
+    return { state: 'ready', type: rule.type, tag, location };
+  };
+  const samePeripheralType = (peripheral, type) => normalizedText(peripheral?.type || peripheral?.tipo) === normalizedText(type);
+  const syncDescription = (assignment, action) => action === 'removed'
+    ? `Sincronização do Inventário — ${assignment.type} removido: ${assignment.tag}.`
+    : `Sincronização do Inventário — ${assignment.type} atualizado com a TAG ${assignment.tag}.`;
+  const appendPeripheralSyncLog = (payload, assignment, itemId, action) => {
+    const at = new Date().toISOString();
+    const text = syncDescription(assignment, action);
+    const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+    return {
+      ...payload,
+      logs: [{ id: `inventory-peripheral-${itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at, text, sourceModule: 'inventory', sourceItemId: String(itemId) }, ...logs],
+      lastActivity: text
+    };
+  };
+  const assignManagementPeripheral = (payload, assignment, itemId) => {
+    const current = Array.isArray(payload?.peripherals) ? payload.peripherals : [];
+    let changed = false;
+    let found = false;
+    const peripherals = current.map(peripheral => {
+      if (!samePeripheralType(peripheral, assignment.type)) return peripheral;
+      found = true;
+      const next = { ...peripheral, type: peripheral.type || peripheral.tipo || assignment.type, status: assignment.tag, sourceModule: 'inventory', sourceItemId: String(itemId) };
+      if (String(peripheral.status || '').trim() !== assignment.tag || peripheral.sourceModule !== 'inventory' || String(peripheral.sourceItemId || '') !== String(itemId) || !peripheral.type) changed = true;
+      return next;
+    });
+    if (!found) {
+      peripherals.push({ id: `inventory-peripheral-${itemId}-${normalizedText(assignment.type).replace(/\s+/g, '-')}`, type: assignment.type, status: assignment.tag, sourceModule: 'inventory', sourceItemId: String(itemId) });
+      changed = true;
+    }
+    return changed ? appendPeripheralSyncLog({ ...(payload || {}), peripherals }, assignment, itemId, 'updated') : null;
+  };
+  const clearManagementPeripheral = (payload, assignment, itemId) => {
+    const current = Array.isArray(payload?.peripherals) ? payload.peripherals : [];
+    const peripherals = current.filter(peripheral => {
+      const linkedSource = String(peripheral?.sourceItemId || '') === String(itemId);
+      const matchingTag = String(peripheral?.status || '').trim().toUpperCase() === assignment.tag;
+      return !(samePeripheralType(peripheral, assignment.type) && (linkedSource || matchingTag));
+    });
+    if (peripherals.length === current.length) return null;
+    return appendPeripheralSyncLog({ ...(payload || {}), peripherals }, assignment, itemId, 'removed');
+  };
   const dateLabel = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html', nfe: 'nfe.html' })[module] || '';
   const activityTarget = (module, tableId, itemId, operation) => {
@@ -223,6 +283,39 @@
         description: logMessage || (existingId ? 'Equipamento atualizado.' : 'Equipamento adicionado ao Inventário.')
       });
       return saved;
+    },
+
+    async syncManagementPeripheral(item, previous = null) {
+      await init();
+      const nextAssignment = inventoryPeripheralAssignment(item);
+      const previousAssignment = previous ? inventoryPeripheralAssignment(previous) : null;
+      const shouldClearPrevious = previousAssignment?.state === 'ready' && (
+        nextAssignment.state !== 'ready' ||
+        normalizedText(previousAssignment.location) !== normalizedText(nextAssignment.location) ||
+        previousAssignment.type !== nextAssignment.type
+      );
+      if (nextAssignment.state !== 'ready' && !shouldClearPrevious) return nextAssignment;
+
+      const managementTables = check(await client.from('module_tables').select('id').eq('module', 'management'));
+      if (!managementTables.length) return { ...nextAssignment, state: 'target-not-found', matched: 0, updated: 0 };
+      const records = check(await client.from('module_records').select('id, payload').in('table_id', managementTables.map(table => table.id)));
+      let matched = 0;
+      let updated = 0;
+      for (const record of records) {
+        const computerName = String(record.payload?.equipment || '').trim();
+        const matchesPrevious = shouldClearPrevious && normalizedText(computerName) === normalizedText(previousAssignment.location);
+        const matchesNext = nextAssignment.state === 'ready' && normalizedText(computerName) === normalizedText(nextAssignment.location);
+        if (!matchesPrevious && !matchesNext) continue;
+        matched += 1;
+        let nextPayload = record.payload || {};
+        if (matchesPrevious) nextPayload = clearManagementPeripheral(nextPayload, previousAssignment, item.id) || nextPayload;
+        if (matchesNext) nextPayload = assignManagementPeripheral(nextPayload, nextAssignment, item.id) || nextPayload;
+        if (nextPayload === record.payload) continue;
+        check(await client.from('module_records').update({ payload: nextPayload }).eq('id', record.id).select('id'));
+        updated += 1;
+      }
+      if (nextAssignment.state !== 'ready') return { ...nextAssignment, state: shouldClearPrevious ? 'cleared' : nextAssignment.state, matched, updated };
+      return { ...nextAssignment, state: matched ? (updated ? 'updated' : 'already-synced') : 'target-not-found', matched, updated };
     },
 
     async addLog(itemId, message) {

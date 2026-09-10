@@ -634,11 +634,21 @@
     if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
     try {
       const saved = await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item));
+      let peripheralSync;
+      try { peripheralSync = await moduleApi().syncManagementPeripheral?.(saved, old); }
+      catch (syncError) {
+        console.warn('Não foi possível concluir a sincronização com a Gestão TI.', syncError);
+        peripheralSync = { state: 'sync-failed' };
+      }
       closeModal();
       await reloadInventory();
       renderInventory();
       const updatedItem = activeTable()?.items.find(entry => entry.id === saved.id);
       if (updatedItem) details(updatedItem);
+      if (peripheralSync?.state === 'updated' || peripheralSync?.state === 'already-synced') window.AldeckotMessage.show(`${peripheralSync.type} sincronizado no computador ${peripheralSync.location}.`);
+      if (peripheralSync?.state === 'target-not-found') window.AldeckotMessage.show(`Equipamento salvo, mas não há computador na Gestão TI com o nome “${peripheralSync.location}”.`);
+      if (peripheralSync?.state === 'cleared') window.AldeckotMessage.show('Vínculo do periférico removido da Gestão TI.');
+      if (peripheralSync?.state === 'sync-failed') window.AldeckotMessage.show('Equipamento salvo. A sincronização com a Gestão TI será retomada quando o módulo atualizar.');
     } catch (error) {
       if (submit) { submit.disabled = false; submit.textContent = originalLabel; }
       window.AldeckotMessage.show(backendMessage(error));

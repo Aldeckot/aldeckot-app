@@ -40,3 +40,26 @@ test('tarefas e eventos da agenda mantêm a conclusão visível e persistente', 
   assert.equal(existsSync(resolve(root, 'supabase/028_agenda_task_completion.sql')), true);
   assert.equal(existsSync(resolve(root, 'supabase/029_agenda_event_completion.sql')), true);
 });
+
+test('Inventário sincroniza as TAGs de periféricos compatíveis com a Gestão TI', () => {
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+  const client = readFileSync(resolve(root, 'supabase-client.js'), 'utf8');
+  const migration = readFileSync(resolve(root, 'supabase/038_inventory_management_peripheral_sync.sql'), 'utf8');
+  const correction = readFileSync(resolve(root, 'supabase/039_fix_inventory_management_peripheral_sync_owner.sql'), 'utf8');
+  const reconciliation = readFileSync(resolve(root, 'supabase/040_reconcile_inventory_management_peripherals.sql'), 'utf8');
+  for (const [type, prefix] of [['Impressora', 'IMPR'], ['Leitor', 'EAN'], ['Gaveta', 'GVT'], ['Pin Pad', 'PP'], ['Balança', 'BAL'], ['Monitor', 'MON'], ['Teclado', 'TEC']]) {
+    assert.match(management, new RegExp(type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(management, new RegExp(`/\\^${prefix}\\[0-9\\]\\+\\$/`));
+    assert.match(migration, new RegExp(`\\^${prefix}\\[0-9\\]\\+\\$`));
+  }
+  assert.match(client, /syncManagementPeripheral/);
+  assert.match(client, /sourceItemId/);
+  assert.match(migration, /inventory_peripheral_management_sync/);
+  assert.match(migration, /management_peripheral_tag_format/);
+  assert.match(correction, /p_remove boolean default false\s*\)\s*returns integer/);
+  assert.match(correction, /app\.apply_inventory_peripheral_assignment\(null, new\.id/);
+  assert.doesNotMatch(correction, /record_item\.owner_id|new\.owner_id|old\.owner_id/);
+  assert.match(reconciliation, /jsonb_typeof\(record_row\.payload -> 'peripherals'\) = 'array'/);
+  assert.match(reconciliation, /reconcile_inventory_management_peripherals/);
+  assert.match(reconciliation, /select app\.reconcile_inventory_management_peripherals\(\)/);
+});
