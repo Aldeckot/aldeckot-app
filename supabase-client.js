@@ -33,21 +33,11 @@
     return { priority: itemPriorityValue(match?.[1]), notes: text.replace(itemPriorityMarker, '') };
   };
   const storeItemPriority = (notes, priority) => `[[aldeckot:item-priority:${itemPriorityKey(priority)}]]\n${splitItemPriority(notes).notes}`;
-  const normalizedItemValue = value => String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const meaningfulItemIdentity = value => {
-    const normalized = normalizedItemValue(value);
-    return ['', 'nao informado', 'sem tag', 'n/a', '-', '—'].includes(normalized) ? '' : normalized;
-  };
-  const withoutDuplicateItems = (items, fields) => {
+  const hasOwn = (source, key) => Object.prototype.hasOwnProperty.call(source || {}, key);
+  const withoutDuplicateItems = items => {
     const seen = new Set();
-    return items.filter(item => {
-      const tag = meaningfulItemIdentity(item.tag);
-      const serial = meaningfulItemIdentity(item.serial);
-      const key = tag
-        ? `tag:${tag}`
-        : serial
-          ? `serial:${serial}`
-          : `record:${fields.map(field => normalizedItemValue(item[field])).join('\u001f')}`;
+    return items.filter((item, index) => {
+      const key = String(item?.id || `record:${index}`);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -107,7 +97,7 @@
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.inventory_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message }))
+      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message, sourceModule: log.source_module || '', sourceLogId: log.source_log_id || '' }))
   });
 
   async function init() {
@@ -133,12 +123,21 @@
   const inventory = {
     async load() {
       await init();
-      const rows = check(await client
+      let response = await client
         .from('module_tables')
-        .select('id, name, icon, position, created_at, inventory_items(id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at, inventory_item_logs(id, message, created_at))')
+        .select('id, name, icon, position, created_at, inventory_items(id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at, inventory_item_logs(id, message, created_at, source_module, source_log_id))')
         .eq('module', 'inventory')
         .order('position', { ascending: true })
-        .order('created_at', { ascending: false }));
+        .order('created_at', { ascending: false });
+      if (response.error && /source_module|source_log_id/i.test(response.error.message || '')) {
+        response = await client
+          .from('module_tables')
+          .select('id, name, icon, position, created_at, inventory_items(id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at, inventory_item_logs(id, message, created_at))')
+          .eq('module', 'inventory')
+          .order('position', { ascending: true })
+          .order('created_at', { ascending: false });
+      }
+      const rows = check(response);
       return {
         tables: rows.map(table => ({
           id: table.id,
@@ -197,8 +196,6 @@
         equipment: values.equipment.trim(),
         model: values.model.trim(),
         brand: values.brand || '',
-        serial: values.serial || '',
-        tag: values.tag || '',
         sector: values.sector || '',
         location: values.location || '',
         status: values.status,
@@ -207,6 +204,8 @@
         notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
+      if (!existingId || hasOwn(values, 'serial')) payload.serial = values.serial || '';
+      if (!existingId || hasOwn(values, 'tag')) payload.tag = values.tag || '';
       const result = existingId
         ? await client.from('inventory_items').update(payload).eq('id', existingId).select().single()
         : await client.from('inventory_items').insert(payload).select().single();
@@ -249,7 +248,8 @@
     async deleteLog(id) {
       await init();
       const log = check(await client.from('inventory_item_logs').select('inventory_item_id').eq('id', id).single());
-      check(await client.from('inventory_item_logs').delete().eq('id', id));
+      const deleted = check(await client.from('inventory_item_logs').delete().eq('id', id).select('id'));
+      if (!deleted?.length) fail('O registro não foi excluído. Atualize a página e tente novamente.');
       await recordItemActivity({ module: 'inventory', itemId: log.inventory_item_id, operation: 'log', description: 'Log excluído.' });
     },
 
@@ -384,8 +384,6 @@
         equipment: values.equipment.trim(),
         model: values.model.trim(),
         brand: values.brand || '',
-        serial: values.serial || '',
-        tag: values.tag || '',
         sector: values.sector || '',
         entry_date: values.entryDate || null,
         exit_date: values.exitDate || null,
@@ -394,6 +392,8 @@
         notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
+      if (!existingId || hasOwn(values, 'serial')) payload.serial = values.serial || '';
+      if (!existingId || hasOwn(values, 'tag')) payload.tag = values.tag || '';
       const result = existingId
         ? await client.from('control_items').update(payload).eq('id', existingId).select().single()
         : await client.from('control_items').insert(payload).select().single();
@@ -434,7 +434,8 @@
     async deleteLog(id) {
       await init();
       const log = check(await client.from('control_item_logs').select('control_item_id').eq('id', id).single());
-      check(await client.from('control_item_logs').delete().eq('id', id));
+      const deleted = check(await client.from('control_item_logs').delete().eq('id', id).select('id'));
+      if (!deleted?.length) fail('O registro não foi excluído. Atualize a página e tente novamente.');
       const context = await itemActivityContext('control', log.control_item_id);
       await this.moveTableToTop(context.table_id);
       await recordItemActivity({ module: 'control', itemId: log.control_item_id, operation: 'log', description: 'Log excluído.', context });
@@ -548,7 +549,9 @@
       logs: logs.map((log, index) => ({
         id: log.id || `${row.id}-${index}`,
         at: log.at || log.createdAt || log.timestamp || row.updated_at || row.created_at,
-        text: log.text || log.action || 'Registro atualizado.'
+        text: log.text || log.action || 'Registro atualizado.',
+        sourceModule: log.sourceModule || (log.controlLogId ? 'control' : ''),
+        sourceLogId: log.sourceLogId || log.controlLogId || ''
       })).sort((first, second) => String(second.at).localeCompare(String(first.at)))
     };
   };
@@ -728,8 +731,6 @@
         equipment: values.equipment.trim(),
         model: values.model.trim(),
         brand: values.brand.trim(),
-        serial: values.serial.trim(),
-        tag: values.tag.trim(),
         sender_company: values.senderCompany.trim(),
         destination_company: values.destinationCompany.trim(),
         sender_responsible: values.senderResponsible.trim(),
@@ -742,6 +743,8 @@
         notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
+      if (!existingId || hasOwn(values, 'serial')) payload.serial = String(values.serial || '').trim();
+      if (!existingId || hasOwn(values, 'tag')) payload.tag = String(values.tag || '').trim();
       const result = existingId
         ? await client.from('flux_items').update(payload).eq('id', existingId).select().single()
         : await client.from('flux_items').insert(payload).select().single();
@@ -782,7 +785,8 @@
     async deleteLog(id) {
       await init();
       const log = check(await client.from('flux_item_logs').select('flux_item_id').eq('id', id).single());
-      check(await client.from('flux_item_logs').delete().eq('id', id));
+      const deleted = check(await client.from('flux_item_logs').delete().eq('id', id).select('id'));
+      if (!deleted?.length) fail('O registro não foi excluído. Atualize a página e tente novamente.');
       const context = await itemActivityContext('flux', log.flux_item_id);
       await this.moveTableToTop(context.table_id);
       await recordItemActivity({ module: 'flux', itemId: log.flux_item_id, operation: 'log', description: 'Log excluído.', context });

@@ -615,6 +615,9 @@
     if (!item || !removed) return;
     try {
       const saved = await window.AldeckotSupabase.management.save({ ...item, logs: item.logs.filter(log => log.id !== targetId) }, item.id, 'Log removido da Gestão TI.');
+      if (removed.sourceModule === 'control' && removed.sourceLogId) {
+        await window.AldeckotSupabase.control.deleteLog(removed.sourceLogId);
+      }
       const index = payload.items.findIndex(entry => entry.id === saved.id);
       if (index >= 0) payload.items.splice(index, 1, saved);
       state.syncAt = new Date().toISOString();

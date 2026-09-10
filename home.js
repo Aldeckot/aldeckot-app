@@ -201,7 +201,7 @@
     recentPanel.dataset.homeRecentItems = 'true';
     recentPanel.setAttribute('aria-live', 'polite');
     recentPanel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Carregando atualizações…</p></div></div><div class="home-operations-slot" data-home-operations-slot></div>`;
-    homeReference.appendChild(recentPanel);
+    homeReference.append(recentPanel);
     loadRecentItems();
   } else completeHomeRender();
   let homeRealtimeTimer;

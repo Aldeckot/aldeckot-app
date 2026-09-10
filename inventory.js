@@ -622,10 +622,18 @@
 
   async function saveItem(form) {
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    const valuesToSave = { ...item };
+    if (old) {
+      ['tag', 'serial'].forEach(field => {
+        const before = String(old[field] || '').trim().toLocaleLowerCase('pt-BR');
+        const after = String(item[field] || '').trim().toLocaleLowerCase('pt-BR');
+        if (before === after) delete valuesToSave[field];
+      });
+    }
     const submit = form.querySelector('[type="submit"]'); const originalLabel = submit?.textContent; const finishSave = window.AldeckotLoading?.beginSave?.(old ? 'Salvando alterações…' : 'Adicionando item…');
     if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
     try {
-      const saved = await moduleApi().saveItem(table.id, item, id || null, updateLogMessage(old, item));
+      const saved = await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item));
       closeModal();
       await reloadInventory();
       renderInventory();
@@ -950,10 +958,17 @@
       }
       if (type === 'delete-log') {
         const itemId = action.dataset.invLogItem;
+        const item = activeTable()?.items.find(entry => entry.id === itemId);
+        const logEntry = item?.logs?.find(entry => entry.id === action.dataset.invLogId);
+        if (!logEntry) return;
         if (await window.AldeckotMessage.confirm('Excluir este registro do histórico?', { title: 'Excluir registro', confirmText: 'Excluir' })) {
-          moduleApi().deleteLog(action.dataset.invLogId).then(async () => {
+          (async () => {
+            await moduleApi().deleteLog(logEntry.id);
+            if (!controlMode && logEntry.sourceModule === 'control' && logEntry.sourceLogId) {
+              await window.AldeckotSupabase.control.deleteLog(logEntry.sourceLogId);
+            }
             await reloadInventory(); closeModal(); const item = activeTable()?.items.find(entry => entry.id === itemId); if (item) details(item);
-          }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
+          })().catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
       }
       if (type === 'export-pdf') exportPdf();
