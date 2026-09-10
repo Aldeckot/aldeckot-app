@@ -15,6 +15,14 @@ test('todas as páginas principais possuem monitoramento e carregamento global',
   }
 });
 
+test('todas as páginas principais usam o ícone oficial na aba do navegador', () => {
+  assert.equal(existsSync(resolve(root, 'assets/aldeckot-favicon.png')), true);
+  for (const page of pages) {
+    const source = readFileSync(resolve(root, page), 'utf8');
+    assert.match(source, /rel="icon" type="image\/png" href="assets\/aldeckot-favicon\.png\?v=20260910-1"/);
+  }
+});
+
 test('os artefatos operacionais essenciais estão presentes', () => {
   for (const artifact of ['README.md', 'docs/OPERATIONS.md', 'supabase/README.md', 'scripts/check-migrations.mjs', 'scripts/verify-rls.mjs', 'scripts/verify-backups.mjs']) {
     assert.equal(existsSync(resolve(root, artifact)), true, `Ausente: ${artifact}`);
