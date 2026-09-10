@@ -4,8 +4,11 @@
   const visibleTasks = new Map();
   let serial = 0;
   let hideTimer = 0;
+  let revealFrame = 0;
+  let shownAt = 0;
   let overlay;
   let label;
+  const minimumVisibleDuration = 340;
 
   function ensureOverlay() {
     if (overlay) return overlay;
@@ -21,19 +24,31 @@
   }
 
   function refresh() {
-    const active = [...visibleTasks.values()];
+    const active = [...visibleTasks.values()].filter(task => task.shown);
     if (!active.length) {
       window.clearTimeout(hideTimer);
+      window.cancelAnimationFrame(revealFrame);
+      revealFrame = 0;
+      const remaining = Math.max(0, minimumVisibleDuration - (Date.now() - shownAt));
       hideTimer = window.setTimeout(() => {
-        if (!visibleTasks.size) overlay?.classList.remove('is-visible');
-      }, 150);
+        if (![...visibleTasks.values()].some(task => task.shown)) {
+          overlay?.classList.remove('is-visible');
+          shownAt = 0;
+        }
+      }, remaining);
       return;
     }
 
     window.clearTimeout(hideTimer);
     const current = ensureOverlay();
     label.textContent = active.at(-1)?.message || 'Carregando…';
-    current.classList.add('is-visible');
+    if (current.classList.contains('is-visible') || revealFrame) return;
+    revealFrame = window.requestAnimationFrame(() => {
+      revealFrame = 0;
+      if (![...visibleTasks.values()].some(task => task.shown)) return;
+      current.classList.add('is-visible');
+      shownAt = Date.now();
+    });
   }
 
   function begin(message = 'Carregando…', delay = 0) {
@@ -57,8 +72,7 @@
     if (!task) return;
     window.clearTimeout(task.timer);
     visibleTasks.delete(token);
-    if ([...visibleTasks.values()].some(item => item.shown)) refresh();
-    else overlay?.classList.remove('is-visible');
+    refresh();
   }
 
   function track(promise, message = 'Sincronizando dados…') {

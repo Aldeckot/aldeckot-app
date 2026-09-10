@@ -26,15 +26,15 @@
   const notificationKey = notification => {
     const item = notification.item;
     const identity = item.id || item.tag || item.serial || item.equipment;
-    return `${key}:${identity}:${normalize(item.status)}:${normalize(item.priority)}:${item.updatedAt || item.createdAt || item.date || ''}`;
+    return `${key}:${identity}:${notification.rule || 'general'}:${normalize(item.status)}:${normalize(item.priority)}:${item.updatedAt || item.createdAt || item.date || ''}`;
   };
 
   function createRoot() {
     if (root) return;
     root = document.createElement('section');
     root.className = 'module-notification-center';
-    root.dataset.moduleNotifications = key;
-    root.innerHTML = `<section class="module-notification-panel" data-module-notification-panel hidden><header><div><p>Central de Notificações</p><h2>${escape(labels[key])}</h2></div><div class="module-notification-head-actions"><span data-module-notification-count>Carregando…</span><button type="button" class="module-notification-clear" data-module-notification-clear title="Limpar notificações" aria-label="Limpar notificações">×</button></div></header><div class="module-notification-list" data-module-notification-list><div class="module-notification-loading"><i></i>Verificando alertas do módulo…</div></div></section>`;
+    root.dataset.moduleNotificationsCenter = key;
+    root.innerHTML = `<section class="module-notification-panel" data-module-notification-panel hidden><header><div><p>Central de Notificações</p><h2>${escape(labels[key])}</h2></div><div class="module-notification-head-actions"><span data-module-notification-count>Carregando…</span><button type="button" class="module-notification-clear" data-module-notification-clear title="Marcar alertas como acompanhados" aria-label="Marcar alertas como acompanhados">✓</button></div></header><div class="module-notification-list" data-module-notification-list><div class="module-notification-loading"><i></i>Verificando alertas do módulo…</div></div></section>`;
     document.body.append(root);
     panel = root.querySelector('[data-module-notification-panel]');
   }
@@ -89,7 +89,7 @@
   }
 
   function toggles() {
-    return [...document.querySelectorAll(key === 'nfe' ? '[data-nfe-notifications]' : '[data-module-notifications]')];
+    return [...document.querySelectorAll('[data-module-notification-toggle]')];
   }
 
   function updateToggle(toggle) {
@@ -111,7 +111,7 @@
     const list = root.querySelector('[data-module-notification-list]');
     const counter = root.querySelector('[data-module-notification-count]');
     const clear = root.querySelector('[data-module-notification-clear]');
-    counter.textContent = error ? 'Atualização indisponível' : (notifications.length ? `${notifications.length} alerta${notifications.length === 1 ? '' : 's'} prioritário${notifications.length === 1 ? '' : 's'}` : 'Sem alertas pendentes');
+    counter.textContent = error ? 'Atualização indisponível' : (notifications.length ? `${notifications.length} alerta${notifications.length === 1 ? '' : 's'} para ação` : 'Sem alertas pendentes');
     clear.hidden = !notifications.length;
     if (error) {
       list.innerHTML = '<div class="module-notification-empty"><span>!</span><div><b>Atualização indisponível</b><p>Não foi possível consultar os alertas deste módulo.</p></div></div>';
@@ -125,9 +125,15 @@
         const identifiers = key === 'nfe'
           ? `PDV ${item.pdv || 'não informado'} · ${notification.occurrences || '4+'} ocorrências na semana`
           : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas');
-        return `<button class="module-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-module-notification-item="${index}" data-level="${notification.level.toLowerCase()}"><span class="module-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${escape(notification.level)}</em></span><span class="module-notification-description">${escape(notification.description)}</span>${notification.urgent ? '<span class="module-notification-urgent">⚠ Atenção urgente</span>' : ''}<span class="module-notification-module">${escape(labels[key])}<i>›</i></span></button>`;
+        const action = notification.action || 'Analisar item';
+        const equipmentName = item.equipment || 'equipamento';
+        return `<article class="module-notification-entry${notification.urgent ? ' is-urgent' : ''}"><button class="module-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-module-notification-item="${index}" data-level="${notification.level.toLowerCase()}"><span class="module-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${escape(notification.level)}</em></span><span class="module-notification-description">${escape(notification.description)}</span><span class="module-notification-action"><i>Próximo passo</i><b>${escape(action)}</b></span>${notification.urgent ? '<span class="module-notification-urgent">⚠ Atenção urgente</span>' : ''}<span class="module-notification-module">${escape(labels[key])}<i>›</i></span></button><button class="module-notification-dismiss" type="button" data-module-notification-dismiss="${index}" title="Marcar este alerta como acompanhado" aria-label="Marcar alerta de ${escape(equipmentName)} como acompanhado">×</button></article>`;
       }).join('');
       list.querySelectorAll('[data-module-notification-item]').forEach(button => button.addEventListener('click', () => openNotification(notifications[Number(button.dataset.moduleNotificationItem)])));
+      list.querySelectorAll('[data-module-notification-dismiss]').forEach(button => button.addEventListener('click', event => {
+        event.stopPropagation();
+        acknowledge(notifications[Number(button.dataset.moduleNotificationDismiss)]);
+      }));
     }
     toggles().forEach(updateToggle);
   }
@@ -173,12 +179,50 @@
 
   function clear() { [...notifications].forEach(acknowledge); }
 
+  const alertFor = (item, { rule, level, weight, urgent = false, action, description, age = 0 }) => ({ item, rule, level, weight, urgent, action, description, age });
+  const ageText = age => age <= 0 ? 'desde a última atualização' : age === 1 ? 'há 1 dia' : `há ${age} dias`;
+
   function notificationFor(item) {
     const priority = normalize(item.priority);
     const status = normalize(item.status);
+    const situation = normalize(item.situation);
+    const cleaning = normalize(item.cleaning || item.situation);
     const age = daysSince(item.updatedAt || item.createdAt || item.date);
-    if (priority === 'alta' && /manutenc/.test(status) && age > 3) return { item, level: 'Alta', weight: 200 + age, urgent: true, description: `Em manutenção há ${age} dias sem resposta.` };
-    if (priority === 'media' && /atenc/.test(status) && age > 5) return { item, level: 'Média', weight: 100 + age, urgent: false, description: `Em atenção há ${age} dias; acompanhamento necessário.` };
+    const transferAge = daysSince(item.sendDate || item.updatedAt || item.createdAt || item.date);
+    const highPriority = priority === 'alta';
+    const needsCleaning = /nao realizada|regular/.test(cleaning);
+    const equipment = item.equipment || 'O equipamento';
+
+    if (key === 'inventory') {
+      if (/defeito/.test(status)) return alertFor(item, { rule: 'inventory-defect', level: 'Alta', weight: 520 + age, urgent: true, action: 'Investigar e definir correção', description: `${equipment} está marcado com defeito. Registre o diagnóstico e encaminhe para manutenção, troca ou descarte.` });
+      if (/manutenc/.test(status) && (highPriority || age >= 3)) return alertFor(item, { rule: 'inventory-maintenance', level: highPriority || age >= 7 ? 'Alta' : 'Média', weight: 370 + age, urgent: highPriority || age >= 7, action: 'Acompanhar manutenção', description: `${equipment} permanece em manutenção ${ageText(age)}. Confirme o responsável e atualize o andamento.` , age });
+      if (/(atenc|verific)/.test(status) || /(atenc|verific)/.test(situation)) {
+        if (highPriority || age >= 2) return alertFor(item, { rule: 'inventory-analysis', level: highPriority ? 'Alta' : 'Média', weight: 310 + age, urgent: highPriority && age >= 1, action: 'Analisar situação', description: `${equipment} está em atenção ou verificação ${ageText(age)}. Valide o funcionamento e registre a decisão.` , age });
+      }
+      if (/(troca|substitu)/.test(status) || /substitu/.test(situation)) {
+        if (highPriority || age >= 4) return alertFor(item, { rule: 'inventory-replacement', level: highPriority ? 'Alta' : 'Média', weight: 280 + age, urgent: highPriority && age >= 2, action: 'Providenciar substituição', description: `${equipment} aguarda troca ou substituição ${ageText(age)}. Defina o equipamento de reposição.` , age });
+      }
+      if (needsCleaning && (highPriority || age >= 14)) return alertFor(item, { rule: 'inventory-cleaning', level: 'Média', weight: 180 + age, action: 'Providenciar limpeza', description: `${equipment} está com limpeza pendente ${ageText(age)}. Agende a higienização e atualize o item.` , age });
+    }
+
+    if (key === 'control') {
+      if (/aguard.*avali/.test(status) && (highPriority || age >= 2)) return alertFor(item, { rule: 'control-assessment', level: highPriority || age >= 5 ? 'Alta' : 'Média', weight: 440 + age, urgent: highPriority || age >= 5, action: 'Analisar e registrar diagnóstico', description: `${equipment} aguarda avaliação ${ageText(age)}. Registre o diagnóstico ou defina o próximo atendimento.` , age });
+      if (/em manutenc/.test(status) && (highPriority || age >= 3)) return alertFor(item, { rule: 'control-maintenance', level: highPriority || age >= 7 ? 'Alta' : 'Média', weight: 390 + age, urgent: highPriority || age >= 7, action: 'Cobrar andamento da manutenção', description: `${equipment} está em manutenção ${ageText(age)}. Confirme o responsável, prazo e solução prevista.` , age });
+      if (needsCleaning && age >= 10) return alertFor(item, { rule: 'control-cleaning', level: 'Média', weight: 190 + age, action: 'Providenciar limpeza preventiva', description: `${equipment} ainda não recebeu a limpeza prevista ${ageText(age)}. Inclua a atividade no atendimento.` , age });
+    }
+
+    if (key === 'flux') {
+      if (/pendente/.test(status) && (highPriority || transferAge >= 2)) return alertFor(item, { rule: 'flux-pending', level: highPriority || transferAge >= 5 ? 'Alta' : 'Média', weight: 360 + transferAge, urgent: highPriority || transferAge >= 5, action: 'Confirmar envio ou recebimento', description: `${equipment} possui movimentação pendente ${ageText(transferAge)}. Confirme a coleta, o destinatário ou corrija o status.` , age: transferAge });
+      if (/transito/.test(status) && (highPriority || transferAge >= 3)) return alertFor(item, { rule: 'flux-transit', level: highPriority || transferAge >= 6 ? 'Alta' : 'Média', weight: 330 + transferAge, urgent: highPriority || transferAge >= 6, action: 'Investigar localização da transferência', description: `${equipment} segue em trânsito ${ageText(transferAge)}. Verifique a localização e atualize a entrega.` , age: transferAge });
+    }
+
+    if (key === 'management') {
+      if (/defeito/.test(status)) return alertFor(item, { rule: 'management-defect', level: 'Alta', weight: 520 + age, urgent: true, action: 'Investigar terminal e periféricos', description: `${equipment} está marcado com defeito. Verifique o terminal, os periféricos conectados e registre a correção.` });
+      if ((/manutenc/.test(status) || /em manutenc/.test(situation)) && (highPriority || age >= 3)) return alertFor(item, { rule: 'management-maintenance', level: highPriority || age >= 7 ? 'Alta' : 'Média', weight: 390 + age, urgent: highPriority || age >= 7, action: 'Acompanhar atendimento técnico', description: `${equipment} permanece em manutenção ${ageText(age)}. Confirme o diagnóstico, responsável e prazo de retorno.` , age });
+      if (/reserva/.test(status) && highPriority && age >= 7) return alertFor(item, { rule: 'management-reserve', level: 'Média', weight: 220 + age, action: 'Analisar necessidade do terminal', description: `${equipment} está em reserva ${ageText(age)} com prioridade alta. Valide se deve retornar à operação ou ser realocado.` , age });
+      if (needsCleaning && age >= 21) return alertFor(item, { rule: 'management-cleaning', level: 'Média', weight: 170 + age, action: 'Providenciar limpeza técnica', description: `${equipment} está sem limpeza concluída ${ageText(age)}. Agende o procedimento preventivo.` , age });
+    }
+
     return null;
   }
 
@@ -195,7 +239,7 @@
       const alerts = await api.nfe?.recurringPdvAlerts?.() || [];
       return alerts.map(alert => ({
         item: { id: alert.id, module: key, equipment: `PDV ${alert.pdv}`, pdv: alert.pdv, updatedAt: alert.latestAt },
-        level: 'Alta', weight: 260 + Number(alert.occurrences || 0), urgent: true, occurrences: Number(alert.occurrences || 0),
+        rule: 'nfe-recurring-pdv', level: 'Alta', weight: 560 + Number(alert.occurrences || 0), urgent: true, occurrences: Number(alert.occurrences || 0), action: 'Investigar recorrência no PDV',
         description: `${alert.occurrences} ocorrências neste PDV nesta semana. Investigação recomendada.`
       }));
     }
@@ -211,7 +255,7 @@
     try {
       const all = await fetchNotifications();
       await hydrateAcknowledgements();
-      notifications = all.filter(notification => !dismissed.has(notificationKey(notification))).slice(0, 4);
+      notifications = all.filter(notification => !dismissed.has(notificationKey(notification))).slice(0, 5);
     } catch (refreshError) {
       console.warn('Não foi possível atualizar a Central de Notificações do módulo.', refreshError);
       error = true;
@@ -224,7 +268,6 @@
 
   function openNotification(notification) {
     if (!notification) return;
-    acknowledge(notification);
     closePanel();
     const item = notification.item;
     if (key === 'nfe') window.AldeckotNfeOpenDetails?.(item.id);
@@ -233,7 +276,7 @@
   }
 
   document.addEventListener('click', event => {
-    const toggle = event.target.closest('[data-nfe-notifications], [data-module-notifications]');
+    const toggle = event.target.closest('[data-module-notification-toggle]');
     if (toggle) { event.preventDefault(); event.stopPropagation(); togglePanel(); return; }
     if (!root?.contains(event.target)) closePanel();
   }, true);

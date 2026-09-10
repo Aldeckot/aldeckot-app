@@ -384,7 +384,6 @@
       'export-pdf': { label: 'Exportar PDF', className: 'inventory-pdf-action', icon: '<path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h4M8.5 14.5h1.2a1.2 1.2 0 0 0 0-2.4H8.5v4.8M12 16.9v-4.8h1.1a2.4 2.4 0 1 1 0 4.8H12ZM16.3 16.9v-4.8h2.5M16.3 14.5h2"/>' },
       backup: { label: 'Backup', className: 'inventory-backup-action', icon: '<ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/>' },
       'add-table': { label: 'Nova tabela', className: 'inventory-new-table-action', icon: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>' },
-      sync: { label: 'Sincronizar', className: 'inventory-sync-action', icon: '<path d="M20 11a8 8 0 0 0-14-4L4 9m0-5v5h5M4 13a8 8 0 0 0 14 4l2-2m0 5v-5h-5"/>' },
       home: { label: 'Home', className: 'inventory-home-action', icon: '<path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/>' }
     };
     Object.entries(actions).forEach(([action, config]) => {
@@ -406,7 +405,7 @@
     const table = activeTable();
     const items = table?.items || [];
     $('#app').innerHTML = `<div class="inventory-shell">
-      <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Sincronizar módulo" aria-label="Sincronizar módulo" class="inventory-header-action" data-inv-action="sync"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-4L4 9m0-5v5h5M4 13a8 8 0 0 0 14 4l2-2m0 5v-5h-5"/></svg></button><span class="inventory-sync" aria-live="polite">Sincronizado <i></i></span><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
+      <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg viewBox="0 0 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4m0 3v4m0 3v4"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
       ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyMarkup()}</main>`}</div></div>`;
     const inventoryHeader = document.querySelector('.inventory-header');
@@ -850,20 +849,6 @@
     } finally { backupBusy = false; }
   }
 
-  async function synchronizeModule() {
-    const label = document.querySelector('.inventory-sync'); const button = document.querySelector('[data-inv-action="sync"]');
-    if (!label || label.dataset.syncing === 'true') return;
-    label.dataset.syncing = 'true'; label.innerHTML = 'Sincronizando… <i></i>'; button?.classList.add('is-syncing');
-    try {
-      // Mantém um breve retorno visual, mesmo quando a conexão responde muito rápido.
-      await Promise.all([reloadInventory(), new Promise(resolve => setTimeout(resolve, 650))]);
-      if (document.body.contains(label)) { label.dataset.syncing = 'false'; label.innerHTML = 'Sincronizado <i></i>'; button?.classList.remove('is-syncing'); renderInventory(); }
-    } catch (error) {
-      if (document.body.contains(label)) { label.dataset.syncing = 'false'; label.innerHTML = 'Falha na sincronização <i></i>'; button?.classList.remove('is-syncing'); }
-      window.AldeckotMessage.show(backendMessage(error));
-    }
-  }
-
   async function openInventorySafely() {
     try {
       if (!initialized) renderConnectionState(`Conectando ao ${moduleConfig.name}`, 'Preparando seus dados com segurança…');
@@ -937,7 +922,7 @@
     const action = event.target.closest('[data-inv-action]');
     if (action) {
       const type = action.dataset.invAction;
-      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup', 'sync']);
+      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup']);
       if (restrictedActions.has(type) && !canManage()) { event.preventDefault(); return; }
       if (type === 'toggle-tables') { state.sidebarOpen = !state.sidebarOpen; state.tableMenu = null; state.tableMenuPosition = null; renderInventory(); }
       if (type === 'add-table') tableForm();
@@ -993,7 +978,6 @@
       if (type === 'confirm-backup-restore') restoreSelectedBackup(action);
       if (type === 'toggle-auto-backup') toggleAutomaticBackup(action);
       if (type === 'backup-back') backupModal();
-      if (type === 'sync') synchronizeModule();
       if (type === 'retry') openInventorySafely();
       if (type === 'home') {
         if (window.AldeckotRoute?.goHome) window.AldeckotRoute.goHome();

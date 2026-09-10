@@ -63,3 +63,38 @@ test('Inventário sincroniza as TAGs de periféricos compatíveis com a Gestão 
   assert.match(reconciliation, /reconcile_inventory_management_peripherals/);
   assert.match(reconciliation, /select app\.reconcile_inventory_management_peripherals\(\)/);
 });
+
+test('os módulos mantêm a atualização automática sem botões manuais de sincronização', () => {
+  const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+
+  assert.doesNotMatch(inventory, /data-inv-action="sync"|Sincronizar módulo|function synchronizeModule/);
+  assert.doesNotMatch(management, /data-management-action="sync"|Sincronizar módulo|function syncModule/);
+  assert.doesNotMatch(inventory, /class="inventory-sync"[^>]*>Sincronizado/);
+  assert.doesNotMatch(management, /class="management-sync"[^>]*>Sincronizado/);
+});
+
+test('os cards de resumo das configurações aparecem apenas na seção geral', () => {
+  const settingsPage = readFileSync(resolve(root, 'settings.html'), 'utf8');
+  const settings = readFileSync(resolve(root, 'settings.js'), 'utf8');
+
+  assert.match(settingsPage, /id="settingsOverview" class="settings-overview"/);
+  assert.match(settings, /overview\.hidden = name !== 'general'/);
+});
+
+test('as notificações dos módulos priorizam equipamentos que exigem ação', () => {
+  const notifications = readFileSync(resolve(root, 'module-notifications.js'), 'utf8');
+  const styles = readFileSync(resolve(root, 'module-notifications.css'), 'utf8');
+
+  for (const rule of ['inventory-defect', 'control-assessment', 'flux-pending', 'management-defect', 'nfe-recurring-pdv']) {
+    assert.match(notifications, new RegExp(rule));
+  }
+  assert.match(notifications, /Próximo passo/);
+  assert.match(notifications, /slice\(0, 5\)/);
+  assert.match(notifications, /data-module-notification-dismiss/);
+  assert.match(notifications, /\[data-module-notification-toggle\]/);
+  assert.match(notifications, /function openNotification\(notification\) \{\s*if \(!notification\) return;\s*closePanel\(\);/);
+  assert.match(notifications, /AldeckotInventoryOpenDetails/);
+  assert.match(styles, /module-notification-action/);
+  assert.match(styles, /module-notification-dismiss/);
+});

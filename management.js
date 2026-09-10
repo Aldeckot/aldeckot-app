@@ -156,7 +156,7 @@
   const managementHeaderSummaryMarkup = () => `<div class="management-heading module-header-summary module-header-summary-management"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">Gestão TI</h1><p class="module-header-summary-description">Monitoramento de PCs ativos em tempo real.</p><div class="module-header-summary-tags"><span>Monitoramento</span><span>Status</span><span>Desempenho</span></div></div><span class="module-header-summary-art management" aria-hidden="true"></span></div>`;
 
   function headerMarkup() {
-    return `<header class="management-header"><div class="management-heading"><span class="management-heading-icon">${svg('monitor', 20)}</span><div><h1>GESTÃO TI</h1><p>Aldeckot — Central de Monitoramento Computacional</p></div></div><div class="management-header-actions" role="toolbar" aria-label="Ações da Gestão TI"><button class="management-action icon management-pdf-action" type="button" data-management-action="export" title="Exportar em PDF" aria-label="Exportar em PDF">${svg('pdf')}</button><button class="management-action icon management-backup-action" type="button" data-management-action="backup" title="Sistema de backup" aria-label="Sistema de backup">${svg('backup')}</button><button class="management-action icon management-sync-action" type="button" data-management-action="sync" title="Sincronizar módulo" aria-label="Sincronizar módulo">${svg('sync')}</button><span class="management-sync" aria-live="polite">Sincronizado <i></i></span><button class="management-action icon management-home-action" type="button" data-management-action="home" title="Voltar ao início" aria-label="Voltar ao início">${svg('home')}</button></div></header>`;
+    return `<header class="management-header"><div class="management-heading"><span class="management-heading-icon">${svg('monitor', 20)}</span><div><h1>GESTÃO TI</h1><p>Aldeckot — Central de Monitoramento Computacional</p></div></div><div class="management-header-actions" role="toolbar" aria-label="Ações da Gestão TI"><button class="management-action icon management-pdf-action" type="button" data-management-action="export" title="Exportar em PDF" aria-label="Exportar em PDF">${svg('pdf')}</button><button class="management-action icon management-backup-action" type="button" data-management-action="backup" title="Sistema de backup" aria-label="Sistema de backup">${svg('backup')}</button><button class="management-action icon management-home-action" type="button" data-management-action="home" title="Voltar ao início" aria-label="Voltar ao início">${svg('home')}</button></div></header>`;
   }
 
   function applyManagementFilters() {
@@ -785,40 +785,6 @@
     }
   }
 
-  async function syncModule() {
-    const label = app.querySelector('.management-sync');
-    const button = app.querySelector('[data-management-action="sync"]');
-    if (!label || label.dataset.syncing === 'true') return;
-    label.dataset.syncing = 'true';
-    label.innerHTML = 'Sincronizando… <i></i>';
-    button?.classList.add('is-syncing');
-
-    try {
-      const [nextPayload] = await Promise.all([
-        window.AldeckotSupabase.init().then(() => window.AldeckotSupabase.management.load()),
-        new Promise(resolve => setTimeout(resolve, 650))
-      ]);
-      payload = nextPayload;
-      state.syncAt = new Date().toISOString();
-      try { await refreshBackupState(Boolean(window.AldeckotAuth?.isAdmin)); }
-      catch (backupError) { console.warn('Backup automático da Gestão TI indisponível:', backupError); }
-      if (!document.body.contains(label)) return;
-      label.dataset.syncing = 'false';
-      label.innerHTML = 'Sincronizado <i></i>';
-      button?.classList.remove('is-syncing');
-      render();
-      notify('Gestão TI sincronizada.');
-    } catch (error) {
-      console.error('Falha ao sincronizar Gestão TI:', error);
-      if (document.body.contains(label)) {
-        label.dataset.syncing = 'false';
-        label.innerHTML = 'Falha na sincronização <i></i>';
-        button?.classList.remove('is-syncing');
-      }
-      notify(error?.message || 'Não foi possível sincronizar a Gestão TI.');
-    }
-  }
-
   document.addEventListener('click', event => {
     const open = event.target.closest('[data-management-open]');
     if (open) { openDetails(open.dataset.managementOpen); return; }
@@ -830,7 +796,7 @@
       if (event.target === modalNode) { state.modal = null; renderModal(); }
       return;
     }
-    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'sync', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
     if (action === 'close') { state.modal = null; state.actionMenu = false; renderModal(); }
@@ -846,7 +812,6 @@
     if (action === 'delete-log' && activeItem()) { state.modal = { type: 'delete-log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'confirm-delete-log') deleteLog();
     if (action === 'clear-filters') { state.query = ''; state.status = ''; state.situation = ''; state.operation = ''; applyManagementFilters(); }
-    if (action === 'sync') syncModule();
     if (action === 'retry') { app.innerHTML = '<section class="management-loading"><i></i><p>Conectando à Gestão TI…</p></section>'; load(); }
     if (action === 'home') {
       if (window.AldeckotRoute?.goHome) window.AldeckotRoute.goHome();

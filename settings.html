@@ -64,7 +64,7 @@
         </div>
       </header>
 
-      <section class="settings-overview" aria-label="Resumo do sistema">
+      <section id="settingsOverview" class="settings-overview" aria-label="Resumo do sistema">
         <button class="overview-card online" data-settings-open="general" type="button"><span class="overview-icon">⌁</span><div><small>Sistema</small><strong>Online</strong><p>Serviços operando normalmente</p></div><i class="card-pulse" aria-hidden="true"></i><em>›</em></button>
         <button class="overview-card database" data-settings-open="integrations" type="button"><span class="overview-icon">▣</span><div><small>Banco de dados</small><strong>Conectado</strong><p>Supabase PostgreSQL</p></div><em>›</em></button>
         <button class="overview-card users" data-settings-open="users" type="button"><span class="overview-icon">♧</span><div><small>Usuários ativos</small><strong id="activeUsersMetric">—</strong><p id="activeUsersHint">Verificando acessos</p></div><em>›</em></button>
@@ -72,7 +72,7 @@
       </section>
 
       <div id="settingsContent" class="settings-content" aria-live="polite"></div>
-      <footer class="settings-footer">© 2026 ALDECKOT Sistema de Gestão <span>Central administrativa <i class="system-version">· Versão <b data-aldeckot-system-version>V2.0.6</b></i></span></footer>
+      <footer class="settings-footer">© 2026 ALDECKOT Sistema de Gestão <span>Central administrativa <i class="system-version">· Versão <b data-aldeckot-system-version>V2.0.12</b></i></span></footer>
     </section>
   </main>
   <input id="themeSwitch" class="theme-switch-native" type="checkbox" aria-label="Ativar tema claro">
@@ -83,12 +83,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="runtime-config.js"></script>
-  <script src="system-version.js?v=20260910-10"></script>
+  <script src="system-version.js?v=20260910-16"></script>
   <script src="supabase-client.js?v=20260908-reconciliation1"></script>
   <script src="auth-guard.js"></script>
   <script src="theme.js"></script>
   <script src="page-transition.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="settings.js?v=20260908-reconciliation1"></script>
+  <script src="settings.js?v=20260910-intelligent-alerts1"></script>
 </body>
 </html>

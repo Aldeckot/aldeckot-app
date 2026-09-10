@@ -1,6 +1,7 @@
 (() => {
   const content = document.getElementById('settingsContent');
   const modal = document.getElementById('settingsModal');
+  const overview = document.getElementById('settingsOverview');
   const tabs = [...document.querySelectorAll('[data-settings-tab]')];
   const avatar = document.getElementById('settingsAvatar');
   const search = document.getElementById('settingsSearch');
@@ -26,6 +27,7 @@
   function selectTab(name) {
     activeSection = name;
     tabs.forEach(button => button.classList.toggle('active', button.dataset.settingsTab === name));
+    if (overview) overview.hidden = name !== 'general';
   }
 
   function syncThemeControl() {
@@ -79,7 +81,7 @@
   function showGeneral() {
     selectTab('general');
     const profile = state.profile;
-    const version = window.AldeckotSystemVersion?.label || 'V2.0.6';
+    const version = window.AldeckotSystemVersion?.label || 'V2.0.12';
     const detail = (icon, label, value, description, target, status = '') => `<button class="settings-detail is-button" type="button" data-open-section="${target}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${escape(value)}</b><small>${description}</small>${status ? `<em class="detail-status">${status}</em>` : '<em aria-hidden="true">›</em>'}</button>`;
     content.innerHTML = `<div class="settings-layout">
       ${panel('Visão geral', 'Informações centrais da conta e do ambiente ALDECKOT.', `<div class="panel-body"><div class="settings-detail-grid">${detail('●', 'Conta conectada', profile.full_name, roleName(profile.role), 'security')}${detail('▣', 'Perfil de acesso', roleName(profile.role), state.isAdmin ? 'Acesso administrativo integral' : 'Permissões atribuídas à conta', 'security')}${detail('◉', 'Estado da conta', statusName(profile.status), 'Conta habilitada para o sistema', 'security', statusName(profile.status))}${detail('⌘', 'Dados compartilhados', 'Sincronização central ativa', 'Supabase e módulos conectados', 'integrations')}${detail('◇', 'Versão do sistema', version, 'Identificação atual da entrega do ALDECKOT', 'general', 'Atual')}</div></div>`, '', '▦')}
@@ -151,7 +153,7 @@
 
   function showNotifications() {
     selectTab('notifications');
-    content.innerHTML = `<div class="settings-layout"><section class="settings-panel-card wide"><header class="panel-heading"><div><h2>Notificações</h2><p>Visão operacional dos avisos que acompanham os módulos do sistema.</p></div></header><div class="settings-option-list"><div class="settings-option"><span class="option-icon">♧</span><span class="option-copy"><b>Eventos operacionais</b><span>Atualizações de equipamentos e atividades ficam disponíveis na Central do Equipamento.</span></span><span class="option-status info">Monitorado</span></div><div class="settings-option"><span class="option-icon">▤</span><span class="option-copy"><b>Auditoria administrativa</b><span>Aprovações, bloqueios e alterações de acesso são registradas com segurança.</span></span><span class="option-status">Ativa</span></div></div></section>${panel('Preferências pessoais', 'O sistema mantém o comportamento atual de notificações sem alterar regras de negócio.', `<div class="panel-body"><div class="settings-note">As notificações seguem as configurações existentes dos módulos. Esta área centraliza sua visualização, sem alterar fluxos operacionais.</div></div>`)}</div>`;
+    content.innerHTML = `<div class="settings-layout"><section class="settings-panel-card wide"><header class="panel-heading"><div><h2>Notificações</h2><p>Visão operacional dos avisos que acompanham os módulos do sistema.</p></div></header><div class="settings-option-list"><div class="settings-option"><span class="option-icon">♧</span><span class="option-copy"><b>Alertas inteligentes por equipamento</b><span>Os módulos priorizam defeitos, manutenções sem andamento, itens em análise e transferências pendentes.</span></span><span class="option-status info">Monitorado</span></div><div class="settings-option"><span class="option-icon">▤</span><span class="option-copy"><b>Auditoria administrativa</b><span>Aprovações, bloqueios e alterações de acesso são registradas com segurança.</span></span><span class="option-status">Ativa</span></div></div></section>${panel('Como os alertas funcionam', 'A Central de Notificações de cada módulo orienta a próxima providência.', `<div class="panel-body"><div class="settings-note"><strong>Priorização por contexto.</strong> Cada alerta considera o status, a prioridade e o tempo sem atualização. Os cinco casos mais importantes exibem o próximo passo — analisar, investigar ou providenciar uma ação — e permanecem visíveis até o equipamento ser atualizado ou o aviso ser marcado como acompanhado.</div></div>`)}</div>`;
   }
 
   async function showBackup() {
