@@ -21,6 +21,14 @@ A migração `039_fix_inventory_management_peripheral_sync_owner.sql` corrige a 
 
 A migração `040_reconcile_inventory_management_peripherals.sql` restaura o formato dos periféricos e sincroniza também os itens que já estavam cadastrados no Inventário. Execute-a após a `039`; o resultado exibirá quantos periféricos foram atualizados.
 
+A migração `041_management_control_maintenance_sync.sql` conecta Gestão TI e Controle TI: todo terminal com **Status** de Manutenção/Defeito ou **Situação** Em Manutenção é incluído automaticamente na última tabela criada do Controle TI. Ela também reconcilia os terminais já marcados, sem duplicar equipamentos, e mantém status e histórico compartilhados entre os módulos.
+
+A migração `042_fix_management_control_maintenance_owner.sql` corrige a inclusão automática quando a reconciliação é executada pelo SQL Editor em instalações que usam `owner_id`: ela atribui ao registro o proprietário do PC e da tabela de destino, em vez de depender da sessão do navegador. Na base corporativa centralizada, onde esse campo não existe, ela termina sem alterações para que a `043` assuma a sincronização compatível.
+
+A migração `043_fix_central_management_control_maintenance_sync.sql` é a correção para a base corporativa centralizada, onde os registros não possuem `owner_id`. Execute-a após a `042`; ela detecta automaticamente instalações que ainda exigem proprietário em itens e logs, sem depender desse campo nos registros de Gestão TI.
+
+A migração `044_route_management_maintenance_to_current_month.sql` direciona as manutenções automáticas para a tabela nomeada com o mês e ano atuais — por exemplo, `SETEMBRO 2026`. Ela também move para o mês atual os itens automáticos que haviam sido vinculados a uma tabela anterior. Execute-a após a `043`.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

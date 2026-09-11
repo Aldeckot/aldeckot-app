@@ -495,7 +495,15 @@
     return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.location)}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td></tr>`).join('') : '<tr><td colspan="7" class="inventory-empty-row">Nenhum equipamento nesta tabela.</td></tr>'}</tbody></table></section>`;
   }
 
+  function removeOpenModals() {
+    document.querySelectorAll('.inv-modal').forEach(openModal => openModal.remove());
+  }
+
   function modal(content, dialogClass = '', statusColor = '') {
+    // Alguns fluxos atualizam o conteúdo do mesmo equipamento (por exemplo,
+    // ao abrir o menu Ação). O modal anterior precisa sair antes de montar o
+    // próximo, ou os controles ficam empilhados e parecem exigir dois cliques.
+    removeOpenModals();
     const glowClass = statusColor ? ' inv-status-glow' : '';
     const glowStyle = statusColor ? ` style="--inv-modal-status-color:${statusColor}"` : '';
     const node = document.createElement('div');
@@ -515,7 +523,7 @@
     dialog.classList.add('inv-status-glow');
     dialog.style.setProperty('--inv-modal-status-color', chartColor('status', status));
   }
-  function closeModal() { state.itemActionMenu = false; document.querySelector('.inv-modal')?.remove(); }
+  function closeModal() { state.itemActionMenu = false; removeOpenModals(); }
 
   function tableForm(entry) {
     const value = entry || {};

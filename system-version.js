@@ -1,6 +1,6 @@
 (() => {
   // Fonte única da versão exibida nas telas do ALDECKOT.
-  const value = '2.0.14';
+  const value = '2.0.22';
   const label = `V${value}`;
   window.AldeckotSystemVersion = Object.freeze({ value, label });
 

@@ -97,7 +97,24 @@
   window.addEventListener('beforeunload', () => begin('Abrindo módulo…'));
 
   const nativeFetch = window.fetch?.bind(window);
+  const requestMethod = (input, options) => String(
+    options?.method ||
+    ((typeof Request !== 'undefined' && input instanceof Request) ? input.method : 'GET')
+  ).toUpperCase();
+  const requestUrl = input => String(
+    typeof input === 'string' || input instanceof URL ? input : input?.url || ''
+  );
+  const isReadOnlyRpc = input => /\/rpc\/(?:nfe_dashboard_metrics|nfe_recurring_pdv_alerts)(?:[?#]|$)/i.test(requestUrl(input));
+  // Consultas e atualizações automáticas mantêm a própria tela disponível.
+  // O indicador global fica reservado para ações que alteram dados e navegação.
+  const isBackgroundRequest = (input, options) => {
+    if (document.body?.classList.contains('aldeckot-page-leaving')) return false;
+    return ['GET', 'HEAD'].includes(requestMethod(input, options)) || isReadOnlyRpc(input);
+  };
   if (nativeFetch) {
-    window.fetch = (...args) => track(nativeFetch(...args));
+    window.fetch = (input, options) => {
+      const request = nativeFetch(input, options);
+      return isBackgroundRequest(input, options) ? request : track(request);
+    };
   }
 })();
