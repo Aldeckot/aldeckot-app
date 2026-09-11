@@ -97,7 +97,7 @@
 
 .inv-dialog:has(.inv-detail-grid) .inv-detail b {
   margin-top: 7px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.38;
   letter-spacing: 0;
   text-transform: none;
@@ -202,7 +202,7 @@
 
 .management-modal-dialog:has(.management-detail-grid) .management-detail b {
   margin-top: 7px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -281,7 +281,7 @@
 
 .nfe-dialog:has(.nfe-detail-grid) .nfe-detail b {
   margin-top: 7px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
 }
 

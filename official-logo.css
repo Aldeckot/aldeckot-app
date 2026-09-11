@@ -2,10 +2,12 @@
 .official-logo-image{display:block;width:100%;height:auto}
 
 /* A marca usa só o símbolo e o nome, sem subtítulo ou versão. */
-.home-page .brand{display:flex;align-items:center;gap:7px;padding:0 11px!important}
+.home-page .brand{display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:7px;row-gap:2px;padding:0 11px!important}
 .home-brand-mark,.settings-brand-mark{display:block;flex:0 0 46px;width:46px;height:44px;overflow:hidden}
 .home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:136px;max-width:none;filter:drop-shadow(0 4px 9px #0006)}
-.home-page .brand b{letter-spacing:.015em!important;text-transform:none}
+.home-page .home-brand-mark{grid-row:1 / span 2;align-self:center}
+.home-page .brand b{grid-column:2;letter-spacing:.015em!important;text-transform:none}
+.home-page .home-brand-subtitle{display:block;grid-column:2;color:#a29daf;font-size:9px;letter-spacing:.2px;line-height:1.1;white-space:nowrap}
 .settings-brand{display:flex;align-items:center;gap:9px}
 .settings-brand b{letter-spacing:.015em!important;text-transform:none}
 
@@ -72,6 +74,7 @@
 }
 
 @media(max-width:760px){
+  .home-page .brand{grid-template-columns:42px minmax(0,1fr);column-gap:6px}
   .home-brand-mark,.settings-brand-mark{flex-basis:42px;width:42px;height:40px}
   .home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:124px}
   .system-header-brand { gap: 6px; padding-left: 3px; }
