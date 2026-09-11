@@ -133,6 +133,31 @@ test('os cards de resumo das configurações aparecem apenas na seção geral', 
   assert.match(settings, /overview\.hidden = name !== 'general'/);
 });
 
+test('a assinatura visual mostra somente a logo e o nome Aldeckot', () => {
+  const headerBrand = readFileSync(resolve(root, 'header-official-logo.js'), 'utf8');
+  const homeBrand = readFileSync(resolve(root, 'home-official-logo.js'), 'utf8');
+  const home = readFileSync(resolve(root, 'index.html'), 'utf8');
+  const settings = readFileSync(resolve(root, 'settings.html'), 'utf8');
+  const version = readFileSync(resolve(root, 'system-version.js'), 'utf8');
+
+  assert.match(headerBrand, /<b>Aldeckot<\/b>/);
+  assert.doesNotMatch(headerBrand, /Sistema de Gestão/);
+  assert.match(homeBrand, /<b>Aldeckot<\/b>/);
+  assert.doesNotMatch(homeBrand, /Sistema de Gestão/);
+  assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
+  assert.match(home, /<b>Aldeckot<\/b>/);
+  assert.doesNotMatch(home, /data-aldeckot-brand-subtitle/);
+  assert.match(settings, /class="settings-brand-mark"/);
+  assert.match(settings, /<b>Aldeckot<\/b>/);
+  assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
+  assert.doesNotMatch(version, /aldeckot-brand-subtitle/);
+
+  for (const page of pages) {
+    const source = readFileSync(resolve(root, page), 'utf8');
+    assert.match(source, /<title>Aldeckot<\/title>/);
+  }
+});
+
 test('os modais de equipamentos e PCs não fecham ao clicar no fundo', () => {
   const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
   const management = readFileSync(resolve(root, 'management.js'), 'utf8');
@@ -141,6 +166,27 @@ test('os modais de equipamentos e PCs não fecham ao clicar no fundo', () => {
   assert.doesNotMatch(management, /event\.target === modalNode\) \{ state\.modal = null; renderModal\(\); \}/);
   assert.match(inventory, /data-inv-close/);
   assert.match(management, /data-management-action="close"/);
+});
+
+test('os modais de informações dos módulos usam o acabamento corporativo compartilhado', () => {
+  const modalStyles = readFileSync(resolve(root, 'item-detail-modals.css'), 'utf8');
+
+  assert.match(modalStyles, /\.inv-dialog:has\(\.inv-detail-grid\)/);
+  assert.match(modalStyles, /\.management-modal-dialog:has\(\.management-detail-grid\)/);
+  assert.match(modalStyles, /\.nfe-dialog:has\(\.nfe-detail-grid\)/);
+  assert.match(modalStyles, /@media \(prefers-reduced-motion: reduce\)/);
+
+  for (const page of ['inventory.html', 'control.html', 'flux.html', 'management.html', 'nfe.html']) {
+    const source = readFileSync(resolve(root, page), 'utf8');
+    assert.match(source, /item-detail-modals\.css\?v=20260911-2/);
+  }
+});
+
+test('Gestão TI preserva o nome fixo do terminal durante a edição', () => {
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+
+  assert.match(management, /const terminalField = edit\s*\? `<input type="hidden" name="terminal" value="\$\{escape\(current\.terminal\)\}">`/);
+  assert.match(management, /terminal: current \? current\.terminal : String\(values\.terminal \|\| ''\)\.trim\(\)/);
 });
 
 test('os controles do Inventário não acumulam modais em uma mesma ação', () => {

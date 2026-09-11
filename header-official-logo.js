@@ -5,8 +5,7 @@
       <img class="official-logo-image" src="assets/aldeckot-logo.svg" alt="">
     </span>
     <span class="system-header-brand-copy">
-      <b>ALDECKOT</b>
-      <small>Sistema de Gestão</small>
+      <b>Aldeckot</b>
     </span>`;
 
   function actionsFor(header) {
@@ -44,7 +43,7 @@
     brand.className = 'system-header-brand';
     brand.dataset.systemHeaderBrand = 'true';
     brand.href = 'index.html';
-    brand.setAttribute('aria-label', 'Voltar para a Home do ALDECKOT');
+    brand.setAttribute('aria-label', 'Voltar para a Home do Aldeckot');
     brand.innerHTML = brandMarkup;
     actions.append(brand);
   }

@@ -1,9 +1,13 @@
-/* Identidade visual oficial ALDECKOT. */
+/* Identidade visual oficial Aldeckot. */
 .official-logo-image{display:block;width:100%;height:auto}
 
-/* Configurações usam a marca completa; a Home mantém o nome animado original. */
-.home-page .brand{padding:0 11px!important}
-.settings-brand .official-logo-image{width:178px;filter:drop-shadow(0 4px 9px #0005)}
+/* A marca usa só o símbolo e o nome, sem subtítulo ou versão. */
+.home-page .brand{display:flex;align-items:center;gap:7px;padding:0 11px!important}
+.home-brand-mark,.settings-brand-mark{display:block;flex:0 0 46px;width:46px;height:44px;overflow:hidden}
+.home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:136px;max-width:none;filter:drop-shadow(0 4px 9px #0006)}
+.home-page .brand b{letter-spacing:.015em!important;text-transform:none}
+.settings-brand{display:flex;align-items:center;gap:9px}
+.settings-brand b{letter-spacing:.015em!important;text-transform:none}
 
 /* Home: marca, mascote e sino ocupam áreas independentes no topo lateral. */
 @media (min-width:981px){
@@ -42,8 +46,7 @@
 }
 
 .system-header-brand-copy {
-  display: grid;
-  gap: 3px;
+  display: block;
   min-width: 0;
   line-height: 1;
 }
@@ -57,18 +60,9 @@
   color: transparent;
   font-size: 18px;
   font-weight: 850;
-  letter-spacing: .045em;
+  letter-spacing: .015em;
   white-space: nowrap;
   animation: aldeckot-header-gradient 5.5s ease-in-out infinite;
-}
-
-.system-header-brand-copy small {
-  color: #9db6cb;
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .system-header-brand:focus-visible {
@@ -77,11 +71,12 @@
   outline-offset: 3px;
 }
 
-.theme-light .system-header-brand-copy small { color: #416882; }
-
 @media(max-width:760px){
-  .settings-brand .official-logo-image { width: 158px; }
-  .system-header-brand { gap: 0; padding-left: 3px; }
-  .system-header-brand-mark { flex-basis: 50px; width: 50px; height: 48px; }
-  .system-header-brand-copy { display: none; }
+  .home-brand-mark,.settings-brand-mark{flex-basis:42px;width:42px;height:40px}
+  .home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:124px}
+  .system-header-brand { gap: 6px; padding-left: 3px; }
+  .system-header-brand-mark { flex-basis:43px; width:43px; height:42px; }
+  .system-header-brand-mark .official-logo-image { width:128px; }
+  .system-header-brand-copy { display:block; }
+  .system-header-brand-copy b { font-size:14px; }
 }

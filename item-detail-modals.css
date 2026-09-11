@@ -1,0 +1,382 @@
+/*
+ * Leitura de informações de itens
+ *
+ * Este acabamento é exclusivo para os modais de consulta. Nenhum campo,
+ * ação ou dado é incluído ou alterado aqui: a intenção é ampliar a área de
+ * leitura e tornar a apresentação consistente entre os módulos.
+ */
+
+@keyframes aldeckot-detail-card-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Inventário, Controle TI e Flux */
+.inv-dialog:has(.inv-detail-grid) {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(86dvh, 750px);
+  overflow-x: hidden;
+  padding: 22px 24px;
+  border-radius: 16px;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-dialog-head {
+  min-height: 46px;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #5365838a;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-dialog-head h2 {
+  font-size: 21px;
+  letter-spacing: -.35px;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #59759a8a;
+  border-radius: 9px;
+  background: #10233aab;
+  font-size: 20px;
+  line-height: 1;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-close:hover {
+  border-color: #85dff5;
+  background: #173c5b;
+  transform: translateY(-1px);
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail-grid {
+  gap: 11px;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail {
+  position: relative;
+  min-height: 70px;
+  padding: 12px 13px;
+  border: 1px solid #58718f70;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #13233aaf, #0b1729b8);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+  animation: aldeckot-detail-card-in .28s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(#5fe7f5, #5a82f4);
+  opacity: .65;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail:nth-child(2) { animation-delay: .025s; }
+.inv-dialog:has(.inv-detail-grid) .inv-detail:nth-child(3) { animation-delay: .05s; }
+.inv-dialog:has(.inv-detail-grid) .inv-detail:nth-child(4) { animation-delay: .075s; }
+.inv-dialog:has(.inv-detail-grid) .inv-detail:nth-child(5) { animation-delay: .1s; }
+.inv-dialog:has(.inv-detail-grid) .inv-detail:nth-child(6) { animation-delay: .125s; }
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail:hover {
+  border-color: #66d6ed9c;
+  background: linear-gradient(145deg, #18334cae, #0d1e34bd);
+  box-shadow: 0 9px 20px #0003;
+  transform: translateY(-1px);
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-detail b {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.38;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-log-head {
+  margin-top: 22px;
+  padding-top: 17px;
+  border-top: 1px solid #53658371;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-log-head h3 {
+  font-size: 13px;
+  letter-spacing: -.15px;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-log-list {
+  display: grid;
+  gap: 7px;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-log {
+  min-height: 48px;
+  padding: 11px 12px;
+  border: 1px solid #4e66805e;
+  border-radius: 9px;
+  background: #0a1729a1;
+}
+
+.inv-dialog:has(.inv-detail-grid) .inv-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #53658358;
+}
+
+/* Gestão TI */
+.management-modal-dialog:has(.management-detail-grid) {
+  width: min(850px, calc(100vw - 32px));
+  max-height: min(86dvh, 760px);
+  overflow-x: hidden;
+  padding: 22px 24px;
+  border-radius: 16px;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-modal-head {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #54759074;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-modal-identity h2 {
+  font-size: 21px;
+  letter-spacing: -.35px;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-tabs {
+  margin: 16px 0;
+  padding: 6px;
+  border: 1px solid #55779559;
+  border-radius: 11px;
+  background: #09192c75;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail-grid {
+  gap: 10px;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail {
+  position: relative;
+  min-height: 70px;
+  padding: 12px 13px 12px 15px;
+  border-color: #58789470;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #10263eaa, #0a182bbb);
+  transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+  animation: aldeckot-detail-card-in .28s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(#63e9f5, #4e88ff);
+  opacity: .68;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail:hover {
+  border-color: #68dff199;
+  background: linear-gradient(145deg, #153552ba, #0c2037c8);
+  box-shadow: 0 9px 20px #0003;
+  transform: translateY(-1px);
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail span {
+  font-size: 9px;
+  letter-spacing: .06em;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-detail b {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-history {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #54759068;
+}
+
+.management-modal-dialog:has(.management-detail-grid) .management-history-item {
+  padding: 12px;
+  border: 1px solid #54759052;
+  border-radius: 10px;
+  background: #0a182a92;
+}
+
+/* Fiscal NF-e */
+.nfe-dialog:has(.nfe-detail-grid) {
+  width: min(960px, calc(100vw - 32px));
+  max-height: min(88dvh, 780px);
+  overflow-x: hidden;
+  padding: 22px 24px;
+  border-radius: 18px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-dialog-head {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #3f6d8d86;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-dialog h2,
+.nfe-dialog:has(.nfe-detail-grid) h2 {
+  font-size: 21px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail-grid {
+  gap: 11px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail {
+  position: relative;
+  min-height: 72px;
+  padding: 12px 13px 12px 15px;
+  border-color: #3e6b8b9e;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #0d2943b5, #08182cbf);
+  transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+  animation: aldeckot-detail-card-in .28s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(#4be9f2, #4c83ff);
+  opacity: .7;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail:hover {
+  border-color: #58e1eea8;
+  background: linear-gradient(145deg, #123a59bf, #0a213ac8);
+  box-shadow: 0 9px 20px #0003;
+  transform: translateY(-1px);
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail small {
+  font-size: 9px;
+  letter-spacing: .06em;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-detail b {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-preview {
+  margin-top: 18px;
+  border-radius: 14px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-preview-head {
+  min-height: 43px;
+  padding: 11px 14px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-preview iframe {
+  height: min(42vh, 420px);
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-log-list {
+  margin-top: 11px;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-log {
+  padding: 11px 12px;
+  border: 1px solid #3e66865e;
+  border-radius: 9px;
+  background: #08182a8f;
+}
+
+.nfe-dialog:has(.nfe-detail-grid) .nfe-modal-actions {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #3e668660;
+}
+
+/* Tema claro: mantém contraste sem forçar superfícies brancas. */
+.theme-light .inv-dialog:has(.inv-detail-grid) .inv-dialog-head,
+.theme-light .management-modal-dialog:has(.management-detail-grid) .management-modal-head,
+.theme-light .nfe-dialog:has(.nfe-detail-grid) .nfe-dialog-head {
+  border-color: #93b3c877;
+}
+
+.theme-light .inv-dialog:has(.inv-detail-grid) .inv-detail,
+.theme-light .management-modal-dialog:has(.management-detail-grid) .management-detail,
+.theme-light .nfe-dialog:has(.nfe-detail-grid) .nfe-detail {
+  border-color: #ffffffc4;
+  background: linear-gradient(145deg, #f7fbffd0, #dce9f3ba);
+  box-shadow: 0 7px 16px #29466312;
+}
+
+.theme-light .inv-dialog:has(.inv-detail-grid) .inv-detail:hover,
+.theme-light .management-modal-dialog:has(.management-detail-grid) .management-detail:hover,
+.theme-light .nfe-dialog:has(.nfe-detail-grid) .nfe-detail:hover {
+  background: linear-gradient(145deg, #ffffffdc, #d4e8f5ca);
+  box-shadow: 0 10px 21px #2946631e;
+}
+
+.theme-light .inv-dialog:has(.inv-detail-grid) .inv-log,
+.theme-light .management-modal-dialog:has(.management-detail-grid) .management-history-item,
+.theme-light .nfe-dialog:has(.nfe-detail-grid) .nfe-log {
+  border-color: #ffffffbd;
+  background: #f3f9fcb5;
+}
+
+@media (max-width: 720px) {
+  .inv-dialog:has(.inv-detail-grid),
+  .management-modal-dialog:has(.management-detail-grid),
+  .nfe-dialog:has(.nfe-detail-grid) {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+    border-radius: 15px;
+  }
+
+  .inv-dialog:has(.inv-detail-grid) .inv-detail-grid,
+  .management-modal-dialog:has(.management-detail-grid) .management-detail-grid,
+  .nfe-dialog:has(.nfe-detail-grid) .nfe-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-dialog:has(.inv-detail-grid) .inv-detail.full,
+  .management-modal-dialog:has(.management-detail-grid) .management-detail.full,
+  .nfe-dialog:has(.nfe-detail-grid) .nfe-detail.full {
+    grid-column: auto;
+  }
+
+  .nfe-dialog:has(.nfe-detail-grid) .nfe-preview iframe {
+    height: min(44vh, 390px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv-dialog:has(.inv-detail-grid) .inv-detail,
+  .management-modal-dialog:has(.management-detail-grid) .management-detail,
+  .nfe-dialog:has(.nfe-detail-grid) .nfe-detail {
+    animation: none;
+    transition: none;
+  }
+}
