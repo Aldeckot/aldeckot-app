@@ -104,12 +104,18 @@
   const requestUrl = input => String(
     typeof input === 'string' || input instanceof URL ? input : input?.url || ''
   );
+  const requestHeader = (input, options, name) => {
+    const headers = options?.headers || ((typeof Request !== 'undefined' && input instanceof Request) ? input.headers : undefined);
+    try { return new Headers(headers || {}).get(name) || ''; }
+    catch { return ''; }
+  };
   const isReadOnlyRpc = input => /\/rpc\/(?:nfe_dashboard_metrics|nfe_recurring_pdv_alerts)(?:[?#]|$)/i.test(requestUrl(input));
+  const isMarkedBackgroundRequest = (input, options) => requestHeader(input, options, 'x-aldeckot-background') === 'postit-layout';
   // Consultas e atualizações automáticas mantêm a própria tela disponível.
   // O indicador global fica reservado para ações que alteram dados e navegação.
   const isBackgroundRequest = (input, options) => {
     if (document.body?.classList.contains('aldeckot-page-leaving')) return false;
-    return ['GET', 'HEAD'].includes(requestMethod(input, options)) || isReadOnlyRpc(input);
+    return ['GET', 'HEAD'].includes(requestMethod(input, options)) || isReadOnlyRpc(input) || isMarkedBackgroundRequest(input, options);
   };
   if (nativeFetch) {
     window.fetch = (input, options) => {

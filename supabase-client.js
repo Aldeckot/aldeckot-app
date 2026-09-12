@@ -2,6 +2,27 @@
 (() => {
   let client;
   let bootPromise;
+  let silentPostitLayoutWrites = 0;
+  const localPostitLayoutUpdates = new Map();
+
+  const rememberLocalPostitLayoutUpdate = id => {
+    const key = String(id || '');
+    if (!key) return;
+    const now = Date.now();
+    for (const [pendingKey, expiresAt] of localPostitLayoutUpdates) {
+      if (expiresAt <= now) localPostitLayoutUpdates.delete(pendingKey);
+    }
+    localPostitLayoutUpdates.set(key, now + 5000);
+  };
+
+  const consumeLocalPostitLayoutUpdate = payload => {
+    if (payload?.table !== 'agenda_entries') return false;
+    const key = String(payload?.new?.id || payload?.record?.id || '');
+    const expiresAt = localPostitLayoutUpdates.get(key);
+    if (!expiresAt) return false;
+    localPostitLayoutUpdates.delete(key);
+    return expiresAt > Date.now();
+  };
 
   const configured = configuration => Boolean(
     configuration?.url && configuration?.publishableKey &&
@@ -10,6 +31,13 @@
   );
 
   const fail = message => { throw new Error(message); };
+  const backgroundAwareFetch = (input, options = {}) => {
+    if (!silentPostitLayoutWrites) return window.fetch(input, options);
+    const inheritedHeaders = options?.headers || ((typeof Request !== 'undefined' && input instanceof Request) ? input.headers : undefined);
+    const headers = new Headers(inheritedHeaders || {});
+    headers.set('X-Aldeckot-Background', 'postit-layout');
+    return window.fetch(input, { ...options, headers });
+  };
   const check = ({ error, data }) => {
     if (error) fail(error.message);
     return data;
@@ -19,6 +47,8 @@
   const missingAgendaCompletionColumn = error => /(?:is_completed|completed_at).*?(?:column|schema cache)|(?:column|schema cache).*?(?:is_completed|completed_at)/i.test(error?.message || '');
   const missingAgendaCompletionFunction = error => /(?:set_agenda_(?:task|entry)_completion|function.*does not exist|schema cache)/i.test(error?.message || '');
   const missingAgendaRetentionFunction = error => /(?:purge_expired_agenda_entries|function.*does not exist|schema cache)/i.test(error?.message || '');
+  const missingAgendaPostitColumns = error => /(?:postit_level|postit_tasks).*?(?:column|schema cache)|(?:column|schema cache).*?(?:postit_level|postit_tasks)/i.test(error?.message || '');
+  const missingAgendaPostitLayoutColumn = error => /postit_layout.*?(?:column|schema cache)|(?:column|schema cache).*?postit_layout/i.test(error?.message || '');
   const splitLegacyPriority = notes => {
     const match = String(notes || '').match(priorityMarker);
     return { priority: match?.[1] || null, notes: String(notes || '').replace(priorityMarker, '') };
@@ -172,7 +202,8 @@
       if (!window.supabase?.createClient) fail('Não foi possível carregar a biblioteca do Supabase. Verifique sua conexão com a internet.');
 
       client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+        global: { fetch: backgroundAwareFetch }
       });
       return { client };
     })();
@@ -1008,16 +1039,20 @@
       if (cleanup.error && !missingAgendaRetentionFunction(cleanup.error)) {
         console.warn('Não foi possível remover os agendamentos expirados.', cleanup.error);
       }
-      let response = await client.from('agenda_entries')
-        .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes, is_completed, completed_at')
+     let response = await client.from('agenda_entries')
+       .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes, is_completed, completed_at, postit_level, postit_tasks, postit_layout')
         .order('due_date', { ascending: true })
         .order('due_time', { ascending: true });
       const priorityUnavailable = missingPriorityColumn(response.error);
       const completionUnavailable = missingAgendaCompletionColumn(response.error);
-      if (priorityUnavailable || completionUnavailable) {
+      const postitUnavailable = missingAgendaPostitColumns(response.error);
+      const postitLayoutUnavailable = missingAgendaPostitLayoutColumn(response.error);
+      if (priorityUnavailable || completionUnavailable || postitUnavailable || postitLayoutUnavailable) {
         const columns = ['id', 'kind', 'title', 'due_date', 'due_time', 'reminder_minutes', 'notes'];
         if (!priorityUnavailable) columns.push('priority');
         if (!completionUnavailable) columns.push('is_completed', 'completed_at');
+        if (!postitUnavailable) columns.push('postit_level', 'postit_tasks');
+        if (!postitLayoutUnavailable) columns.push('postit_layout');
         response = await client.from('agenda_entries')
           .select(columns.join(', '))
           .order('due_date', { ascending: true })
@@ -1034,33 +1069,73 @@
         priority: splitLegacyPriority(row.notes).priority || row.priority || 'normal',
         notes: splitLegacyPriority(row.notes).notes,
         completed: Boolean(row.is_completed),
-        completedAt: row.completed_at || null
+        completedAt: row.completed_at || null,
+        postitLevel: row.postit_level || null,
+        postitTasks: Array.isArray(row.postit_tasks) ? row.postit_tasks : [],
+        postitLayout: row.postit_layout && typeof row.postit_layout === 'object' && !Array.isArray(row.postit_layout) ? row.postit_layout : {}
       }));
     },
 
     async save(entry) {
       await init();
-      const payload = {
-        kind: entry.kind,
-        title: entry.title.trim(),
-        due_date: entry.date,
+     const payload = {
+       kind: entry.kind,
+       title: entry.title.trim(),
+       due_date: entry.date,
         due_time: entry.time || null,
         reminder_minutes: Number(entry.reminder || 0),
         priority: entry.priority || 'normal',
         notes: entry.notes || ''
       };
+     if (entry.kind === 'note') {
+       payload.postit_level = entry.postitLevel || 'verify';
+       payload.postit_tasks = Array.isArray(entry.postitTasks) ? entry.postitTasks : [];
+       payload.postit_layout = entry.postitLayout && typeof entry.postitLayout === 'object' && !Array.isArray(entry.postitLayout) ? entry.postitLayout : {};
+     }
       let result = entry.id
-        ? await client.from('agenda_entries').update(payload).eq('id', entry.id).select().single()
-        : await client.from('agenda_entries').insert(payload).select().single();
+       ? await client.from('agenda_entries').update(payload).eq('id', entry.id).select().single()
+       : await client.from('agenda_entries').insert(payload).select().single();
+      if (missingAgendaPostitColumns(result.error) && entry.kind === 'note') {
+       fail('As notas Post-it precisam da migração 045_agenda_postit_notes.sql no banco de dados.');
+      }
+      if (missingAgendaPostitLayoutColumn(result.error) && entry.kind === 'note') {
+       fail('As notas Post-it livres precisam da migração 047_postit_free_layout_and_ten_limit.sql no banco de dados.');
+      }
       if (missingPriorityColumn(result.error)) {
         const legacyPayload = { ...payload, notes: storeLegacyPriority(payload.notes, payload.priority) };
-        delete legacyPayload.priority;
-        result = entry.id
-          ? await client.from('agenda_entries').update(legacyPayload).eq('id', entry.id).select().single()
-          : await client.from('agenda_entries').insert(legacyPayload).select().single();
+       delete legacyPayload.priority;
+       result = entry.id
+         ? await client.from('agenda_entries').update(legacyPayload).eq('id', entry.id).select().single()
+         : await client.from('agenda_entries').insert(legacyPayload).select().single();
+     }
+     const row = check(result);
+     return { ...entry, id: row.id, priority: entry.priority || 'normal' };
+   },
+
+    async updatePostitLayout(id, layout) {
+      await init();
+      silentPostitLayoutWrites += 1;
+      rememberLocalPostitLayoutUpdate(id);
+      try {
+        const result = await client.from('agenda_entries')
+          .update({ postit_layout: layout && typeof layout === 'object' && !Array.isArray(layout) ? layout : {} })
+          .eq('id', id)
+          .select('id, postit_layout')
+          .single();
+        if (missingAgendaPostitLayoutColumn(result.error)) {
+          fail('O reposicionamento dos Post-its precisa da migração 047_postit_free_layout_and_ten_limit.sql no banco de dados.');
+        }
+        const row = check(result);
+        return {
+          id: row.id,
+          postitLayout: row.postit_layout && typeof row.postit_layout === 'object' && !Array.isArray(row.postit_layout) ? row.postit_layout : {}
+        };
+      } catch (error) {
+        localPostitLayoutUpdates.delete(String(id || ''));
+        throw error;
+      } finally {
+        silentPostitLayoutWrites = Math.max(0, silentPostitLayoutWrites - 1);
       }
-      const row = check(result);
-      return { ...entry, id: row.id, priority: entry.priority || 'normal' };
     },
 
     async remove(id) {
@@ -1615,6 +1690,10 @@
   };
 
   const realtime = {
+    isLocalPostitLayoutUpdate(payload) {
+      return consumeLocalPostitLayoutUpdate(payload);
+    },
+
     async subscribe(onChange) {
       await init();
       let channel = client.channel(`aldeckot-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);

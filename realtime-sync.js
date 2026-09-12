@@ -30,9 +30,10 @@
     try {
       unsubscribe?.();
       unsubscribe = await realtime.subscribe(payload => {
-        const detail = { table: payload.table, eventType: payload.eventType, record: payload.new || null, previous: payload.old || null };
+        const silent = Boolean(realtime.isLocalPostitLayoutUpdate?.(payload));
+        const detail = { table: payload.table, eventType: payload.eventType, record: payload.new || null, previous: payload.old || null, silent };
         window.dispatchEvent(new CustomEvent('aldeckot:realtime-change', { detail }));
-        showNotice();
+        if (!silent) showNotice();
       });
     } catch (error) {
       console.warn('Não foi possível iniciar as atualizações em tempo real.', error);

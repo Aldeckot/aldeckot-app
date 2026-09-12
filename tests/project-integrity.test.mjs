@@ -29,12 +29,14 @@ test('as telas permanecem disponíveis durante consultas e atualizações autom�
 
   assert.match(loading, /const requestMethod = \(input, options\) => String\(/);
   assert.match(loading, /const isReadOnlyRpc = input => \/\\\/rpc\\\//);
-  assert.match(loading, /return \['GET', 'HEAD'\]\.includes\(requestMethod\(input, options\)\) \|\| isReadOnlyRpc\(input\);/);
+  assert.match(loading, /isMarkedBackgroundRequest/);
+  assert.match(loading, /x-aldeckot-background/);
+  assert.match(loading, /return \['GET', 'HEAD'\]\.includes\(requestMethod\(input, options\)\) \|\| isReadOnlyRpc\(input\) \|\| isMarkedBackgroundRequest\(input, options\);/);
   assert.match(loading, /return isBackgroundRequest\(input, options\) \? request : track\(request\);/);
-  assert.match(home, /loading-indicator\.js\?v=20260910-background-requests2/);
+  assert.match(home, /loading-indicator\.js\?v=20260912-silent-postit1/);
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /loading-indicator\.js\?v=20260910-background-requests2/);
+    assert.match(source, /loading-indicator\.js\?v=20260912-silent-postit1/);
   }
 });
 
@@ -147,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(home, /SISTEMA DE GESTÃO V2\.0\.28/);
+  assert.match(version, /const value = '2\.0\.43'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
@@ -216,4 +218,70 @@ test('as notificações dos módulos priorizam equipamentos que exigem ação', 
   assert.match(notifications, /AldeckotInventoryOpenDetails/);
   assert.match(styles, /module-notification-action/);
   assert.match(styles, /module-notification-dismiss/);
+});
+
+test('as notas Post-it ficam integradas à agenda e preservam o limite corporativo', () => {
+  const home = readFileSync(resolve(root, 'index.html'), 'utf8');
+  const agenda = readFileSync(resolve(root, 'agenda.js'), 'utf8');
+  const client = readFileSync(resolve(root, 'supabase-client.js'), 'utf8');
+  const realtime = readFileSync(resolve(root, 'realtime-sync.js'), 'utf8');
+  const notes = readFileSync(resolve(root, 'postit-notes.js'), 'utf8');
+  const styles = readFileSync(resolve(root, 'postit-notes.css'), 'utf8');
+  const migration = readFileSync(resolve(root, 'supabase/045_agenda_postit_notes.sql'), 'utf8');
+
+  assert.match(home, /postit-notes\.css\?v=20260912-10/);
+  assert.match(home, /postit-notes\.js\?v=20260912-10/);
+  assert.match(agenda, /aldeckot:agenda-create-request/);
+  assert.match(agenda, /aldeckot:agenda-open-entry-form/);
+  assert.match(agenda, /data-postit-archive-trigger/);
+  assert.match(agenda, /aldeckot:agenda-widget-rendered/);
+  assert.match(notes, /const MAX_NOTES = 10/);
+  assert.match(notes, /Notas finalizadas/);
+  assert.match(notes, /data-postit-archive-trigger/);
+  assert.match(notes, /data-postit-archive-open/);
+  assert.match(notes, /data-postit-restore/);
+  assert.match(notes, /data-postit-confirm-delete/);
+  assert.match(notes, /data-postit-task/);
+  assert.match(notes, /data-postit-choice="note"/);
+  assert.match(notes, /data-postit-resize/);
+  assert.match(notes, /data-postit-delete/);
+  assert.match(notes, /Excluir Post-it/);
+  assert.match(notes, /document\.addEventListener\('pointerdown', startDrag\)/);
+  assert.match(notes, /\.postit-note > header/);
+  assert.match(notes, /postitTasks/);
+  assert.match(styles, /\.postit-board\{position:absolute;z-index:20;inset:0/);
+  assert.match(styles, /postit-note header\{[^}]*cursor:grab/);
+  assert.match(styles, /postit-note-delete/);
+  assert.match(styles, /--postit-auto-scale/);
+  assert.match(styles, /postit-archive-trigger/);
+  assert.match(styles, /postit-archive-dialog/);
+  assert.match(styles, /postit-expanded-preview/);
+  assert.match(styles, /\.postit-urgent/);
+  assert.match(styles, /\.postit-maintenance/);
+  assert.match(styles, /\.postit-network/);
+  assert.match(styles, /\.postit-note header>div\{min-width:0;flex:1\}/);
+  assert.match(styles, /white-space:nowrap/);
+  assert.match(client, /postit_level, postit_tasks, postit_layout/);
+  assert.match(client, /updatePostitLayout/);
+  assert.match(client, /silentPostitLayoutWrites/);
+  assert.match(client, /localPostitLayoutUpdates/);
+  assert.match(client, /X-Aldeckot-Background/);
+  assert.match(realtime, /isLocalPostitLayoutUpdate/);
+  assert.match(realtime, /silent/);
+  assert.match(agenda, /event\.detail\?\.silent/);
+  assert.match(notes, /event\.detail\?\.silent/);
+  assert.match(client, /045_agenda_postit_notes\.sql/);
+  assert.match(migration, /returns trigger/);
+  assert.match(migration, /kind in \('event', 'task', 'note'\)/);
+  const revisedLimit = readFileSync(resolve(root, 'supabase/047_postit_free_layout_and_ten_limit.sql'), 'utf8');
+  assert.match(revisedLimit, /postit_layout jsonb/);
+  assert.match(revisedLimit, /note_count >= 10/);
+  assert.match(revisedLimit, /Limite de 10 notas Post-it atingido/);
+  assert.match(revisedLimit, /lock_agenda_postit_content/);
+  assert.match(revisedLimit, /jsonb_array_elements/);
+  assert.match(notes, /Nota finalizada e movida para o histórico/);
+  assert.match(migration, /information_schema\.columns/);
+  assert.match(migration, /to_jsonb\(new\) ->> 'owner_id'/);
+  assert.match(migration, /agenda_entries_note_idx/);
+  assert.match(migration, /where kind <> 'note'/);
 });

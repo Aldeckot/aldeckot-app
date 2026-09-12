@@ -29,7 +29,7 @@
   };
   const priorityOf = event => priorityInfo[event.priority] || priorityInfo.normal;
   const isCompleted = event => Boolean(event.completed);
-  const overdueEntries = () => read().filter(event => event.date && event.date < iso(new Date()) && !isCompleted(event));
+  const overdueEntries = () => read().filter(event => event.kind !== 'note' && event.date && event.date < iso(new Date()) && !isCompleted(event));
   const overdueDismissalKey = () => `aldeckot-overdue-reminders-${iso(new Date())}`;
   const dismissedOverdueIds = () => {
     try { return new Set(JSON.parse(localStorage.getItem(overdueDismissalKey()) || '[]')); }
@@ -64,11 +64,12 @@
     while (dayCells.length % 7) dayCells.push('<td></td>');
     const weeks = [];
     for (let index = 0; index < dayCells.length; index += 7) weeks.push(`<tr>${dayCells.slice(index, index + 7).join('')}</tr>`);
-    const selectedEvents = events.filter(event => event.date === selectedDate).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    const selectedEvents = events.filter(event => event.kind !== 'note' && event.date === selectedDate).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     const selectedLabel = new Date(`${selectedDate}T12:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
     widget.innerHTML = `
       <div class="agenda-head">
         <div class="home-cal-title"><i>▣</i>${localeMonth(view)}</div>
+        <button type="button" class="postit-archive-trigger" data-postit-archive-trigger hidden aria-label="Abrir notas finalizadas"></button>
         <div class="agenda-nav"><button data-agenda-nav="prev" title="Mês anterior">‹</button><button data-agenda-nav="next" title="Próximo mês">›</button></div>
       </div>
       <table class="agenda-table" aria-label="Calendário de compromissos"><thead><tr><th>D</th><th>S</th><th>T</th><th>Q</th><th>Q</th><th>S</th><th>S</th></tr></thead><tbody>${weeks.join('')}</tbody></table>
@@ -104,7 +105,7 @@
   }
 
   function renderPanels() {
-    const events = read();
+    const events = read().filter(event => event.kind !== 'note');
     const upcoming = events.filter(event => event.date >= iso(today))
       .sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`))
       .slice(0, 3);
@@ -131,6 +132,7 @@
     ensurePanels();
     document.querySelectorAll('.home-calendar').forEach(renderWidget);
     renderPanels();
+    window.dispatchEvent(new CustomEvent('aldeckot:agenda-widget-rendered'));
     renderOverdueReminder();
   }
 
@@ -151,7 +153,13 @@
 
   function formatShort(event) {
     const date = new Date(`${event.date}T12:00`);
-    return `${event.kind === 'task' ? 'Tarefa' : 'Evento'} · ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} ${event.time ? `às ${event.time}` : ''}`;
+    const type = event.kind === 'note' ? 'Nota' : event.kind === 'task' ? 'Tarefa' : 'Evento';
+    return `${type} · ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} ${event.time ? `às ${event.time}` : ''}`;
+  }
+
+  function requestCreationChoice(date) {
+    const request = new CustomEvent('aldeckot:agenda-create-request', { cancelable: true, detail: { date } });
+    return !window.dispatchEvent(request);
   }
 
   function openForm(date, item) {
@@ -237,13 +245,13 @@
     }
     const day = event.target.closest('.agenda-date[data-date]');
     if (day) {
-      openDay(day.dataset.date);
+      if (!requestCreationChoice(day.dataset.date)) openDay(day.dataset.date);
       return;
     }
     const newForDay = event.target.closest('[data-agenda-new-date]');
     if (newForDay) {
       closeModal();
-      openForm(newForDay.dataset.agendaNewDate);
+      if (!requestCreationChoice(newForDay.dataset.agendaNewDate)) openForm(newForDay.dataset.agendaNewDate);
       return;
     }
     const openItem = event.target.closest('[data-agenda-open-id]');
@@ -255,7 +263,7 @@
     }
     const addForDate = event.target.closest('[data-agenda-add-date]');
     if (addForDate) {
-      openForm(addForDate.dataset.agendaAddDate);
+      if (!requestCreationChoice(addForDate.dataset.agendaAddDate)) openForm(addForDate.dataset.agendaAddDate);
       return;
     }
     const detail = event.target.closest('[data-agenda-details]');
@@ -339,6 +347,13 @@
     }).catch(error => window.AldeckotMessage.show(error.message || 'Não foi possível salvar o agendamento.'));
   });
 
+  window.addEventListener('aldeckot:agenda-open-entry-form', event => {
+    const { date, kind } = event.detail || {};
+    openForm(date);
+    const type = document.querySelector('.agenda-modal select[name="kind"]');
+    if (type && (kind === 'task' || kind === 'event')) type.value = kind;
+  });
+
   async function bootstrapAgenda() {
     try {
       await (window.AldeckotAuthReady || Promise.resolve());
@@ -346,6 +361,7 @@
       if (!backend()) throw new Error('Cliente Supabase não foi carregado.');
       await ensureHomeBackend();
       entries = await backend().agenda.load();
+      window.dispatchEvent(new CustomEvent('aldeckot:agenda-ready', { detail: { entries: read() } }));
     } catch (error) {
       console.warn('Agenda indisponível:', error.message || error);
     }
@@ -357,8 +373,12 @@
   else bootstrapAgenda();
   setInterval(checkAlerts, 30000);
   let agendaRealtimeTimer;
+  window.addEventListener('aldeckot:agenda-reload', () => {
+    window.clearTimeout(agendaRealtimeTimer);
+    agendaRealtimeTimer = window.setTimeout(bootstrapAgenda, 80);
+  });
   window.addEventListener('aldeckot:realtime-change', event => {
-    if (event.detail?.table !== 'agenda_entries') return;
+    if (event.detail?.table !== 'agenda_entries' || event.detail?.silent) return;
     window.clearTimeout(agendaRealtimeTimer);
     agendaRealtimeTimer = window.setTimeout(bootstrapAgenda, 180);
   });
