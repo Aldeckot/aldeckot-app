@@ -17,7 +17,7 @@
 .postit-note header{position:relative;z-index:1;display:flex;gap:12px;align-items:flex-start;padding-bottom:11px;border-bottom:2px solid #10233175;cursor:grab;touch-action:none}
 .postit-note.is-dragging header{cursor:grabbing}
 .postit-note header>div{min-width:0;flex:1}
-.postit-note header i{display:grid;place-items:center;flex:0 0 35px;width:35px;height:35px;border-radius:11px;background:#ffffff61;color:#102331;font-size:23px;font-style:normal;font-weight:900;line-height:1}
+.postit-level-icon{display:grid;place-items:center;flex:0 0 35px;width:35px;height:35px;padding:0;border:0;border-radius:11px;background:#ffffff61;color:#102331;font-size:23px;font-style:normal;font-weight:900;line-height:1;cursor:pointer}.postit-level-icon:hover,.postit-level-icon:focus-visible{background:#ffffff9c;outline:2px solid #173647;outline-offset:2px}
 .postit-note header small{display:block;margin:1px 0 3px;color:#193a4c;font-family:Arial,sans-serif;font-size:9px;font-weight:800;letter-spacing:.7px;text-transform:uppercase}
 .postit-note h2{margin:0;color:#0c2839;font-family:"Segoe Print","Bradley Hand","Comic Sans MS",cursive;font-size:clamp(14px,1.28vw,21px);line-height:1.05;letter-spacing:-.8px;white-space:nowrap}
 .postit-checklist{position:relative;z-index:1;display:grid;gap:9px;margin:16px 0 36px;padding:0;list-style:none}

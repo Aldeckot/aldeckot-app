@@ -654,11 +654,188 @@ body.management-open .management-modal-identity .mini-computer.compact {
     0 20px 40px #38516c34 !important;
 }
 
+/* Cartões maiores e identificação imediata do PC, sem abrir os detalhes. */
+body.management-open .management-area-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.management-open .management-area-icon {
+  flex: 0 0 34px;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--area-color) 30%, transparent) !important;
+}
+
+body.management-open .management-computer-grid {
+  grid-template-columns: repeat(auto-fill, 124px) !important;
+  gap: 14px !important;
+  padding: 17px !important;
+}
+
+body.management-open .mini-computer {
+  grid-template-rows: 72px 8px 7px 30px 18px 18px !important;
+  width: 124px !important;
+  min-height: 190px !important;
+  padding: 10px 8px 9px !important;
+}
+
+body.management-open .mini-computer.is-fixed-terminal {
+  grid-template-rows: 72px 8px 7px 30px 18px 18px 18px !important;
+  min-height: 208px !important;
+}
+
+body.management-open .mini-screen {
+  width: 96px !important;
+  height: 72px !important;
+}
+
+body.management-open .mini-chassis {
+  width: 94px !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  justify-content: center !important;
+}
+
+body.management-open .mini-tag-readout {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: #eefaff !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: .02em;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--status-color) 46%, transparent);
+  white-space: nowrap;
+}
+
+body.management-open .mini-computer-label,
+body.management-open .mini-assigned-computer {
+  max-width: 112px !important;
+}
+
+/* A tela traduz cada status em um sinal visual compreensível. */
+body.management-open .mini-screen::after {
+  opacity: .3 !important;
+  animation: management-screen-sweep 5.4s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen::after {
+  background: linear-gradient(90deg, transparent, #d8fff0, transparent) !important;
+  opacity: .42 !important;
+  animation-duration: 3.4s !important;
+}
+
+body.management-open .mini-computer[data-status="Ativo"] .mini-screen-mark {
+  animation: management-active-mark-vivid 2.8s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen::after {
+  background: repeating-linear-gradient(90deg, transparent 0 5px, #ffe6a6 5px 8px) !important;
+  opacity: .34 !important;
+  animation: management-reserve-sweep 3.8s linear infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Reserva"] .mini-screen-mark {
+  animation: management-reserve-mark-vivid 3.4s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen::after {
+  background: linear-gradient(90deg, transparent 0 28%, #ff9aa5 38%, transparent 48% 60%, #ff7785 70%, transparent 80%) !important;
+  opacity: .5 !important;
+  animation: management-alert-glitch 1.25s steps(2, end) infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-hud {
+  animation: management-alert-flicker .95s steps(2, end) infinite;
+}
+
+body.management-open .mini-computer[data-status="Defeito"] .mini-screen-mark {
+  animation: management-alert-mark-vivid 1.25s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen::after {
+  width: 14% !important;
+  background: linear-gradient(180deg, transparent, #ffe0a1, transparent) !important;
+  opacity: .46 !important;
+  animation: management-service-sweep 2.9s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Manutenção"] .mini-screen-mark {
+  animation: management-service-mark-vivid 3s ease-in-out infinite !important;
+}
+
+body.management-open .mini-computer[data-status="Desativado"] .mini-screen::after {
+  opacity: .08 !important;
+  animation: none !important;
+}
+
+@keyframes management-screen-sweep {
+  0%, 18%, 100% { transform: translateX(-80%) rotate(15deg); }
+  56% { transform: translateX(520%) rotate(15deg); }
+}
+
+@keyframes management-active-mark-vivid {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); opacity: .78; transform: scale(.94); }
+  48% { filter: drop-shadow(0 0 10px currentColor); opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes management-reserve-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(520%); }
+}
+
+@keyframes management-reserve-mark-vivid {
+  0%, 100% { opacity: .48; transform: scale(.9); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes management-alert-glitch {
+  0%, 43%, 100% { transform: translateX(-42%) skewX(-8deg); }
+  46% { transform: translateX(260%) skewX(8deg); }
+  50% { transform: translateX(112%) skewX(-3deg); }
+}
+
+@keyframes management-alert-flicker {
+  0%, 100% { opacity: .7; }
+  48%, 54% { opacity: 1; }
+  50% { opacity: .22; }
+}
+
+@keyframes management-alert-mark-vivid {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); opacity: .56; transform: scale(.88); }
+  43%, 58% { filter: drop-shadow(0 0 12px currentColor); opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes management-service-sweep {
+  0%, 100% { transform: translateX(-420%) rotate(18deg); }
+  50% { transform: translateX(440%) rotate(18deg); }
+}
+
+@keyframes management-service-mark-vivid {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); opacity: .72; transform: rotate(-9deg) scale(.92); }
+  50% { filter: drop-shadow(0 0 10px currentColor); opacity: 1; transform: rotate(12deg) scale(1.08); }
+}
+
 @media (max-width: 720px) {
   body.management-open .management-computer-grid {
-    grid-template-columns: repeat(auto-fit, minmax(104px, 112px)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(108px, 118px)) !important;
     justify-content: center;
   }
+
+  body.management-open .mini-computer { width: 118px !important; }
+  body.management-open .mini-screen { width: 91px !important; height: 68px !important; }
+  body.management-open .mini-chassis { width: 88px !important; }
 }
 
 @media (max-width: 410px) {
@@ -673,6 +850,7 @@ body.management-open .management-modal-identity .mini-computer.compact {
   body.management-open .mini-screen-hud b,
   body.management-open .mini-screen-hud i,
   body.management-open .mini-screen-telemetry i,
+  body.management-open .mini-screen-hud,
   body.management-open .mini-screen-mark,
   body.management-open .mini-led,
   body.management-open .management-modal-dialog.management-status-glow { animation: none !important; }

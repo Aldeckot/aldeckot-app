@@ -81,7 +81,7 @@
   function showGeneral() {
     selectTab('general');
     const profile = state.profile;
-    const version = window.AldeckotSystemVersion?.label || 'V2.0.43';
+    const version = window.AldeckotSystemVersion?.label || 'V2.0.48';
     const detail = (icon, label, value, description, target, status = '') => `<button class="settings-detail is-button" type="button" data-open-section="${target}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${escape(value)}</b><small>${description}</small>${status ? `<em class="detail-status">${status}</em>` : '<em aria-hidden="true">›</em>'}</button>`;
     content.innerHTML = `<div class="settings-layout">
       ${panel('Visão geral', 'Informações centrais da conta e do ambiente ALDECKOT.', `<div class="panel-body"><div class="settings-detail-grid">${detail('●', 'Conta conectada', profile.full_name, roleName(profile.role), 'security')}${detail('▣', 'Perfil de acesso', roleName(profile.role), state.isAdmin ? 'Acesso administrativo integral' : 'Permissões atribuídas à conta', 'security')}${detail('◉', 'Estado da conta', statusName(profile.status), 'Conta habilitada para o sistema', 'security', statusName(profile.status))}${detail('⌘', 'Dados compartilhados', 'Sincronização central ativa', 'Supabase e módulos conectados', 'integrations')}${detail('◇', 'Versão do sistema', version, 'Identificação atual da entrega do ALDECKOT', 'general', 'Atual')}</div></div>`, '', '▦')}

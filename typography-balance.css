@@ -1,0 +1,38 @@
+/* Hierarquia tipográfica: leitura leve, destaques apenas onde orientam a ação. */
+:root {
+  --aldeckot-text-weight: 400;
+  --aldeckot-emphasis-weight: 600;
+  --aldeckot-heading-weight: 650;
+}
+
+body {
+  font-weight: var(--aldeckot-text-weight);
+}
+
+/* Textos de apoio, rótulos, listas e tabelas não competem visualmente com o conteúdo. */
+body :where(p, small, label, legend, li, td, th, dt, dd,
+  [class*="label"], [class*="caption"], [class*="subtitle"],
+  [class*="description"], [class*="helper"], [class*="meta"],
+  [class*="hint"], [class*="eyebrow"]) {
+  font-weight: var(--aldeckot-text-weight) !important;
+}
+
+/* Mantém uma diferenciação discreta para nomes, valores e ações. */
+body :where(b, strong) {
+  font-weight: var(--aldeckot-emphasis-weight) !important;
+}
+
+body :where(h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--aldeckot-heading-weight) !important;
+}
+
+body :where(button, input, select, textarea) {
+  font-weight: 500 !important;
+}
+
+/* Estados e comandos principais continuam fáceis de reconhecer, sem peso excessivo. */
+body :where(.primary, .danger, .warning, .success, .error,
+  [class*="status"], [class*="badge"], [class*="chip"],
+  [class*="pill"], [class*="tag"]) {
+  font-weight: var(--aldeckot-emphasis-weight) !important;
+}

@@ -35,6 +35,8 @@ A migração `046_limit_agenda_postit_notes_to_four.sql` atualiza o limite trans
 
 A migração `047_postit_free_layout_and_ten_limit.sql` permite arrastar livremente até **dez** Post-its ativos, inclusive sobrepostos, e salva suas posições e tamanhos. Ela bloqueia o conteúdo depois da criação, mantendo disponível apenas a conclusão das tarefas e o ajuste visual pelo adesivo superior. Ao concluir todas as tarefas, a nota sai da Home e permanece no histórico, onde pode ser aberta em visualização ampliada, restaurada ou excluída individualmente. Execute-a após a `045`; ela substitui a regra de quatro notas da `046` quando essa migração já tiver sido aplicada.
 
+A migração `048_allow_agenda_postit_editing.sql` permite editar uma Nota Post-it ativa por meio de duplo clique no ícone do seu nível. Ela mantém protegida a conversão da nota para outro tipo de agendamento. Execute-a após a `047` antes de usar a edição de Post-its.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

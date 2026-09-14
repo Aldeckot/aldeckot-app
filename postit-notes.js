@@ -96,9 +96,9 @@
       : '';
     const rotation = [-2.3, 1.35, -.7][index % 3];
     const style = 'left:' + layout.x + '%;top:' + layout.y + '%;z-index:' + layout.z + ';--postit-auto-scale:' + automaticScale(total) + ';--postit-manual-scale:' + layout.scale + ';--postit-rotation:' + rotation + 'deg';
-    return '<article class="postit-note postit-' + safe(note.postitLevel || 'verify') + '" data-postit-id="' + safe(note.id) + '" style="' + style + '" aria-label="Nota ' + safe(note.title) + '. Arraste para reposicionar.">'
+    return '<article class="postit-note postit-' + safe(note.postitLevel || 'verify') + '" data-postit-id="' + safe(note.id) + '" style="' + style + '" aria-label="Nota ' + safe(note.title) + '. Arraste pelo cabeçalho para reposicionar. Clique duas vezes no ícone para editar.">'
       + '<button type="button" class="postit-tape" data-postit-resize="' + safe(note.id) + '" aria-label="Ajustar tamanho da nota ' + safe(note.title) + '" title="Clique para ajustar o tamanho"></button>'
-      + '<header><i aria-hidden="true">' + level.icon + '</i><div><small>' + level.label + '</small><h2>' + safe(note.title) + '</h2></div></header>'
+      + '<header><button type="button" class="postit-level-icon" data-postit-edit="' + safe(note.id) + '" aria-label="Editar Post-it ' + safe(note.title) + '" title="Clique duas vezes para editar">' + level.icon + '</button><div><small>' + level.label + '</small><h2>' + safe(note.title) + '</h2></div></header>'
       + '<ul class="postit-checklist">' + taskMarkup + '</ul>'
       + '<footer><span>' + safe(note.date || '') + (note.time ? ' · ' + safe(note.time) : '') + '</span><em>' + tasks.filter(task => task.completed).length + '/' + tasks.length + '</em></footer>'
       + deleteControl
@@ -250,34 +250,47 @@
     document.body.appendChild(dialog);
   }
 
-  function noteForm(date) {
+  function noteForm(date, editId = '') {
     if (!canManage()) {
-      notify('Somente administradores podem criar notas.');
+      notify('Somente administradores podem editar notas.');
       return;
     }
-    if (activeNotes().length >= MAX_NOTES) {
+    const note = editId ? notes.find(item => item.id === editId) : null;
+    if (editId && !note) {
+      notify('Não foi possível localizar o Post-it para edição.');
+      return;
+    }
+    if (!note && activeNotes().length >= MAX_NOTES) {
       notify('Limite de 10 notas Post-it atingido. Finalize as notas pendentes antes de criar outra.');
       return;
     }
     removeModal();
+    const currentLevel = note?.postitLevel || 'verify';
+    const currentTasks = normalizeTasks(note?.postitTasks).map(task => task.title).join('\n');
+    const heading = note ? 'Editar Nota Post-it' : 'Nova Nota Post-it';
+    const submitLabel = note ? 'Salvar alterações' : 'Salvar Nota';
+    const formAttributes = note ? ' data-postit-edit-id="' + safe(note.id) + '"' : '';
     const dialog = document.createElement('div');
     dialog.className = 'postit-modal';
-    dialog.innerHTML = '<div class="postit-dialog" role="dialog" aria-modal="true" aria-label="Nova nota">'
-      + '<div class="postit-dialog-head"><div><small>Agenda integrada</small><h2>Nova Nota Post-it</h2></div><button type="button" data-postit-close aria-label="Fechar">×</button></div>'
-      + '<form data-postit-form><label>Título<input name="title" required maxlength="80" placeholder="Ex.: Revisar PDVs"></label>'
-      + '<div class="postit-form-grid"><label>Data<input name="date" type="date" required value="' + safe(date || localDate()) + '"></label><label>Hora<input name="time" type="time" value="09:00"></label></div>'
-      + '<div class="postit-form-grid"><label>Alerta<select name="reminder"><option value="0">No horário</option><option value="10">10 min antes</option><option value="30">30 min antes</option><option value="60">1 hora antes</option><option value="1440">1 dia antes</option></select></label>'
-      + '<label>Nível<select name="postitLevel">' + Object.entries(levels).map(entry => '<option value="' + entry[0] + '">' + entry[1].label + '</option>').join('') + '</select></label></div>'
-      + '<label>Tarefas<textarea name="tasks" required maxlength="900" placeholder="Uma tarefa por linha"></textarea><small>Após salvar, o conteúdo da nota fica bloqueado. Somente a conclusão das tarefas poderá ser alterada.</small></label>'
-      + '<div class="postit-dialog-actions"><button type="button" data-postit-close>Cancelar</button><button class="postit-save">Salvar Nota</button></div></form></div>';
+    dialog.innerHTML = '<div class="postit-dialog" role="dialog" aria-modal="true" aria-label="' + heading + '">'
+      + '<div class="postit-dialog-head"><div><small>Agenda integrada</small><h2>' + heading + '</h2></div><button type="button" data-postit-close aria-label="Fechar">×</button></div>'
+      + '<form data-postit-form' + formAttributes + '><label>Título<input name="title" required maxlength="80" placeholder="Ex.: Revisar PDVs" value="' + safe(note?.title || '') + '"></label>'
+      + '<div class="postit-form-grid"><label>Data<input name="date" type="date" required value="' + safe(note?.date || date || localDate()) + '"></label><label>Hora<input name="time" type="time" value="' + safe(note?.time || '09:00') + '"></label></div>'
+      + '<div class="postit-form-grid"><label>Alerta<select name="reminder"><option value="0"' + (Number(note?.reminder || 0) === 0 ? ' selected' : '') + '>No horário</option><option value="10"' + (Number(note?.reminder) === 10 ? ' selected' : '') + '>10 min antes</option><option value="30"' + (Number(note?.reminder) === 30 ? ' selected' : '') + '>30 min antes</option><option value="60"' + (Number(note?.reminder) === 60 ? ' selected' : '') + '>1 hora antes</option><option value="1440"' + (Number(note?.reminder) === 1440 ? ' selected' : '') + '>1 dia antes</option></select></label>'
+      + '<label>Nível<select name="postitLevel">' + Object.entries(levels).map(entry => '<option value="' + entry[0] + '"' + (entry[0] === currentLevel ? ' selected' : '') + '>' + entry[1].label + '</option>').join('') + '</select></label></div>'
+      + '<label>Tarefas<textarea name="tasks" required maxlength="900" placeholder="Uma tarefa por linha">' + safe(currentTasks) + '</textarea><small>Use uma linha por tarefa. As tarefas já concluídas são preservadas enquanto o texto permanecer o mesmo.</small></label>'
+      + '<div class="postit-dialog-actions"><button type="button" data-postit-close>Cancelar</button><button class="postit-save">' + submitLabel + '</button></div></form></div>';
     document.body.appendChild(dialog);
     dialog.querySelector('[name="title"]').focus();
   }
 
-  function taskPayload(text) {
-    return String(text || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean).map((title, index) => ({
-      id: identify(), title, completed: false, position: index
-    }));
+  function taskPayload(text, previousTasks = []) {
+    const available = normalizeTasks(previousTasks).map(task => ({ ...task, used: false }));
+    return String(text || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean).map((title, index) => {
+      const previous = available.find(task => !task.used && task.title === title);
+      if (previous) previous.used = true;
+      return { id: previous?.id || identify(), title, completed: Boolean(previous?.completed), position: index };
+    });
   }
 
   async function loadNotes() {
@@ -296,25 +309,32 @@
     if (!form) return;
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
+    const current = form.dataset.postitEditId ? notes.find(note => note.id === form.dataset.postitEditId) : null;
+    if (form.dataset.postitEditId && !current) {
+      notify('Não foi possível localizar o Post-it para salvar.');
+      return;
+    }
     const payload = {
       kind: 'note', title: data.title, date: data.date, time: data.time,
       reminder: Number(data.reminder), priority: 'normal', notes: '',
-      postitLevel: data.postitLevel, postitTasks: taskPayload(data.tasks), postitLayout: {}
+      postitLevel: data.postitLevel, postitTasks: taskPayload(data.tasks, current?.postitTasks), postitLayout: current?.postitLayout || {}
     };
     const button = form.querySelector('.postit-save');
     button.disabled = true;
     button.textContent = 'Salvando...';
     try {
-      const saved = await api().save(payload);
-      notes = sortNotes([...notes, { ...payload, ...saved, postitTasks: payload.postitTasks }]);
+      const saved = await api().save(current ? { ...current, ...payload } : payload);
+      notes = sortNotes(current
+        ? notes.map(note => note.id === current.id ? { ...current, ...payload, ...saved, postitTasks: payload.postitTasks } : note)
+        : [...notes, { ...payload, ...saved, postitTasks: payload.postitTasks }]);
       removeModal();
       render();
       window.dispatchEvent(new CustomEvent('aldeckot:agenda-reload'));
-      notify('Nota Post-it criada na Home.');
+      notify(current ? 'Post-it atualizado.' : 'Nota Post-it criada na Home.');
     } catch (error) {
       button.disabled = false;
-      button.textContent = 'Salvar Nota';
-      notify(error?.message || 'Não foi possível salvar a nota.');
+      button.textContent = current ? 'Salvar alterações' : 'Salvar Nota';
+      notify(error?.message || 'Não foi possível salvar o Post-it.');
     }
   }
 
@@ -509,6 +529,13 @@
     }
     const resize = event.target.closest('[data-postit-resize]');
     if (resize) resizeNote(resize.dataset.postitResize);
+  });
+
+  document.addEventListener('dblclick', event => {
+    const edit = event.target.closest('[data-postit-edit]');
+    if (!edit) return;
+    event.preventDefault();
+    noteForm('', edit.dataset.postitEdit);
   });
 
   document.addEventListener('pointerdown', startDrag);

@@ -149,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(version, /const value = '2\.0\.43'/);
+  assert.match(version, /const value = '2\.0\.48'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
@@ -195,6 +195,24 @@ test('Gestão TI preserva o nome fixo do terminal durante a edição', () => {
   assert.match(management, /terminal: current \? current\.terminal : String\(values\.terminal \|\| ''\)\.trim\(\)/);
 });
 
+test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', () => {
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+  const computers = readFileSync(resolve(root, 'management-computers.css'), 'utf8');
+  const page = readFileSync(resolve(root, 'management.html'), 'utf8');
+
+  assert.match(management, /mini-tag-readout/);
+  assert.match(management, /TAG do PC/);
+  assert.match(management, /'Escritório': 'building', Estoque: 'warehouse', 'Frente de Loja': 'store'/);
+  assert.match(management, /Reserva: \{ color: '#f6bd55', icon: 'reserve' \}/);
+  assert.match(computers, /management-alert-glitch/);
+  assert.match(computers, /management-service-sweep/);
+  assert.match(computers, /mini-computer\.is-fixed-terminal/);
+  assert.match(page, /management-computers\.css\?v=20260914-terminal-status3/);
+  assert.match(page, /management\.js\?v=20260914-terminal-status2/);
+  assert.match(computers, /font-size: 11px !important/);
+  assert.match(computers, /width: 34px !important/);
+});
+
 test('os controles do Inventário não acumulam modais em uma mesma ação', () => {
   const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
 
@@ -229,8 +247,8 @@ test('as notas Post-it ficam integradas à agenda e preservam o limite corporati
   const styles = readFileSync(resolve(root, 'postit-notes.css'), 'utf8');
   const migration = readFileSync(resolve(root, 'supabase/045_agenda_postit_notes.sql'), 'utf8');
 
-  assert.match(home, /postit-notes\.css\?v=20260912-10/);
-  assert.match(home, /postit-notes\.js\?v=20260912-10/);
+  assert.match(home, /postit-notes\.css\?v=20260914-11/);
+  assert.match(home, /postit-notes\.js\?v=20260914-11/);
   assert.match(agenda, /aldeckot:agenda-create-request/);
   assert.match(agenda, /aldeckot:agenda-open-entry-form/);
   assert.match(agenda, /data-postit-archive-trigger/);
@@ -244,6 +262,8 @@ test('as notas Post-it ficam integradas à agenda e preservam o limite corporati
   assert.match(notes, /data-postit-task/);
   assert.match(notes, /data-postit-choice="note"/);
   assert.match(notes, /data-postit-resize/);
+  assert.match(notes, /data-postit-edit/);
+  assert.match(notes, /document\.addEventListener\('dblclick'/);
   assert.match(notes, /data-postit-delete/);
   assert.match(notes, /Excluir Post-it/);
   assert.match(notes, /document\.addEventListener\('pointerdown', startDrag\)/);
@@ -252,6 +272,7 @@ test('as notas Post-it ficam integradas à agenda e preservam o limite corporati
   assert.match(styles, /\.postit-board\{position:absolute;z-index:20;inset:0/);
   assert.match(styles, /postit-note header\{[^}]*cursor:grab/);
   assert.match(styles, /postit-note-delete/);
+  assert.match(styles, /postit-level-icon/);
   assert.match(styles, /--postit-auto-scale/);
   assert.match(styles, /postit-archive-trigger/);
   assert.match(styles, /postit-archive-dialog/);
@@ -284,4 +305,21 @@ test('as notas Post-it ficam integradas à agenda e preservam o limite corporati
   assert.match(migration, /to_jsonb\(new\) ->> 'owner_id'/);
   assert.match(migration, /agenda_entries_note_idx/);
   assert.match(migration, /where kind <> 'note'/);
+  const editableNotes = readFileSync(resolve(root, 'supabase/048_allow_agenda_postit_editing.sql'), 'utf8');
+  assert.match(editableNotes, /validate_agenda_postit_edit/);
+  assert.match(editableNotes, /agenda_entries_lock_postit_content/);
+});
+
+test('a tipografia equilibra a leitura em todas as telas', () => {
+  const typography = readFileSync(resolve(root, 'typography-balance.css'), 'utf8');
+
+  assert.match(typography, /--aldeckot-text-weight:\s*400/);
+  assert.match(typography, /--aldeckot-emphasis-weight:\s*600/);
+  assert.match(typography, /h1, h2, h3, h4, h5, h6/);
+  assert.match(typography, /\[class\*="status"\]/);
+
+  for (const page of ['index.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'settings.html', 'login.html']) {
+    const markup = readFileSync(resolve(root, page), 'utf8');
+    assert.match(markup, /typography-balance\.css\?v=20260914-1/);
+  }
 });

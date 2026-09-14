@@ -23,23 +23,23 @@
   const areaColors = { 'Escritório': '#4ea8ff', Estoque: '#f6bd55', 'Frente de Loja': '#47dd9b' };
   const statusPresentation = {
     Ativo: { color: '#19ff72', icon: 'wifi' },
-    Reserva: { color: '#ff9d00', icon: 'warning' },
-    Defeito: { color: '#ff9d00', icon: 'warning' },
-    Manutenção: { color: '#ff3030', icon: 'wrench' },
-    Desativado: { color: '#555a60', icon: 'offline' }
+    Reserva: { color: '#f6bd55', icon: 'reserve' },
+    Defeito: { color: '#ff5b6e', icon: 'warning' },
+    Manutenção: { color: '#ff9d00', icon: 'wrench' },
+    Desativado: { color: '#718096', icon: 'offline' }
   };
   const screenReadouts = {
-    Ativo: { code: 'NET', value: 'LIVE' },
-    Reserva: { code: 'STBY', value: 'READY' },
-    Defeito: { code: 'ALRT', value: 'CHECK' },
-    Manutenção: { code: 'SERV', value: 'WORK' },
-    Desativado: { code: 'OFF', value: 'SLEEP' }
+    Ativo: { code: 'REDE', value: 'ON' },
+    Reserva: { code: 'STBY', value: 'LIVRE' },
+    Defeito: { code: 'ALTA', value: 'FALHA' },
+    Manutenção: { code: 'SERV', value: 'REPARO' },
+    Desativado: { code: 'OFF', value: 'PAUSA' }
   };
   const statusColors = Object.fromEntries(Object.entries(statusPresentation).map(([status, presentation]) => [status, presentation.color]));
   const situationColors = { 'Em Sala': '#9d6cff', 'Em Uso': '#36c8f4', Estoque: '#e582ff', 'Em Manutenção': '#ff6d47' };
   const cleaningColors = { Preventiva: '#4d8dff', Completa: '#58e6bd', 'Não Realizada': '#d486ff' };
   const priorityColors = { Alta: '#ff6674', 'Média': '#ffce59', 'Estável': '#3de5d3' };
-  const areaIcons = { 'Escritório': '⌂', Estoque: '▦', 'Frente de Loja': '◉' };
+  const areaIcons = { 'Escritório': 'building', Estoque: 'warehouse', 'Frente de Loja': 'store' };
   let payload = { table: null, items: [] };
   let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'operational', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
   let toastTimer;
@@ -49,6 +49,9 @@
   const svg = (name, size = 18) => {
     const paths = {
       monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8m-4-5v5M8 10h8M12 7v6M9.5 8.5l5 5M14.5 8.5l-5 5"/>',
+      building: '<path d="M4 21V5l8-2v18M4 9h8m-4 3h.01m4 0h.01M8 16h.01m4 0h.01M12 21v-8h8v8M16 17h.01m3 0h.01"/>',
+      warehouse: '<path d="m3 10 9-6 9 6v10H3V10Z"/><path d="M3 10h18M8 20v-6h8v6M8 10h.01m4 0h.01m4 0h.01"/>',
+      store: '<path d="M4 10V6h16v4M3 10h18v3a3 3 0 0 1-5 2.2A3 3 0 0 1 12 16a3 3 0 0 1-4-.8A3 3 0 0 1 3 13v-3Z"/><path d="M5 15v6h14v-6M9 21v-4h6v4"/>',
       search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
       sync: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.4 8.7A7 7 0 0 1 18.8 7M17.6 15.3A7 7 0 0 1 5.2 17"/>',
       home: '<path d="m3 11 9-8 9 8v9H3v-9Z"/><path d="M9 20v-6h6v6"/>',
@@ -128,18 +131,19 @@
     const fixedTerminal = hasFixedTerminal(item);
     const terminal = terminalName(item);
     const computer = computerName(item);
+    const tag = String(item.tag || '').trim().toUpperCase() || '—';
     const tooltip = `<span class="mini-tooltip"><b>${escape(fixedTerminal ? terminal : item.equipment)}</b>${fixedTerminal ? `<span>Computador: ${escape(computer)}</span>` : ''}<span>TAG ${escape(display(item.tag))} · ${escape(display(item.ip))}</span><span>${escape(display(item.operatingSystem))} · ${escape(display(item.model))}</span><span>${escape(display(item.user))} · ${escape(item.status)}</span></span>`;
     const identity = fixedTerminal
       ? `<b class="mini-computer-label mini-terminal-label">${escape(terminal)}</b><span class="mini-status"><i></i>${escape(item.status)}</span><span class="mini-assigned-computer" title="${escape(computer)}">${escape(computer)}</span>`
       : `<b class="mini-computer-label">${escape(item.equipment)}</b><span class="mini-status"><i></i>${escape(item.status)}</span>`;
     const ariaLabel = fixedTerminal
-      ? `Terminal ${terminal}. Computador: ${computer}. Status: ${item.status}. Ativar para ver detalhes.`
-      : `Equipamento ${item.equipment} — Status: ${item.status}. Ativar para ver detalhes.`;
-    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${escape(item.status)}" style="--status-color:${color};--area-color:${areaColor};--category-color:${color}" aria-label="${escape(ariaLabel)}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(statusIcon(item.status), 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis"><i>ALDECKOT</i><em aria-hidden="true">${svg('cube', 12)}</em></span>${identity}${tooltip}</button>`;
+      ? `Terminal ${terminal}. Computador: ${computer}. TAG: ${tag}. Status: ${item.status}. Ativar para ver detalhes.`
+      : `Equipamento ${item.equipment}. TAG: ${tag}. Status: ${item.status}. Ativar para ver detalhes.`;
+    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${escape(item.status)}" style="--status-color:${color};--area-color:${areaColor};--category-color:${color}" aria-label="${escape(ariaLabel)}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(statusIcon(item.status), 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis" title="TAG do PC: ${escape(tag)}"><span class="mini-tag-readout">${escape(tag)}</span></span>${identity}${tooltip}</button>`;
   }
 
   function areaMarkup(area, items) {
-    return `<section class="management-area" style="--area-color:${areaColors[area]}"><header class="management-area-head"><span class="management-area-icon">${areaIcons[area]}</span><h2>${escape(area)}</h2><span class="management-area-count" data-management-area-count="${escape(area)}">${items.length}</span><button class="management-area-add" type="button" data-management-action="add-area" data-management-area="${escape(area)}">${svg('plus', 12)} Adicionar</button><i class="management-area-rule" aria-hidden="true"></i></header><div class="management-computer-grid">${items.map(item => computerMarkup(item)).join('')}</div></section>`;
+    return `<section class="management-area" style="--area-color:${areaColors[area]}"><header class="management-area-head"><span class="management-area-icon" aria-hidden="true">${svg(areaIcons[area] || 'monitor', 15)}</span><h2>${escape(area)}</h2><span class="management-area-count" data-management-area-count="${escape(area)}">${items.length}</span><button class="management-area-add" type="button" data-management-action="add-area" data-management-area="${escape(area)}">${svg('plus', 12)} Adicionar</button><i class="management-area-rule" aria-hidden="true"></i></header><div class="management-computer-grid">${items.map(item => computerMarkup(item)).join('')}</div></section>`;
   }
 
   function chartMarkup(title, items, key, labels, colors) {
