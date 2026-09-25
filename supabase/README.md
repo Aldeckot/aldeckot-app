@@ -37,6 +37,10 @@ A migração `047_postit_free_layout_and_ten_limit.sql` permite arrastar livreme
 
 A migração `048_allow_agenda_postit_editing.sql` permite editar uma Nota Post-it ativa por meio de duplo clique no ícone do seu nível. Ela mantém protegida a conversão da nota para outro tipo de agendamento. Execute-a após a `047` antes de usar a edição de Post-its.
 
+A migração `049_fix_management_terminal_transfer_identity.sql` corrige a transferência entre terminais fixos da Gestão TI quando há TAG ou número de série nos computadores. Ela preserva a validação contra duplicidades nas edições comuns e libera somente a troca atômica já autorizada. Execute-a após a `048` antes de transferir computadores entre terminais.
+
+A migração `050_defer_management_transfer_sync.sql` evita o erro `stack depth limit exceeded` durante a transferência. Ela adia a sincronização automática com o Controle TI até que os dois terminais estejam com suas identidades finais, impedindo uma recursão entre gatilhos. Execute-a após a `049`.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

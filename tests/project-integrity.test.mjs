@@ -149,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(version, /const value = '2\.0\.48'/);
+  assert.match(version, /const value = '2\.0\.52'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
@@ -195,6 +195,28 @@ test('Gestão TI preserva o nome fixo do terminal durante a edição', () => {
   assert.match(management, /terminal: current \? current\.terminal : String\(values\.terminal \|\| ''\)\.trim\(\)/);
 });
 
+test('Gestão TI transfere computadores sem bloquear TAG ou série durante a troca atômica', () => {
+  const migration = readFileSync(resolve(root, 'supabase/049_fix_management_terminal_transfer_identity.sql'), 'utf8');
+
+  assert.match(migration, /create or replace function app\.prevent_management_identity_duplicate\(\)/);
+  assert.match(migration, /current_setting\('app\.management_transfer_in_progress', true\) = 'on'/);
+  assert.match(migration, /perform set_config\('app\.management_transfer_in_progress', 'on', true\);/);
+  assert.match(migration, /update public\.module_records set payload = source_next where id = source_row\.id;/);
+  assert.match(migration, /update public\.module_records set payload = destination_next where id = destination_row\.id;/);
+  assert.match(migration, /if not app\.is_admin\(\) then/);
+});
+
+test('Gestão TI adia a sincronização enquanto a transferência recompõe as identidades finais', () => {
+  const migration = readFileSync(resolve(root, 'supabase/050_defer_management_transfer_sync.sql'), 'utf8');
+
+  assert.match(migration, /create or replace function app\.sync_control_from_management\(\)/);
+  assert.match(migration, /if current_setting\('app\.management_transfer_in_progress', true\) = 'on' then\s+return new;/);
+  assert.match(migration, /perform set_config\('app\.management_transfer_in_progress', 'on', true\);[\s\S]*?update public\.module_records set payload = destination_next where id = destination_row\.id;/);
+  assert.match(migration, /perform set_config\('app\.management_transfer_in_progress', 'off', true\);/);
+  assert.match(migration, /perform app\.sync_management_record_to_control\(source_row\.id, source_next\);/);
+  assert.match(migration, /perform app\.sync_management_record_to_control\(destination_row\.id, destination_next\);/);
+});
+
 test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', () => {
   const management = readFileSync(resolve(root, 'management.js'), 'utf8');
   const computers = readFileSync(resolve(root, 'management-computers.css'), 'utf8');
@@ -207,10 +229,12 @@ test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', 
   assert.match(computers, /management-alert-glitch/);
   assert.match(computers, /management-service-sweep/);
   assert.match(computers, /mini-computer\.is-fixed-terminal/);
-  assert.match(page, /management-computers\.css\?v=20260914-terminal-status3/);
+  assert.match(page, /management-computers\.css\?v=20260925-info-layer1/);
   assert.match(page, /management\.js\?v=20260914-terminal-status2/);
   assert.match(computers, /font-size: 11px !important/);
   assert.match(computers, /width: 34px !important/);
+  assert.match(computers, /management-area:has\(\.mini-computer:hover\)/);
+  assert.match(computers, /z-index: 14 !important/);
 });
 
 test('os controles do Inventário não acumulam modais em uma mesma ação', () => {

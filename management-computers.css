@@ -724,6 +724,29 @@ body.management-open .mini-assigned-computer {
   max-width: 112px !important;
 }
 
+/* Identificação do computador: leitura rápida sem alterar a altura do cartão. */
+body.management-open .mini-assigned-computer {
+  font-size: 9px !important;
+  font-weight: 650 !important;
+  line-height: 1.3 !important;
+}
+
+/* O resumo ao passar o cursor deve permanecer acima dos outros cartões. */
+body.management-open .management-area {
+  overflow: visible;
+  position: relative;
+}
+
+body.management-open .management-area:has(.mini-computer:hover),
+body.management-open .management-area:has(.mini-computer:focus-visible) {
+  z-index: 12;
+}
+
+body.management-open .mini-computer:hover,
+body.management-open .mini-computer:focus-visible {
+  z-index: 14 !important;
+}
+
 /* A tela traduz cada status em um sinal visual compreensível. */
 body.management-open .mini-screen::after {
   opacity: .3 !important;
