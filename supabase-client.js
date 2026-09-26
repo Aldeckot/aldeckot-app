@@ -1191,6 +1191,13 @@
   };
 
   const nfeReasonValues = ['Erro no SASII', 'Erro no Pin Pad', 'Travamento do PC', 'Erro no cartão'];
+  const nfeMoney = (value, label) => {
+    const input = String(value ?? '').trim().replace(/R\$|\s/g, '');
+    const normalized = input.includes(',') ? input.replace(/\./g, '').replace(',', '.') : input;
+    const amount = Number(normalized);
+    if (!input || !Number.isFinite(amount) || amount < 0) fail(`Informe um ${label} válido.`);
+    return Math.round(amount * 100) / 100;
+  };
   const nfeRow = row => ({
     id: row.id,
     operator: row.operator || '',
@@ -1200,6 +1207,8 @@
     pdv: row.pdv || '',
     nfeNumber: row.nfe_number || '',
     reason: row.reason || '',
+    totalValue: row.total_value === null || row.total_value === undefined ? null : Number(row.total_value),
+    pendingValue: row.pending_value === null || row.pending_value === undefined ? null : Number(row.pending_value),
     notes: row.notes || '',
     pdfPath: row.pdf_path || '',
     pdfName: row.pdf_name || '',
@@ -1207,19 +1216,26 @@
     createdAt: row.created_at || '',
     updatedAt: row.updated_at || row.created_at || ''
   });
-  const nfePayload = values => ({
-    operator: String(values.operator || '').trim(),
-    operator_code: String(values.operatorCode || '').trim(),
-    fiscal: String(values.fiscal || '').trim(),
-    occurred_at: String(values.occurredAt || ''),
-    pdv: String(values.pdv || '').trim(),
-    nfe_number: String(values.nfeNumber || '').trim(),
-    reason: String(values.reason || '').trim(),
-    notes: String(values.notes || '').trim(),
-    pdf_path: String(values.pdfPath || '').trim(),
-    pdf_name: String(values.pdfName || '').trim(),
-    pdf_size: Number(values.pdfSize || 0)
-  });
+  const nfePayload = values => {
+    const totalValue = nfeMoney(values.totalValue, 'valor total');
+    const pendingValue = nfeMoney(values.pendingValue, 'valor pendente');
+    if (pendingValue > totalValue) fail('O valor pendente não pode ser maior que o valor total.');
+    return {
+      operator: String(values.operator || '').trim(),
+      operator_code: String(values.operatorCode || '').trim(),
+      fiscal: String(values.fiscal || '').trim(),
+      occurred_at: String(values.occurredAt || ''),
+      pdv: String(values.pdv || '').trim(),
+      nfe_number: String(values.nfeNumber || '').trim(),
+      reason: String(values.reason || '').trim(),
+      total_value: totalValue,
+      pending_value: pendingValue,
+      notes: String(values.notes || '').trim(),
+      pdf_path: String(values.pdfPath || '').trim(),
+      pdf_name: String(values.pdfName || '').trim(),
+      pdf_size: Number(values.pdfSize || 0)
+    };
+  };
   const nfeSafeFileName = name => String(name || 'documento.pdf').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'documento.pdf';
   const nfeCurrentUser = async () => {
     const { data, error } = await client.auth.getUser();
@@ -1235,7 +1251,7 @@
       const page = Math.max(1, Number(filters.page || 1));
       const pageSize = Math.min(50, Math.max(10, Number(filters.pageSize || 15)));
       let request = client.from('nfe_occurrences')
-        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at', { count: 'exact' })
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, total_value, pending_value, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at', { count: 'exact' })
         .order('occurred_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1);
       const term = String(filters.query || '').trim().replace(/[(),]/g, ' ').slice(0, 80);
@@ -1256,7 +1272,7 @@
     async all(filters = {}) {
       await init();
       let request = client.from('nfe_occurrences')
-        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, total_value, pending_value, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
         .order('occurred_at', { ascending: false })
         .limit(5000);
       const term = String(filters.query || '').trim().replace(/[(),]/g, ' ').slice(0, 80);
@@ -1289,7 +1305,7 @@
     async get(id) {
       await init();
       const row = check(await client.from('nfe_occurrences')
-        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
+        .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, total_value, pending_value, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at')
         .eq('id', id).single());
       const logs = check(await client.from('nfe_occurrence_logs')
         .select('id, action, details, created_at')
@@ -1371,14 +1387,14 @@
       await init();
       const user = await nfeCurrentUser();
       const row = check(await client.from('nfe_occurrences').insert({ ...nfePayload(values), created_by: user.id }).select().single());
-      await events.record('nfe', 'create', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason });
+      await events.record('nfe', 'create', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason, totalValue: row.total_value, pendingValue: row.pending_value });
       return nfeRow(row);
     },
 
     async update(id, values) {
       await init();
       const row = check(await client.from('nfe_occurrences').update(nfePayload(values)).eq('id', id).select().single());
-      await events.record('nfe', 'update', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason });
+      await events.record('nfe', 'update', { occurrenceId: row.id, pdv: row.pdv, nfeNumber: row.nfe_number, reason: row.reason, totalValue: row.total_value, pendingValue: row.pending_value });
       return nfeRow(row);
     },
 
@@ -1442,6 +1458,7 @@
         const payload = rows.map(item => ({
           id: item.id, operator: item.operator, operator_code: item.operatorCode, fiscal: item.fiscal,
           occurred_at: item.occurredAt, pdv: item.pdv, nfe_number: item.nfeNumber, reason: item.reason,
+          total_value: item.totalValue ?? null, pending_value: item.pendingValue ?? null,
           notes: item.notes || '', pdf_path: item.pdfPath, pdf_name: item.pdfName, pdf_size: item.pdfSize,
           created_at: item.createdAt || undefined, updated_at: item.updatedAt || undefined
         }));

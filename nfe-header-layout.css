@@ -1,0 +1,65 @@
+/* Cabeçalho e busca: foco na operação diária do Fiscal NF-e. */
+body.nfe-open .nfe-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+body.nfe-open .nfe-header .module-header-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.nfe-open .nfe-header-mascot {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 68px;
+  margin: 0;
+}
+
+body.nfe-open .nfe-header-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.nfe-table-head {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(280px, 430px) auto;
+  align-items: center;
+}
+
+.nfe-table-search {
+  width: min(100%, 430px);
+  justify-self: center;
+  height: 48px;
+}
+
+.nfe-header-actions [data-nfe-backup].nfe-icon-button {
+  border-color: #38e48d;
+  background: linear-gradient(145deg, #0a4838, #072d2a);
+  color: #8affc4;
+  box-shadow: inset 0 1px 0 rgba(221, 255, 239, .22), 0 7px 17px rgba(0, 0, 0, .28);
+}
+
+.nfe-header-actions [data-nfe-backup].nfe-icon-button:hover,
+.nfe-header-actions [data-nfe-backup].nfe-icon-button:focus-visible {
+  border-color: #8affc4;
+  background: linear-gradient(145deg, #10654c, #0a3b33);
+  box-shadow: 0 0 0 3px rgba(56, 228, 141, .15), 0 0 20px rgba(56, 228, 141, .28);
+}
+
+@media (max-width: 1060px) {
+  .nfe-table-head {
+    grid-template-columns: minmax(190px, 1fr) minmax(240px, 360px);
+  }
+
+  .nfe-table-actions { grid-column: 1 / -1; justify-self: end; }
+}
+
+@media (max-width: 760px) {
+  body.nfe-open .nfe-header { gap: 10px; }
+  body.nfe-open .nfe-header-mascot { flex-basis: 52px; width: 52px; height: 56px; }
+  .nfe-table-head { display: flex; align-items: stretch; }
+  .nfe-table-search { width: 100%; order: 2; }
+  .nfe-table-actions { order: 3; justify-self: auto; }
+}

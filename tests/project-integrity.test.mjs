@@ -149,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(version, /const value = '2\.0\.52'/);
+  assert.match(version, /const value = '2\.0\.59'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
@@ -235,6 +235,35 @@ test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', 
   assert.match(computers, /width: 34px !important/);
   assert.match(computers, /management-area:has\(\.mini-computer:hover\)/);
   assert.match(computers, /z-index: 14 !important/);
+});
+
+test('Fiscal NF-e registra os valores total e pendente com validação financeira', () => {
+  const nfe = readFileSync(resolve(root, 'nfe.js'), 'utf8');
+  const client = readFileSync(resolve(root, 'supabase-client.js'), 'utf8');
+  const migration = readFileSync(resolve(root, 'supabase/051_nfe_financial_values.sql'), 'utf8');
+  const page = readFileSync(resolve(root, 'nfe.html'), 'utf8');
+  const metricStyles = readFileSync(resolve(root, 'nfe-metric-icons.css'), 'utf8');
+
+  assert.match(nfe, /name="totalValue" required inputmode="decimal"/);
+  assert.match(nfe, /name="pendingValue" required inputmode="decimal"/);
+  assert.match(nfe, /\['Valor total', currency\(item\.totalValue\)\]/);
+  assert.match(nfe, /\['Valor pendente', currency\(item\.pendingValue\)\]/);
+  assert.match(client, /const nfeMoney = \(value, label\) =>/);
+  assert.match(client, /pendingValue > totalValue/);
+  assert.match(client, /total_value: totalValue/);
+  assert.match(client, /pending_value: pendingValue/);
+  assert.match(client, /total_value, pending_value/);
+  assert.match(migration, /add column if not exists total_value numeric\(14, 2\)/);
+  assert.match(migration, /pending_value <= total_value/);
+  assert.match(migration, /create or replace function app\.audit_nfe_occurrence\(\)/);
+  assert.match(page, /nfe\.js\?v=20260926-nfe-layout2/);
+  assert.match(page, /nfe-metric-icons\.css\?v=20260926-metric-icon2/);
+  assert.match(page, /nfe-header-layout\.css\?v=20260926-nfe-layout4/);
+  assert.match(metricStyles, /\.nfe-metric-main\s*\{\s*align-items: center;/);
+  assert.match(metricStyles, /\.nfe-metric-icon\s*\{[\s\S]*?place-items: center;[\s\S]*?align-self: center;[\s\S]*?justify-self: center;/);
+  assert.match(metricStyles, /\[data-nfe-backup\]\.nfe-icon-button/);
+  assert.match(nfe, /inventoryBackup: '<ellipse cx="10"/);
+  assert.match(nfe, /nfe-table-search/);
 });
 
 test('os controles do Inventário não acumulam modais em uma mesma ação', () => {

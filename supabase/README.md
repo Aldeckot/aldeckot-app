@@ -41,6 +41,8 @@ A migração `049_fix_management_terminal_transfer_identity.sql` corrige a trans
 
 A migração `050_defer_management_transfer_sync.sql` evita o erro `stack depth limit exceeded` durante a transferência. Ela adia a sincronização automática com o Controle TI até que os dois terminais estejam com suas identidades finais, impedindo uma recursão entre gatilhos. Execute-a após a `049`.
 
+A migração `051_nfe_financial_values.sql` adiciona os campos **Valor total** e **Valor pendente** às NF-e. Ela impede valores negativos e valores pendentes superiores ao total, sem preencher artificialmente os registros antigos. Execute-a após a `050` antes de cadastrar novas NF-e com os valores financeiros.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:
