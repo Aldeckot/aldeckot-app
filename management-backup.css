@@ -226,6 +226,11 @@ body.management-open .management-backup-switch-row small { color: #bbcae1; font-
 
 body.management-open .management-backup-frequency { display: grid; gap: 10px; margin-top: 21px; color: #bdcce1; font-size: 13px; }
 body.management-open .management-backup-frequency output { display: flex; align-items: center; gap: 11px; height: 47px; padding: 0 14px; border: 1px solid #55769f9c; border-radius: 10px; background: #0b1b32a6; color: #ecf4ff; font-size: 15px; }
+body.management-open .management-backup-frequency-control { display: flex; align-items: center; gap: 11px; height: 47px; padding: 0 14px; border: 1px solid #55769f9c; border-radius: 10px; background: #0b1b32a6; color: #ecf4ff; font-size: 15px; }
+body.management-open .management-backup-frequency-control input { width: 62px; height: 31px; padding: 0 8px; border: 1px solid #6c91bc9e; border-radius: 7px; background: #102a47; color: #f2f8ff; font: inherit; font-weight: 700; outline: 0; }
+body.management-open .management-backup-frequency-control input:focus { border-color: #55e5f4; box-shadow: 0 0 0 3px #54e5f51f; }
+body.management-open .management-backup-frequency-control em { color: #bad0e9; font-size: 12px; font-style: normal; }
+body.management-open .management-backup-frequency > small { color: #9db5d2; font-size: 11px; line-height: 1.35; }
 
 body.management-open .management-backup-history-list { overflow: hidden; border: 1px solid #4b6c9582; border-radius: 14px; background: #09182cad; }
 body.management-open .management-backup-history-row { display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(98px, .7fr) minmax(92px, .65fr) 44px; align-items: center; gap: 13px; min-height: 69px; padding: 10px 14px; border-bottom: 1px solid #4b65816e; }
@@ -292,6 +297,7 @@ body.management-open .management-backup-confirm-warning p { margin: 6px 0 0; col
 .theme-light.management-open .management-backup-action-card,
 .theme-light.management-open .management-backup-switch-row,
 .theme-light.management-open .management-backup-frequency output,
+.theme-light.management-open .management-backup-frequency-control,
 .theme-light.management-open .management-backup-history-date b,
 .theme-light.management-open .management-backup-success,
 .theme-light.management-open .management-backup-destination,
@@ -329,6 +335,7 @@ body.management-open .management-backup-confirm-warning p { margin: 6px 0 0; col
   body.management-open .management-backup-automatic-status { justify-content: flex-start; }
   body.management-open .management-backup-details-grid { grid-template-columns: 1fr; }
 }
+.theme-light.management-open .management-backup-frequency-control input { border-color: #8faac4; background: #f7fbff; color: #1c3453; }
 
 @media (max-width: 620px) {
   body.management-open .management-backup-dialog { width: min(100vw - 20px, 1120px) !important; max-height: calc(100dvh - 20px) !important; }
@@ -389,6 +396,8 @@ body.management-open .management-backup-switch-row b { font-size: 13px !importan
 body.management-open .management-backup-switch-row small { font-size: 12px !important; line-height: 1.36 !important; }
 body.management-open .management-backup-frequency { gap: 7px !important; margin-top: 12px !important; font-size: 12px !important; }
 body.management-open .management-backup-frequency output { height: 39px !important; font-size: 13px !important; }
+body.management-open .management-backup-frequency-control { height: 39px !important; font-size: 13px !important; }
+body.management-open .management-backup-frequency-control input { height: 27px !important; width: 58px !important; }
 body.management-open .management-backup-history-row { min-height: 51px !important; padding: 7px 10px !important; }
 body.management-open .management-backup-history-date b { font-size: 12px !important; }
 body.management-open .management-backup-history-date small,

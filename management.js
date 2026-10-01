@@ -450,9 +450,10 @@
   function backupModal() {
     const latest = state.backups[0] || state.localBackupAt;
     const automatic = Boolean(state.backupSettings?.automatic);
+    const frequencyDays = Number(state.backupSettings?.frequency_days || 7);
     const latestMessage = latest ? 'Backup realizado com sucesso' : 'Nenhum backup realizado';
     const latestDetail = latest ? `Backup ${backupSource(latest.source).toLowerCase()}` : 'Crie seu primeiro backup para proteger os dados da Gestão TI.';
-    return `<section class="management-modal-dialog management-backup-dialog" role="dialog" aria-modal="true" aria-labelledby="managementBackupTitle"><div class="management-backup-content"><header class="management-backup-header"><div class="management-backup-title-icon">${backupSvg('backup', 27)}</div><div><h2 id="managementBackupTitle">Sistema de Backup</h2><p>Proteção e recuperação dos dados da Gestão TI</p></div><button class="management-backup-close" type="button" data-management-action="close" aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close', 22)}</button></header><section class="management-backup-latest" aria-labelledby="managementBackupLatestTitle"><h3 id="managementBackupLatestTitle">Último backup</h3><div class="management-backup-latest-grid"><div class="management-backup-result ${latest ? 'success' : 'empty'}"><span class="management-backup-status-icon">${backupSvg(latest ? 'check' : 'history', 25)}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="management-backup-time">${backupSvg('calendar', 29)}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="management-backup-automatic-status" type="button" data-management-action="toggle-backup-automatic" role="switch" aria-checked="${automatic}" aria-label="${automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="management-backup-actions-section" aria-labelledby="managementBackupActionsTitle"><h3 id="managementBackupActionsTitle">Ações</h3><div class="management-backup-action-grid"><button class="management-backup-action-card create" type="button" data-management-action="create-backup"><span class="management-backup-action-icon">${backupSvg('download', 37)}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados da Gestão TI.</small></span></button><button class="management-backup-action-card restore" type="button" data-management-action="restore-backup"><span class="management-backup-action-icon">${backupSvg('upload', 37)}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="management-backup-details-grid"><section class="management-backup-auto-panel" aria-labelledby="managementBackupAutoTitle"><h3 id="managementBackupAutoTitle">Backup automático</h3><button class="management-backup-switch-row" type="button" data-management-action="toggle-backup-automatic" role="switch" aria-checked="${automatic}"><span class="management-backup-switch ${automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="management-backup-frequency"><span>Frequência</span><output>${backupSvg('calendar', 20)}A cada 7 dias</output></label></section><section class="management-backup-history-panel" aria-labelledby="managementBackupHistoryTitle"><h3 id="managementBackupHistoryTitle">Histórico de backups</h3><div class="management-backup-history-list">${backupHistoryMarkup()}</div></section></div><footer class="management-backup-footer"><div class="management-backup-warning">${backupSvg('warning', 32)}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais da Gestão TI pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="management-backup-secondary" type="button" data-management-action="close">Fechar</button></footer></div></section>`;
+    return `<section class="management-modal-dialog management-backup-dialog" role="dialog" aria-modal="true" aria-labelledby="managementBackupTitle"><div class="management-backup-content"><header class="management-backup-header"><div class="management-backup-title-icon">${backupSvg('backup', 27)}</div><div><h2 id="managementBackupTitle">Sistema de Backup</h2><p>Proteção e recuperação dos dados da Gestão TI</p></div><button class="management-backup-close" type="button" data-management-action="close" aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close', 22)}</button></header><section class="management-backup-latest" aria-labelledby="managementBackupLatestTitle"><h3 id="managementBackupLatestTitle">Último backup</h3><div class="management-backup-latest-grid"><div class="management-backup-result ${latest ? 'success' : 'empty'}"><span class="management-backup-status-icon">${backupSvg(latest ? 'check' : 'history', 25)}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="management-backup-time">${backupSvg('calendar', 29)}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="management-backup-automatic-status" type="button" data-management-action="toggle-backup-automatic" role="switch" aria-checked="${automatic}" aria-label="${automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="management-backup-actions-section" aria-labelledby="managementBackupActionsTitle"><h3 id="managementBackupActionsTitle">Ações</h3><div class="management-backup-action-grid"><button class="management-backup-action-card create" type="button" data-management-action="create-backup"><span class="management-backup-action-icon">${backupSvg('download', 37)}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados da Gestão TI.</small></span></button><button class="management-backup-action-card restore" type="button" data-management-action="restore-backup"><span class="management-backup-action-icon">${backupSvg('upload', 37)}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="management-backup-details-grid"><section class="management-backup-auto-panel" aria-labelledby="managementBackupAutoTitle"><h3 id="managementBackupAutoTitle">Backup automático</h3><button class="management-backup-switch-row" type="button" data-management-action="toggle-backup-automatic" role="switch" aria-checked="${automatic}"><span class="management-backup-switch ${automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="management-backup-frequency"><span>Frequência</span><span class="management-backup-frequency-control">${backupSvg('calendar', 20)}<input type="number" min="1" max="90" step="1" value="${frequencyDays}" data-management-backup-frequency aria-label="Frequência do backup automático em dias"><em>dias</em></span><small>De 1 a 90 dias. A alteração é salva automaticamente.</small></label></section><section class="management-backup-history-panel" aria-labelledby="managementBackupHistoryTitle"><h3 id="managementBackupHistoryTitle">Histórico de backups</h3><div class="management-backup-history-list">${backupHistoryMarkup()}</div></section></div><footer class="management-backup-footer"><div class="management-backup-warning">${backupSvg('warning', 32)}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais da Gestão TI pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="management-backup-secondary" type="button" data-management-action="close">Fechar</button></footer></div></section>`;
   }
 
   function backupChoiceModal(kind) {
@@ -701,12 +702,13 @@
   async function refreshBackupState(createAutomatic = false) {
     const backupApi = window.AldeckotSupabase.managementBackups;
     const initialHistory = await backupApi.list();
-    let settings = { automatic: false, updated_at: null };
+    let settings = { automatic: false, frequency_days: 7, updated_at: null };
     try { settings = await backupApi.settings(); }
     catch (settingsError) { console.warn('Configuração de backup automático da Gestão TI indisponível:', settingsError); }
     let history = initialHistory;
     const latest = history[0];
-    if (createAutomatic && settings.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= 7 * 24 * 60 * 60 * 1000)) {
+    const frequencyDays = Math.max(1, Number(settings.frequency_days || 7));
+    if (createAutomatic && settings.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
       const automatic = await backupApi.create(backupSnapshot(), 'Backup automático da Gestão TI', 'automatic');
       history = [automatic, ...history.filter(backup => backup.id !== automatic.id)].slice(0, 3);
     }
@@ -747,6 +749,25 @@
     } catch (error) {
       console.error('Falha ao atualizar backup automático da Gestão TI:', error);
       notify(error?.message || 'Não foi possível atualizar o backup automático. Execute a migração 012 no Supabase.');
+    }
+  }
+
+  async function updateBackupFrequency(input) {
+    const days = Number(input.value);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      input.value = Number(state.backupSettings?.frequency_days || 7);
+      notify('Informe uma frequência entre 1 e 90 dias.');
+      return;
+    }
+    input.disabled = true;
+    try {
+      state.backupSettings = await window.AldeckotSupabase.managementBackups.setFrequency(days);
+      state.modal = { type: 'backup' };
+      renderModal();
+      notify(`Backup automático ajustado para cada ${days} ${days === 1 ? 'dia' : 'dias'}.`);
+    } catch (error) {
+      input.disabled = false;
+      notify(error?.message || 'Não foi possível atualizar a frequência do backup.');
     }
   }
 
@@ -848,6 +869,9 @@
       event.target.value = peripheralTag(event.target.value);
       event.target.setCustomValidity(isValidPeripheralTag(type, event.target.value) ? '' : `Informe a TAG no formato ${peripheralTagRules[type]?.example || 'correto'}.`);
     }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.matches('[data-management-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-management-status]')) { state.status = event.target.value; state.operation = ''; applyManagementFilters(); }

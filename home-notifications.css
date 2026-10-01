@@ -34,3 +34,41 @@
   .home-notification-list{gap:6px;margin-top:9px}
   .home-notification-item{gap:5px;padding:9px}
 }
+
+/* A lista rola independentemente do título em todas as larguras da Home. */
+.home-notification-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.home-notification-panel > header { flex: 0 0 auto; }
+
+.home-notification-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #63bde0 #112b43;
+  padding-right: 4px;
+}
+
+.home-notification-list::-webkit-scrollbar { width: 8px; }
+.home-notification-list::-webkit-scrollbar-track { border-radius: 8px; background: #112b43; }
+.home-notification-list::-webkit-scrollbar-thumb { border: 2px solid #112b43; border-radius: 8px; background: #63bde0; }
+.home-notification-list::-webkit-scrollbar-thumb:hover { background: #8ce5f7; }
+.home-notification-list:focus-visible { outline: 2px solid #63d9ef; outline-offset: -2px; }
+
+.theme-light .home-notification-list { scrollbar-color: #5495b6 #dcecf5; }
+.theme-light .home-notification-list::-webkit-scrollbar-track { background: #dcecf5; }
+.theme-light .home-notification-list::-webkit-scrollbar-thumb { border-color: #dcecf5; background: #5495b6; }
+
+@media (max-width: 980px) {
+  .home-notification-panel { max-height: calc(100dvh - 110px); }
+}
+
+@media (max-width: 760px) {
+  .home-notification-panel { max-height: calc(100dvh - 94px); }
+}

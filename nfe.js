@@ -76,7 +76,7 @@
     modalFile: null,
     refreshTimer: 0,
     investigationFilters: { pdv: '', operator: '', dateFrom: '', dateTo: '' },
-    backup: { history: [], automatic: false, pendingRestore: null, busy: false }
+    backup: { history: [], automatic: false, frequencyDays: 7, pendingRestore: null, busy: false }
   };
   const root = document.getElementById('app');
   const modal = document.getElementById('nfeModal');
@@ -466,13 +466,14 @@
   }
 
   function renderBackupHome() {
-    const { history, automatic } = state.backup;
+    const { history, automatic, frequencyDays } = state.backup;
     const latest = history[0] || null;
     const latestLabel = latest ? 'Backup realizado com sucesso' : 'Nenhum backup realizado';
     const latestDescription = latest
       ? latest.source === 'automatic' ? 'Backup automático' : 'Backup manual'
       : 'Crie sua primeira cópia para proteger a Central Fiscal NF-e.';
-    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="Sistema de Backup Fiscal NF-e"><div class="nfe-backup-content"><header class="nfe-backup-header"><span class="nfe-backup-title-icon">${icon('backup')}</span><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do Fiscal NF-e</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><section class="nfe-backup-latest"><h3>Último backup</h3><div class="nfe-backup-latest-grid"><div class="nfe-backup-result ${latest ? 'success' : 'empty'}"><span class="nfe-backup-status-icon">${icon(latest ? 'check' : 'history')}</span><span><b>${latestLabel}</b><small>${latestDescription}</small></span></div><div class="nfe-backup-time">${icon('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="nfe-backup-auto-status" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}" aria-label="${automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="nfe-backup-actions"><h3>Ações</h3><div class="nfe-backup-action-grid"><button class="nfe-backup-action-card create" type="button" data-nfe-backup-action="create"><span>${icon('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa das ocorrências e dos históricos fiscais.</small></span></button><button class="nfe-backup-action-card restore" type="button" data-nfe-backup-action="restore"><span>${icon('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar uma cópia e recuperar os dados com segurança.</small></span></button></div></section><div class="nfe-backup-details-grid"><section class="nfe-backup-auto-panel"><h3>Backup automático</h3><button class="nfe-backup-switch-row" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}"><span class="nfe-backup-switch ${automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Cria uma cópia privada no Supabase a cada 7 dias quando um administrador utiliza o módulo.</small></span></button><label class="nfe-backup-frequency"><span>Frequência</span><output>${icon('calendar')}A cada 7 dias</output></label></section><section class="nfe-backup-history-panel"><h3>Histórico de backups</h3><div class="nfe-backup-history-list">${nfeBackupHistory(history)}</div></section></div><footer class="nfe-backup-footer"><div>${icon('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todas as ocorrências e soluções atuais da Central Fiscal.<br>Esta ação não poderá ser desfeita.</p></div><button class="nfe-backup-secondary" type="button" data-nfe-close>Fechar</button></footer></div></section>`);
+    const frequencyLabel = frequencyDays === 1 ? 'dia' : 'dias';
+    openModal(`<section class="nfe-dialog nfe-backup-dialog" role="dialog" aria-modal="true" aria-label="Sistema de Backup Fiscal NF-e"><div class="nfe-backup-content"><header class="nfe-backup-header"><span class="nfe-backup-title-icon">${icon('backup')}</span><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do Fiscal NF-e</p></div><button class="nfe-backup-close" type="button" data-nfe-close title="Fechar" aria-label="Fechar">${icon('close')}</button></header><section class="nfe-backup-latest"><h3>Último backup</h3><div class="nfe-backup-latest-grid"><div class="nfe-backup-result ${latest ? 'success' : 'empty'}"><span class="nfe-backup-status-icon">${icon(latest ? 'check' : 'history')}</span><span><b>${latestLabel}</b><small>${latestDescription}</small></span></div><div class="nfe-backup-time">${icon('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="nfe-backup-auto-status" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}" aria-label="${automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="nfe-backup-actions"><h3>Ações</h3><div class="nfe-backup-action-grid"><button class="nfe-backup-action-card create" type="button" data-nfe-backup-action="create"><span>${icon('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa das ocorrências e dos históricos fiscais.</small></span></button><button class="nfe-backup-action-card restore" type="button" data-nfe-backup-action="restore"><span>${icon('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar uma cópia e recuperar os dados com segurança.</small></span></button></div></section><div class="nfe-backup-details-grid"><section class="nfe-backup-auto-panel"><h3>Backup automático</h3><button class="nfe-backup-switch-row" type="button" data-nfe-backup-action="toggle-auto" role="switch" aria-checked="${automatic}"><span class="nfe-backup-switch ${automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Cria uma cópia privada no Supabase conforme a frequência definida quando um administrador utiliza o módulo.</small></span></button><label class="nfe-backup-frequency"><span>Frequência</span><span class="nfe-backup-frequency-control">${icon('calendar')}<input type="number" min="1" max="90" step="1" value="${frequencyDays}" data-nfe-backup-frequency aria-label="Frequência do backup automático em dias"><em>${frequencyLabel}</em></span><small>De 1 a 90 dias. A alteração é salva automaticamente.</small></label></section><section class="nfe-backup-history-panel"><h3>Histórico de backups</h3><div class="nfe-backup-history-list">${nfeBackupHistory(history)}</div></section></div><footer class="nfe-backup-footer"><div>${icon('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todas as ocorrências e soluções atuais da Central Fiscal.<br>Esta ação não poderá ser desfeita.</p></div><button class="nfe-backup-secondary" type="button" data-nfe-close>Fechar</button></footer></div></section>`);
     bindBackupModal();
   }
 
@@ -578,7 +579,27 @@
     } finally { state.backup.busy = false; }
   }
 
+  async function updateNfeBackupFrequency(input) {
+    const days = Number(input.value);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      input.value = state.backup.frequencyDays;
+      toast('Informe uma frequência entre 1 e 90 dias.', true);
+      return;
+    }
+    input.disabled = true;
+    try {
+      const settings = await api().setBackupFrequency(days);
+      state.backup = { ...state.backup, automatic: Boolean(settings.automatic), frequencyDays: Number(settings.frequency_days || 7) };
+      renderBackupHome();
+      toast(`Backup automático ajustado para cada ${days} ${days === 1 ? 'dia' : 'dias'}.`);
+    } catch (error) {
+      input.disabled = false;
+      toast(error.message || 'Não foi possível atualizar a frequência do backup.', true);
+    }
+  }
+
   function bindBackupModal() {
+    modal.querySelector('[data-nfe-backup-frequency]')?.addEventListener('change', event => updateNfeBackupFrequency(event.currentTarget));
     modal.querySelectorAll('[data-nfe-backup-restore]').forEach(button => button.addEventListener('click', () => prepareBackupRestore(button.dataset.nfeBackupRestore)));
     modal.querySelectorAll('[data-nfe-backup-action]').forEach(button => button.addEventListener('click', () => {
       const action = button.dataset.nfeBackupAction;
@@ -600,7 +621,7 @@
       const [settings, backups] = await Promise.all([api().backupSettings(), api().backups()]);
       const automatic = await api().createAutomaticBackupIfDue(settings, backups[0]);
       const history = automatic ? await api().backups() : backups;
-      state.backup = { ...state.backup, history, automatic: Boolean(settings.automatic), pendingRestore: null, busy: false };
+      state.backup = { ...state.backup, history, automatic: Boolean(settings.automatic), frequencyDays: Number(settings.frequency_days || 7), pendingRestore: null, busy: false };
       renderBackupHome();
     } catch (error) { toast(error.message || 'Não foi possível carregar os backups.', true); }
   }

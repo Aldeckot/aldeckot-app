@@ -149,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(version, /const value = '2\.0\.59'/);
+  assert.match(version, /const value = '2\.0\.62'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);
@@ -266,6 +266,30 @@ test('Fiscal NF-e registra os valores total e pendente com validação financeir
   assert.match(nfe, /nfe-table-search/);
 });
 
+test('Fiscal NF-e cria históricos organizados no PC e no Pin Pad correspondente', () => {
+  const management = readFileSync(resolve(root, 'management.css'), 'utf8');
+  const inventory = readFileSync(resolve(root, 'inventory.css'), 'utf8');
+  const migration = readFileSync(resolve(root, 'supabase/052_nfe_management_inventory_logs.sql'), 'utf8');
+
+  assert.match(migration, /create or replace function app\.sync_nfe_creation_logs\(\)/);
+  assert.match(migration, /after insert on public\.nfe_occurrences/);
+  assert.match(migration, /record_row\.payload ->> 'equipment'/);
+  assert.match(migration, /'Motivo: %s', new\.reason/);
+  assert.match(migration, /'Operador: %s', new\.operator/);
+  assert.match(migration, /'Fiscal: %s', new\.fiscal/);
+  assert.match(migration, /'Valor total: R\$ %s'/);
+  assert.match(migration, /'Valor pendente: R\$ %s'/);
+  assert.match(migration, /if new\.reason <> 'Erro no cartão' then/);
+  assert.match(migration, /'Número do cupom: %s', new\.nfe_number/);
+  assert.match(migration, /source_module,[\s\S]*?'nfe',[\s\S]*?source_log_id/);
+  assert.match(migration, /sourceModule' = 'nfe'/);
+  assert.match(management, /\.management-history-item p\{white-space:pre-line\}/);
+  assert.match(inventory, /\.inv-dialog:has\(\.inv-detail-grid\) \.inv-log span\{white-space:pre-line\}/);
+  const pinPadReasonMigration = readFileSync(resolve(root, 'supabase/053_nfe_pin_pad_reason_sync.sql'), 'utf8');
+  assert.match(pinPadReasonMigration, /new\.reason not in \('Erro no cartão', 'Erro no Pin Pad'\)/);
+  assert.match(pinPadReasonMigration, /format\('Motivo: %s', new\.reason\)/);
+});
+
 test('os controles do Inventário não acumulam modais em uma mesma ação', () => {
   const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
 
@@ -375,4 +399,23 @@ test('a tipografia equilibra a leitura em todas as telas', () => {
     const markup = readFileSync(resolve(root, page), 'utf8');
     assert.match(markup, /typography-balance\.css\?v=20260914-1/);
   }
+});
+
+test('a frequência dos backups automáticos é configurável por módulo', () => {
+  const client = readFileSync(resolve(root, 'supabase-client.js'), 'utf8');
+  const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
+  const management = readFileSync(resolve(root, 'management.js'), 'utf8');
+  const nfe = readFileSync(resolve(root, 'nfe.js'), 'utf8');
+  const migration = readFileSync(resolve(root, 'supabase/054_module_backup_frequencies.sql'), 'utf8');
+
+  for (const table of ['inventory_backup_settings', 'management_backup_settings', 'control_backup_settings', 'flux_backup_settings']) {
+    assert.match(migration, new RegExp(`alter table public\\.${table}`));
+  }
+  assert.match(migration, /check \(frequency_days between 1 and 90\)/);
+  assert.match(client, /normalizeBackupFrequencyDays/);
+  assert.match(client, /setBackupFrequency/);
+  assert.match(management, /managementBackups\.setFrequency/);
+  assert.match(inventory, /data-inv-backup-frequency/);
+  assert.match(management, /data-management-backup-frequency/);
+  assert.match(nfe, /data-nfe-backup-frequency/);
 });

@@ -34,7 +34,7 @@
     root = document.createElement('section');
     root.className = 'module-notification-center';
     root.dataset.moduleNotificationsCenter = key;
-    root.innerHTML = `<section class="module-notification-panel" data-module-notification-panel hidden><header><div><p>Central de Notificações</p><h2>${escape(labels[key])}</h2></div><div class="module-notification-head-actions"><span data-module-notification-count>Carregando…</span><button type="button" class="module-notification-clear" data-module-notification-clear title="Marcar alertas como acompanhados" aria-label="Marcar alertas como acompanhados">✓</button></div></header><div class="module-notification-list" data-module-notification-list><div class="module-notification-loading"><i></i>Verificando alertas do módulo…</div></div></section>`;
+    root.innerHTML = `<section id="moduleNotificationsPanel" class="module-notification-panel" data-module-notification-panel hidden><header><div><p>Central de Notificações</p><h2>${escape(labels[key])}</h2></div><div class="module-notification-head-actions"><span data-module-notification-count>Carregando…</span><button type="button" class="module-notification-clear" data-module-notification-clear title="Marcar alertas como acompanhados" aria-label="Marcar alertas como acompanhados">✓</button></div></header><div class="module-notification-list" data-module-notification-list role="region" tabindex="0" aria-label="Lista de notificações de ${escape(labels[key])}"><div class="module-notification-loading"><i></i>Verificando alertas do módulo…</div></div></section>`;
     document.body.append(root);
     panel = root.querySelector('[data-module-notification-panel]');
   }

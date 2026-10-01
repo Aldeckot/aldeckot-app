@@ -44,7 +44,7 @@
   const stamp = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const dateValue = value => value ? new Date(`${value}T12:00`).toLocaleDateString('pt-BR') : '—';
   let data = { tables: [] };
-  let backupMeta = { last: null, lastAt: null, lastSource: null, automatic: false, history: [] };
+  let backupMeta = { last: null, lastAt: null, lastSource: null, automatic: false, frequencyDays: 7, history: [] };
   let pendingRestore = null;
   let backupBusy = false;
   let initialized = false;
@@ -258,7 +258,8 @@
     const [setting, initialHistory] = await Promise.all([backupApi().settings(), backupApi().list()]);
     let history = initialHistory;
     let latest = history[0] || null;
-    if (window.AldeckotAuth?.isAdmin && setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= 7 * 24 * 60 * 60 * 1000)) {
+    const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
+    if (window.AldeckotAuth?.isAdmin && setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
       latest = await backupApi().create(clone(data), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
       history = [latest, ...history.filter(backup => backup.id !== latest.id)].slice(0, 3);
     }
@@ -267,6 +268,7 @@
       lastAt: latest?.created_at || null,
       lastSource: latest?.source || null,
       automatic: setting.automatic,
+      frequencyDays,
       history
     });
     // A área de trabalho só deve carregar depois que a pessoa escolher uma tabela.
@@ -404,10 +406,11 @@
     document.body.classList.add('inventory-open');
     const table = activeTable();
     const items = table?.items || [];
+    const emptyPresentation = emptyPresentationMarkup();
     $('#app').innerHTML = `<div class="inventory-shell">
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg viewBox="0 0 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4m0 3v4m0 3v4"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-      ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyMarkup()}</main>`}</div></div>`;
+      ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
     const inventoryHeader = document.querySelector('.inventory-header');
     const previousHeading = inventoryHeader?.querySelector('.inventory-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = moduleHeaderSummaryMarkup();
@@ -424,6 +427,13 @@
         if (heading) heading.insertAdjacentElement('afterend', dock);
         else header.prepend(dock);
       }
+    }
+    if (emptyPresentation.illustration) {
+      const animationDock = document.createElement('div');
+      animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : ''}`;
+      animationDock.setAttribute('aria-hidden', 'true');
+      animationDock.innerHTML = emptyPresentation.illustration;
+      inventoryHeader?.querySelector('.module-header-summary')?.insertAdjacentElement('afterend', animationDock);
     }
     applyHeaderPresentation();
     applyInventoryCleaningColumn(table);
@@ -442,6 +452,15 @@
       details(pendingItem);
     }
     window.AldeckotModuleStage?.reveal?.();
+  }
+
+  function emptyPresentationMarkup() {
+    const template = document.createElement('template');
+    template.innerHTML = emptyMarkup();
+    const illustration = template.content.querySelector('.inventory-empty-illustration');
+    const illustrationMarkup = illustration?.outerHTML || '';
+    illustration?.remove();
+    return { illustration: illustrationMarkup, emptyState: template.innerHTML };
   }
 
   function emptyMarkup() {
@@ -752,7 +771,7 @@
     const latest = meta.history[0] || (meta.lastAt ? { created_at: meta.lastAt, source: meta.lastSource } : null);
     const latestMessage = latest ? 'Backup realizado com sucesso' : 'Nenhum backup realizado';
     const latestDetail = latest ? (latest.source === 'automatic' ? 'Backup automático' : latest.source === 'local' ? 'Backup local' : 'Backup manual') : `Crie seu primeiro backup para proteger os dados do ${moduleConfig.backupName}.`;
-    return replaceBackupModal(`<section class="backup-dialog-content"><header class="backup-dialog-header"><div class="backup-title-icon">${backupSvg('backup')}</div><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do ${moduleConfig.backupName}</p></div><button class="backup-close" data-inv-close aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close')}</button></header><section class="backup-latest" aria-labelledby="backup-latest-title"><h3 id="backup-latest-title">Último backup</h3><div class="backup-latest-grid"><div class="backup-latest-result ${latest ? 'success' : 'empty'}"><span class="backup-status-icon">${backupSvg(latest ? 'check' : 'history')}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="backup-latest-time">${backupSvg('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="backup-automatic-status" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}" aria-label="${meta.automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${meta.automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="backup-actions-section" aria-labelledby="backup-actions-title"><h3 id="backup-actions-title">Ações</h3><div class="backup-action-grid"><button class="backup-action-card create" data-inv-action="create-backup"><span class="backup-action-icon">${backupSvg('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados do ${moduleConfig.backupName}.</small></span></button><button class="backup-action-card restore" data-inv-action="restore-backup"><span class="backup-action-icon">${backupSvg('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="backup-details-grid"><section class="backup-automatic-panel" aria-labelledby="backup-auto-title"><h3 id="backup-auto-title">Backup automático</h3><button class="backup-switch-row" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}"><span class="backup-switch ${meta.automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="backup-frequency"><span>Frequência</span><output>${backupSvg('calendar')}A cada 7 dias</output></label></section><section class="backup-history-panel" aria-labelledby="backup-history-title"><h3 id="backup-history-title">Histórico de backups</h3><div class="backup-history-list">${backupHistoryMarkup(meta.history)}</div></section></div><footer class="backup-dialog-footer"><div class="backup-warning">${backupSvg('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais do ${moduleConfig.backupName} pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="backup-secondary-button" data-inv-close>Fechar</button></footer></section>`);
+    return replaceBackupModal(`<section class="backup-dialog-content"><header class="backup-dialog-header"><div class="backup-title-icon">${backupSvg('backup')}</div><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do ${moduleConfig.backupName}</p></div><button class="backup-close" data-inv-close aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close')}</button></header><section class="backup-latest" aria-labelledby="backup-latest-title"><h3 id="backup-latest-title">Último backup</h3><div class="backup-latest-grid"><div class="backup-latest-result ${latest ? 'success' : 'empty'}"><span class="backup-status-icon">${backupSvg(latest ? 'check' : 'history')}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="backup-latest-time">${backupSvg('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="backup-automatic-status" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}" aria-label="${meta.automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${meta.automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="backup-actions-section" aria-labelledby="backup-actions-title"><h3 id="backup-actions-title">Ações</h3><div class="backup-action-grid"><button class="backup-action-card create" data-inv-action="create-backup"><span class="backup-action-icon">${backupSvg('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados do ${moduleConfig.backupName}.</small></span></button><button class="backup-action-card restore" data-inv-action="restore-backup"><span class="backup-action-icon">${backupSvg('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="backup-details-grid"><section class="backup-automatic-panel" aria-labelledby="backup-auto-title"><h3 id="backup-auto-title">Backup automático</h3><button class="backup-switch-row" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}"><span class="backup-switch ${meta.automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="backup-frequency"><span>Frequência</span><span class="backup-frequency-control">${backupSvg('calendar')}<input type="number" min="1" max="90" step="1" value="${meta.frequencyDays}" data-inv-backup-frequency aria-label="Frequência do backup automático em dias"><em>dias</em></span><small>De 1 a 90 dias. A alteração é salva automaticamente.</small></label></section><section class="backup-history-panel" aria-labelledby="backup-history-title"><h3 id="backup-history-title">Histórico de backups</h3><div class="backup-history-list">${backupHistoryMarkup(meta.history)}</div></section></div><footer class="backup-dialog-footer"><div class="backup-warning">${backupSvg('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais do ${moduleConfig.backupName} pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="backup-secondary-button" data-inv-close>Fechar</button></footer></section>`);
   }
 
   function backupChoice(kind) {
@@ -860,6 +879,26 @@
       clearBackupBusy();
       window.AldeckotMessage.show('Não foi possível atualizar o backup automático. Tente novamente.');
     } finally { backupBusy = false; }
+  }
+
+  async function updateBackupFrequency(input) {
+    const days = Number(input.value);
+    const meta = readBackupMeta();
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      input.value = meta.frequencyDays;
+      window.AldeckotMessage.show('Informe uma frequência entre 1 e 90 dias.');
+      return;
+    }
+    input.disabled = true;
+    try {
+      const setting = await backupApi().setFrequency(days);
+      writeBackupMeta({ automatic: setting.automatic, frequencyDays: Number(setting.frequency_days || 7) });
+      backupModal();
+      window.AldeckotMessage.show(`Backup automático ajustado para cada ${days} ${days === 1 ? 'dia' : 'dias'}.`);
+    } catch (error) {
+      input.disabled = false;
+      window.AldeckotMessage.show(error?.message || 'Não foi possível atualizar a frequência do backup.');
+    }
   }
 
   async function openInventorySafely() {
@@ -1017,6 +1056,9 @@
     if (event.target.matches('[data-inv-shipping-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('shipping', event.target.value));
     if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; applyInventoryFilters(); }
     if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; applyInventoryFilters(); }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('submit', event => {
     if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form]')) { event.preventDefault(); return; }

@@ -43,6 +43,12 @@ A migração `050_defer_management_transfer_sync.sql` evita o erro `stack depth 
 
 A migração `051_nfe_financial_values.sql` adiciona os campos **Valor total** e **Valor pendente** às NF-e. Ela impede valores negativos e valores pendentes superiores ao total, sem preencher artificialmente os registros antigos. Execute-a após a `050` antes de cadastrar novas NF-e com os valores financeiros.
 
+A migração `052_nfe_management_inventory_logs.sql` sincroniza cada **nova NF-e** com o PC da Gestão TI cujo nome corresponde ao campo **PDV**. O histórico do PC recebe motivo, operador, fiscal e valores financeiros em linhas separadas. Para o motivo **Erro no cartão**, a migração também encontra o Pin Pad vinculado ao PC, pelo campo de periféricos, e cria no Inventário um registro com motivo, operador, número do cupom e PDV. Execute-a após a `051` antes de usar essa automação.
+
+A migração `053_nfe_pin_pad_reason_sync.sql` amplia o registro automático do Pin Pad também para o motivo **Erro no Pin Pad**, mantendo o mesmo contexto de operador, cupom e PDV. Execute-a após a `052`.
+
+A migração `054_module_backup_frequencies.sql` permite definir de forma independente, de **1 a 90 dias**, a frequência dos backups automáticos de Inventário, Gestão TI, Controle TI e Flux. O Fiscal NF-e já possui a mesma configuração. Uma alteração em um módulo não modifica os demais. Execute-a após a `053` antes de alterar as frequências nas telas de backup.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

@@ -784,12 +784,17 @@
     },
     async settings() {
       await init();
-      const setting = check(await client.from('management_backup_settings').select('automatic, updated_at').maybeSingle());
-      return setting || { automatic: false, updated_at: null };
+      const setting = check(await client.from('management_backup_settings').select('automatic, frequency_days, updated_at').maybeSingle());
+      return setting || { automatic: false, frequency_days: 7, updated_at: null };
     },
     async setAutomatic(automatic) {
       await init();
       return check(await client.from('management_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+    async setFrequency(frequencyDays) {
+      await init();
+      const days = normalizeBackupFrequencyDays(frequencyDays);
+      return check(await client.from('management_backup_settings').upsert({ setting_key: 'global', frequency_days: days }).select().single());
     }
   };
 
@@ -994,12 +999,17 @@
     },
     async settings() {
       await init();
-      const setting = check(await client.from('control_backup_settings').select('automatic, updated_at').maybeSingle());
-      return setting || { automatic: false, updated_at: null };
+      const setting = check(await client.from('control_backup_settings').select('automatic, frequency_days, updated_at').maybeSingle());
+      return setting || { automatic: false, frequency_days: 7, updated_at: null };
     },
     async setAutomatic(automatic) {
       await init();
       return check(await client.from('control_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+    async setFrequency(frequencyDays) {
+      await init();
+      const days = normalizeBackupFrequencyDays(frequencyDays);
+      return check(await client.from('control_backup_settings').upsert({ setting_key: 'global', frequency_days: days }).select().single());
     }
   };
 
@@ -1023,12 +1033,17 @@
     },
     async settings() {
       await init();
-      const setting = check(await client.from('flux_backup_settings').select('automatic, updated_at').maybeSingle());
-      return setting || { automatic: false, updated_at: null };
+      const setting = check(await client.from('flux_backup_settings').select('automatic, frequency_days, updated_at').maybeSingle());
+      return setting || { automatic: false, frequency_days: 7, updated_at: null };
     },
     async setAutomatic(automatic) {
       await init();
       return check(await client.from('flux_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+    async setFrequency(frequencyDays) {
+      await init();
+      const days = normalizeBackupFrequencyDays(frequencyDays);
+      return check(await client.from('flux_backup_settings').upsert({ setting_key: 'global', frequency_days: days }).select().single());
     }
   };
 
@@ -1181,12 +1196,17 @@
     },
     async settings() {
       await init();
-      const setting = check(await client.from('inventory_backup_settings').select('automatic, updated_at').maybeSingle());
-      return setting || { automatic: false, updated_at: null };
+      const setting = check(await client.from('inventory_backup_settings').select('automatic, frequency_days, updated_at').maybeSingle());
+      return setting || { automatic: false, frequency_days: 7, updated_at: null };
     },
     async setAutomatic(automatic) {
       await init();
       return check(await client.from('inventory_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+    async setFrequency(frequencyDays) {
+      await init();
+      const days = normalizeBackupFrequencyDays(frequencyDays);
+      return check(await client.from('inventory_backup_settings').upsert({ setting_key: 'global', frequency_days: days }).select().single());
     }
   };
 
@@ -1197,6 +1217,11 @@
     const amount = Number(normalized);
     if (!input || !Number.isFinite(amount) || amount < 0) fail(`Informe um ${label} válido.`);
     return Math.round(amount * 100) / 100;
+  };
+  const normalizeBackupFrequencyDays = value => {
+    const days = Number(value);
+    if (!Number.isInteger(days) || days < 1 || days > 90) fail('Informe uma frequência entre 1 e 90 dias.');
+    return days;
   };
   const nfeRow = row => ({
     id: row.id,
@@ -1428,6 +1453,12 @@
     async setBackupAutomatic(automatic) {
       await init();
       return check(await client.from('nfe_backup_settings').upsert({ setting_key: 'global', automatic: Boolean(automatic) }).select().single());
+    },
+
+    async setBackupFrequency(frequencyDays) {
+      await init();
+      const days = normalizeBackupFrequencyDays(frequencyDays);
+      return check(await client.from('nfe_backup_settings').upsert({ setting_key: 'global', frequency_days: days }).select().single());
     },
 
     async createAutomaticBackupIfDue(settings = {}, latest = null) {
