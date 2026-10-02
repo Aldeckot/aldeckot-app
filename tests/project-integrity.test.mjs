@@ -230,7 +230,7 @@ test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', 
   assert.match(computers, /management-service-sweep/);
   assert.match(computers, /mini-computer\.is-fixed-terminal/);
   assert.match(page, /management-computers\.css\?v=20260925-info-layer1/);
-  assert.match(page, /management\.js\?v=20260914-terminal-status2/);
+  assert.match(page, /management\.js\?v=20261002-shared-office-stock-transfer/);
   assert.match(computers, /font-size: 11px !important/);
   assert.match(computers, /width: 34px !important/);
   assert.match(computers, /management-area:has\(\.mini-computer:hover\)/);
@@ -418,4 +418,15 @@ test('a frequência dos backups automáticos é configurável por módulo', () =
   assert.match(inventory, /data-inv-backup-frequency/);
   assert.match(management, /data-management-backup-frequency/);
   assert.match(nfe, /data-nfe-backup-frequency/);
+});
+
+test('Flux mostra o número de série apenas nos detalhes da movimentação', () => {
+  const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
+  const list = inventory.split('function fluxTableMarkup(table, visible) {')[1]?.split('function tableMarkup(table, visible) {')[0];
+
+  assert.ok(list);
+  assert.doesNotMatch(list, /<th>Nº SÉRIE<\/th>/);
+  assert.doesNotMatch(list, /<td>\$\{escape\(item\.serial\)\}<\/td>/);
+  assert.match(list, /colspan="12"/);
+  assert.match(inventory, /\['serial', 'Nº de série'\]/);
 });

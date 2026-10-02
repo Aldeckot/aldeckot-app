@@ -49,6 +49,10 @@ A migração `053_nfe_pin_pad_reason_sync.sql` amplia o registro automático do 
 
 A migração `054_module_backup_frequencies.sql` permite definir de forma independente, de **1 a 90 dias**, a frequência dos backups automáticos de Inventário, Gestão TI, Controle TI e Flux. O Fiscal NF-e já possui a mesma configuração. Uma alteração em um módulo não modifica os demais. Execute-a após a `053` antes de alterar as frequências nas telas de backup.
 
+A migração `055_management_res_03_terminal.sql` acrescenta o terminal fixo **RES 03** ao setor **Frente de Loja** da Gestão TI, sem substituir ou alterar os terminais e computadores existentes. Ela não cria uma duplicata se o terminal já estiver cadastrado. Execute-a após a `054`.
+
+A migração `056_management_shared_office_stock_transfers.sql` acrescenta **RES GERAL 01** e **RES GERAL 02** ao **Escritório**, e **RES GERAL 03** ao **Estoque**. Ela libera transferências de computadores entre esses dois setores, mantendo as transferências da **Frente de Loja** restritas ao próprio setor. Os terminais existentes e os dados técnicos dos computadores permanecem preservados. Execute-a após a `055`.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

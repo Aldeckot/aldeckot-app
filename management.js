@@ -87,6 +87,10 @@
   const display = value => String(value || '').trim() || 'Não informado';
   const hasFixedTerminal = item => Boolean(String(item?.terminal || '').trim());
   const isProtectedTerminal = item => Boolean(item?.isFixed);
+  const sharedTransferAreas = new Set(['Escritório', 'Estoque']);
+  const canTransferBetweenAreas = (sourceArea, destinationArea) =>
+    areas.includes(sourceArea) && areas.includes(destinationArea) &&
+    (sourceArea === destinationArea || (sharedTransferAreas.has(sourceArea) && sharedTransferAreas.has(destinationArea)));
   const terminalName = item => String(item?.terminal || item?.equipment || 'Terminal não informado').trim();
   const computerName = item => String(item?.equipment || '').trim() || 'Sem computador atribuído';
   const count = (items, key, value) => items.filter(item => item[key] === value).length;
@@ -250,19 +254,20 @@
   }
 
   function transferModal(item) {
+    const transferScope = sharedTransferAreas.has(item.area) ? 'Escritório e Estoque' : item.area;
     const targets = payload.items
-      .filter(candidate => candidate.id !== item.id && hasFixedTerminal(candidate) && candidate.area === item.area)
-      .sort((first, second) => terminalName(first).localeCompare(terminalName(second), 'pt-BR'));
+      .filter(candidate => candidate.id !== item.id && hasFixedTerminal(candidate) && canTransferBetweenAreas(item.area, candidate.area))
+      .sort((first, second) => first.area.localeCompare(second.area, 'pt-BR') || terminalName(first).localeCompare(terminalName(second), 'pt-BR'));
     const search = normalize(state.transferQuery);
     const destinationCards = targets.length
       ? targets.map(candidate => {
         const selected = state.transferDestinationId === candidate.id;
-        const terms = [terminalName(candidate), computerName(candidate), candidate.tag].map(normalize).join(' ');
-        return `<button class="management-transfer-destination${selected ? ' selected' : ''}" type="button" data-management-action="select-transfer-destination" data-management-destination-id="${escape(candidate.id)}" data-management-transfer-search="${escape(terms)}" aria-pressed="${selected}" ${search && !terms.includes(search) ? 'hidden' : ''}><span class="management-transfer-destination-head"><b>${escape(terminalName(candidate))}</b><i style="--destination-status:${statusColors[candidate.status] || statusColors.Ativo}"></i></span><span>${escape(computerName(candidate))}</span><small>${candidate.tag ? `TAG ${escape(candidate.tag)}` : 'Sem TAG'}</small></button>`;
-      }).join('') + `<p class="management-transfer-empty" data-management-transfer-empty ${targets.some(candidate => [terminalName(candidate), computerName(candidate), candidate.tag].map(normalize).join(' ').includes(search)) ? 'hidden' : ''}>Nenhum terminal deste setor corresponde à pesquisa.</p>`
-      : '<p class="management-transfer-empty">Nenhum terminal deste setor corresponde à pesquisa.</p>';
+        const terms = [terminalName(candidate), computerName(candidate), candidate.tag, candidate.area].map(normalize).join(' ');
+        return `<button class="management-transfer-destination${selected ? ' selected' : ''}" type="button" data-management-action="select-transfer-destination" data-management-destination-id="${escape(candidate.id)}" data-management-transfer-search="${escape(terms)}" aria-pressed="${selected}" ${search && !terms.includes(search) ? 'hidden' : ''}><span class="management-transfer-destination-head"><b>${escape(terminalName(candidate))}</b><i style="--destination-status:${statusColors[candidate.status] || statusColors.Ativo}"></i></span><span>${escape(computerName(candidate))}</span><small>${escape(candidate.area)} · ${candidate.tag ? `TAG ${escape(candidate.tag)}` : 'Sem TAG'}</small></button>`;
+      }).join('') + `<p class="management-transfer-empty" data-management-transfer-empty ${targets.some(candidate => [terminalName(candidate), computerName(candidate), candidate.tag, candidate.area].map(normalize).join(' ').includes(search)) ? 'hidden' : ''}>Nenhum terminal permitido corresponde à pesquisa.</p>`
+      : '<p class="management-transfer-empty">Nenhum terminal permitido corresponde à pesquisa.</p>';
     const selected = targets.find(candidate => candidate.id === state.transferDestinationId);
-    return `<section class="management-modal-dialog management-transfer-dialog" role="dialog" aria-modal="true" aria-labelledby="managementTransferTitle"><header class="management-modal-head"><div><h2 id="managementTransferTitle">Transferir computador — ${escape(terminalName(item))}</h2><p class="management-last-sync">Destinos disponíveis somente no setor ${escape(item.area)}.</p></div><button class="management-modal-action" type="button" data-management-action="details" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-transfer-form" data-management-transfer-form><label class="management-transfer-search">${svg('search', 16)}<input data-management-transfer-query placeholder="Pesquisar computador ou terminal de destino..." value="${escape(state.transferQuery)}" autocomplete="off"></label><section class="management-transfer-origin"><span>Equipamento de origem</span><div><i style="--origin-status:${statusColors[item.status] || statusColors.Ativo}"></i><b>${escape(terminalName(item))}</b><small>${escape(computerName(item))}${item.tag ? ` · TAG ${escape(item.tag)}` : ''}</small></div></section><section class="management-transfer-picker"><div><h3>Selecionar destino</h3><p>${escape(item.area)} · ${targets.length} terminais disponíveis</p></div><div class="management-transfer-destination-grid">${destinationCards}</div></section><input type="hidden" name="destinationId" value="${escape(selected?.id || '')}"><p class="management-transfer-note">${selected ? `Destino selecionado: ${terminalName(selected)}.` : 'Selecione um terminal de destino para continuar.'} Se o destino estiver ocupado, os computadores serão trocados sem perda de dados.</p><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="details">Cancelar</button><button class="management-form-save" type="submit" ${selected ? '' : 'disabled'}>${svg('transfer', 14)} Transferir</button></footer></form></section>`;
+    return `<section class="management-modal-dialog management-transfer-dialog" role="dialog" aria-modal="true" aria-labelledby="managementTransferTitle"><header class="management-modal-head"><div><h2 id="managementTransferTitle">Transferir computador — ${escape(terminalName(item))}</h2><p class="management-last-sync">Destinos disponíveis em ${escape(transferScope)}.</p></div><button class="management-modal-action" type="button" data-management-action="details" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-transfer-form" data-management-transfer-form><label class="management-transfer-search">${svg('search', 16)}<input data-management-transfer-query placeholder="Pesquisar computador ou terminal de destino..." value="${escape(state.transferQuery)}" autocomplete="off"></label><section class="management-transfer-origin"><span>Equipamento de origem</span><div><i style="--origin-status:${statusColors[item.status] || statusColors.Ativo}"></i><b>${escape(terminalName(item))}</b><small>${escape(computerName(item))}${item.tag ? ` · TAG ${escape(item.tag)}` : ''}</small></div></section><section class="management-transfer-picker"><div><h3>Selecionar destino</h3><p>${escape(transferScope)} · ${targets.length} terminais disponíveis</p></div><div class="management-transfer-destination-grid">${destinationCards}</div></section><input type="hidden" name="destinationId" value="${escape(selected?.id || '')}"><p class="management-transfer-note">${selected ? `Destino selecionado: ${terminalName(selected)}.` : 'Selecione um terminal de destino para continuar.'} Se o destino estiver ocupado, os computadores serão trocados sem perda de dados.</p><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="details">Cancelar</button><button class="management-form-save" type="submit" ${selected ? '' : 'disabled'}>${svg('transfer', 14)} Transferir</button></footer></form></section>`;
   }
 
   const optionList = (values, selected) => values.map(value => `<option value="${escape(value)}" ${selected === value ? 'selected' : ''}>${escape(value)}</option>`).join('');
@@ -588,7 +593,7 @@
     const source = activeItem();
     const destinationId = String(new FormData(form).get('destinationId') || '');
     const destination = payload.items.find(item => item.id === destinationId);
-    if (!source || !hasFixedTerminal(source) || !destination || !hasFixedTerminal(destination) || destination.area !== source.area) {
+    if (!source || !hasFixedTerminal(source) || !destination || !hasFixedTerminal(destination) || !canTransferBetweenAreas(source.area, destination.area)) {
       notify('Selecione um terminal de destino válido.');
       return;
     }
@@ -608,7 +613,7 @@
       console.error('Falha ao transferir computador entre terminais:', error);
       submit.disabled = false;
       submit.textContent = 'Confirmar transferência';
-      notify(error?.message || 'Não foi possível concluir a transferência. Execute a migração 023 no Supabase.');
+      notify(error?.message || 'Não foi possível concluir a transferência. Verifique as migrações da Gestão TI no Supabase.');
     }
   }
 
