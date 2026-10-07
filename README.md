@@ -27,6 +27,8 @@ npm run check:migrations
 
 Os comandos validam o código, a estrutura essencial, os testes automatizados e a sequência de migrações. O GitHub Actions repete essas verificações para alterações destinadas à branch `main`.
 
+Toda alteração entregue deve incrementar a versão do sistema (normalmente o próximo número de correção). O número precisa coincidir em `package.json`, `package-lock.json`, `system-version.js` e na marca inicial da Home em `index.html`. Rode `npm run check:version` para verificar também a chave de cache e o incremento em relação à versão anterior; `npm run verify` já inclui essa conferência.
+
 ## Publicação e operação
 
 - A publicação é configurada pela Vercel em [`vercel.json`](vercel.json).

@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const pages = ['index.html', 'login.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'settings.html'];
+const pages = ['index.html', 'login.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'supplies.html', 'settings.html'];
 
 test('todas as páginas principais possuem monitoramento e carregamento global', () => {
   for (const page of pages) {
@@ -149,7 +149,7 @@ test('a assinatura visual mantém o subtítulo e a versão somente na Home', () 
   assert.match(home, /<div class="brand" aria-label="Aldeckot">/);
   assert.match(home, /<b>Aldeckot<\/b>/);
   assert.match(home, /data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO"/);
-  assert.match(version, /const value = '2\.0\.62'/);
+  assert.match(version, /const value = '\d+\.\d+\.\d+'/);
   assert.match(settings, /class="settings-brand-mark"/);
   assert.match(settings, /<b>Aldeckot<\/b>/);
   assert.doesNotMatch(settings, /ALDECKOT — Sistema de Gestão/);

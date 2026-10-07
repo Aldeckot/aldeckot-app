@@ -4,6 +4,7 @@
 .operations-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .operations-heading>div{display:flex;align-items:center;gap:9px;min-width:0}
 .operations-heading>div>span{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border:1px solid #27cce9;border-radius:9px;background:#0a4160;color:#71efff;font-size:16px;box-shadow:inset 0 1px #ffffff18}
+.home-recent-icon svg,.operations-heading>div>span svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .operations-heading h2{margin:0;color:#f0f7ff;font-size:13px;letter-spacing:-.15px}
 .operations-heading p{margin:2px 0 0;color:#9db9d9;font-size:10px}
 .operations-refresh{flex:0 0 auto;padding:6px 9px;border:1px solid #286aa0;border-radius:8px;background:#0a2947;color:#b5e9ff;font-size:9px;font-weight:800;transition:border-color .18s ease,background .18s ease,transform .18s ease}
@@ -41,6 +42,7 @@
 .theme-switch:checked~main .operations-panel{border-color:#7fa8be88}
 .theme-switch:checked~main .operations-heading h2,.theme-switch:checked~main .operations-metric{color:#183957}
 .theme-switch:checked~main .operations-heading p,.theme-switch:checked~main .operations-metric small,.theme-switch:checked~main .operations-metric span{color:#547594}
+.theme-switch:checked~main .operations-heading>div>span{border-color:#6bb4d0;background:#dcf4fb;color:#167f9d}
 .theme-switch:checked~main .operations-metric{border-color:#9ec9e3;background:#f8fcffcf}
 .theme-switch:checked~main .operations-metric:hover,.theme-switch:checked~main .operations-metric:focus-visible{background:#fff;border-color:#55b6d3}
 .theme-switch:checked~main .operations-metric:disabled:hover{background:#f8fcffcf;border-color:#9ec9e3}

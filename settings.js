@@ -81,7 +81,7 @@
   function showGeneral() {
     selectTab('general');
     const profile = state.profile;
-    const version = window.AldeckotSystemVersion?.label || 'V2.0.62';
+    const version = window.AldeckotSystemVersion?.label || 'V2.0.69';
     const detail = (icon, label, value, description, target, status = '') => `<button class="settings-detail is-button" type="button" data-open-section="${target}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${escape(value)}</b><small>${description}</small>${status ? `<em class="detail-status">${status}</em>` : '<em aria-hidden="true">›</em>'}</button>`;
     content.innerHTML = `<div class="settings-layout">
       ${panel('Visão geral', 'Informações centrais da conta e do ambiente ALDECKOT.', `<div class="panel-body"><div class="settings-detail-grid">${detail('●', 'Conta conectada', profile.full_name, roleName(profile.role), 'security')}${detail('▣', 'Perfil de acesso', roleName(profile.role), state.isAdmin ? 'Acesso administrativo integral' : 'Permissões atribuídas à conta', 'security')}${detail('◉', 'Estado da conta', statusName(profile.status), 'Conta habilitada para o sistema', 'security', statusName(profile.status))}${detail('⌘', 'Dados compartilhados', 'Sincronização central ativa', 'Supabase e módulos conectados', 'integrations')}${detail('◇', 'Versão do sistema', version, 'Identificação atual da entrega do ALDECKOT', 'general', 'Atual')}</div></div>`, '', '▦')}
@@ -110,7 +110,7 @@
   async function showUsers(message = '', kind = '') {
     if (!state.isAdmin) return showGeneral();
     selectTab('users');
-    content.innerHTML = `<section class="settings-panel-card wide"><header class="panel-heading"><div><h2>Usuários e Permissões</h2><p>Carregando contas, permissões e histórico administrativo…</p></div></header></section>`;
+    content.innerHTML = `<section class="settings-panel-card wide"><header class="panel-heading"><div><h2>Usuários e Permissões</h2><p class="aldeckot-inline-loading" role="status">Carregando contas, permissões e histórico administrativo…</p></div></header></section>`;
     try { await refreshUsersData(); } catch (error) { content.innerHTML = `<section class="settings-panel-card wide"><header class="panel-heading"><div><h2>Usuários e Permissões</h2></div></header><div class="panel-body">${notice(error.message || 'Não foi possível carregar os usuários.', 'error')}</div></section>`; return; }
     const userRows = (usersData.users || []).map(user => `<tr><td><b>${escape(user.full_name)}</b><br><small>${escape(user.user_code)}</small></td><td><span class="role-tag ${escape(user.role)}">${roleName(user.role)}</span></td><td><span class="account-tag ${escape(user.status)}">${statusName(user.status)}</span></td><td>${date(user.created_at)}</td><td>${user.status === 'pending' ? `<button class="settings-action approve" data-user-approve="${user.id}">Aprovar</button> ` : ''}<button class="settings-action" data-user-edit="${user.id}">Editar</button></td></tr>`).join('') || '<tr><td colspan="5">Nenhuma conta cadastrada.</td></tr>';
     const auditRows = renderAuditRows((usersData.audit || []).slice(0, 8));

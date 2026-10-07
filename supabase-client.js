@@ -212,6 +212,10 @@
   }
 
   const inventory = {
+    async replaceEquipment(values) {
+      await init();
+      return check(await client.rpc('inventory_replace_equipment', values));
+    },
     async load() {
       await init();
       let response = await client

@@ -9,6 +9,7 @@
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => releaseHomeRender?.()));
   };
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const recentItemsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5a8.5 8.5 0 1 1 2.6 6.1"/><path d="M3.5 5.5v6h6"/><path d="M12 7.5v4.8l3.2 1.9"/></svg>';
   const statusClass = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '-');
   const navigateTo = target => {
     if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(target);
@@ -26,7 +27,8 @@
     management: { label: 'Gestão TI', page: 'management.html' },
     control: { label: 'Controle TI', page: 'control.html' },
     flux: { label: 'Flux', page: 'flux.html' },
-    nfe: { label: 'Fiscal NF-e', page: 'nfe.html' }
+    nfe: { label: 'Fiscal NF-e', page: 'nfe.html' },
+    supplies: { label: 'Suprimentos', page: 'supplies.html' }
   })[module] || { label: 'Módulo', page: '' };
   const activityTime = entry => entry.occurredAt || entry.updatedAt || entry.date || '';
   const itemKey = entry => `${entry.module || 'inventory'}:${entry.id || ''}`;
@@ -74,11 +76,11 @@
     const panel = document.querySelector('[data-home-recent-items]');
     if (!panel) return;
     if (!items.length) {
-      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p><div class="home-operations-slot" data-home-operations-slot></div>`;
+      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p><div class="home-operations-slot" data-home-operations-slot></div>`;
       window.dispatchEvent(new CustomEvent('aldeckot:home-recent-rendered'));
       return;
     }
-    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div><div class="home-operations-slot" data-home-operations-slot></div>`;
+    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div><div class="home-operations-slot" data-home-operations-slot></div>`;
     panel.querySelectorAll('[data-home-recent-target]').forEach(button => {
       button.addEventListener('click', () => openRecentItem(button.dataset.homeRecentTarget));
     });
@@ -161,6 +163,7 @@
     else if (module === 'control') navigateTo('control.html');
     else if (module === 'flux') navigateTo('flux.html');
     else if (module === 'nfe') navigateTo('nfe.html');
+    else if (module === 'supplies') navigateTo('supplies.html');
     else window.AldeckotMessage.show('A interface deste módulo será conectada às tabelas próprias do Supabase na próxima etapa.');
   };
 
@@ -169,14 +172,16 @@
     management: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M6.5 11.2h2l1.4-3.1 2.2 6 1.6-3h2.8"/></svg>',
     control: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4.2"/><path d="M14.9 9.1 21 3l-2 6.1 2 2-6.1 6.1"/></svg>',
     flux: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13M14 3l4 4-4 4M20 17H7M10 13l-4 4 4 4"/><rect x="2.5" y="4" width="3" height="6" rx="1"/><rect x="18.5" y="14" width="3" height="6" rx="1"/></svg>',
-    nfe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8.5 12h7M8.5 16h7"/><path d="M4 7v12a2 2 0 0 0 2 2h8"/></svg>'
+    nfe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8.5 12h7M8.5 16h7"/><path d="M4 7v12a2 2 0 0 0 2 2h8"/></svg>',
+    supplies: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7M12 11v10M4 12l8 4 8-4"/></svg>'
   };
   const moduleCards = [
     { id: 'inventory', title: 'Inventário', description: 'Controle de equipamentos, patrimônio e localização.', tags: ['Patrimônio', 'Localização', 'Status'] },
     { id: 'management', title: 'Gestão TI', description: 'Monitoramento de PCs ativos em tempo real.', tags: ['Monitoramento', 'Status', 'Desempenho'] },
     { id: 'control', title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.', tags: ['Manutenção', 'Chamados', 'Equipe'] },
     { id: 'flux', title: 'Flux', description: 'Envio e recebimento de equipamentos.', tags: ['Transferência', 'Recebimento', 'Histórico'] },
-    { id: 'nfe', title: 'Fiscal NF-e', description: 'Registro e consulta de notas fiscais e cupons.', tags: ['NF-e', 'Cupom fiscal', 'Auditoria'] }
+    { id: 'nfe', title: 'Fiscal NF-e', description: 'Registro e consulta de notas fiscais e cupons.', tags: ['NF-e', 'Cupom fiscal', 'Auditoria'] },
+    { id: 'supplies', title: 'Suprimentos', description: 'Estoque rastreável de materiais e componentes de TI.', tags: ['Estoque', 'Componentes', 'Manutenção'] }
   ];
   const renderModuleCards = navigation => {
     navigation.innerHTML = moduleCards.map(card => `
@@ -200,7 +205,7 @@
     recentPanel.className = 'home-recent-panel';
     recentPanel.dataset.homeRecentItems = 'true';
     recentPanel.setAttribute('aria-live', 'polite');
-    recentPanel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">◈</span><div><h2>Últimos itens atualizados</h2><p>Carregando atualizações…</p></div></div><div class="home-operations-slot" data-home-operations-slot></div>`;
+    recentPanel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p class="aldeckot-inline-loading" role="status">Carregando atualizações…</p></div></div><div class="home-operations-slot" data-home-operations-slot></div>`;
     homeReference.append(recentPanel);
     loadRecentItems();
   } else completeHomeRender();

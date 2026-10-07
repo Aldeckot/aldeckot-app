@@ -1,18 +1,63 @@
-/* Barras de rolagem compartilhadas em todo o ALDECKOT. */
-:root{scrollbar-width:thin;scrollbar-color:#7a50db #100b1c}
-html,body,*{scrollbar-width:thin;scrollbar-color:#7a50db #100b1c}
-html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{width:12px;height:12px}
-html::-webkit-scrollbar-track,body::-webkit-scrollbar-track,*::-webkit-scrollbar-track{background:#100b1c;border-radius:999px}
-html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb,*::-webkit-scrollbar-thumb{min-height:38px;border:3px solid #100b1c;border-radius:999px;background:linear-gradient(180deg,#956df2,#7042d1)}
-html::-webkit-scrollbar-thumb:hover,body::-webkit-scrollbar-thumb:hover,*::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#aa86ff,#8053e5)}
-html::-webkit-scrollbar-corner,body::-webkit-scrollbar-corner,*::-webkit-scrollbar-corner{background:#100b1c}
+/* Barras de rolagem discretas compartilhadas por todos os módulos. */
+:root {
+  --app-scroll-thumb: rgba(161, 187, 212, .38);
+  --app-scroll-thumb-hover: rgba(180, 208, 231, .58);
+  --app-scroll-glow: rgba(119, 158, 194, .2);
+}
 
-/* O tema claro mantém a mesma leitura, usando trilho e indicador mais claros. */
-html[data-theme="light"],body.theme-light,html[data-theme="light"] *,body.theme-light *{scrollbar-color:#90a8c8 #e9f1fa}
-html[data-theme="light"]::-webkit-scrollbar-track,body.theme-light::-webkit-scrollbar-track,html[data-theme="light"] *::-webkit-scrollbar-track,body.theme-light *::-webkit-scrollbar-track{background:#e9f1fa}
-html[data-theme="light"]::-webkit-scrollbar-thumb,body.theme-light::-webkit-scrollbar-thumb,html[data-theme="light"] *::-webkit-scrollbar-thumb,body.theme-light *::-webkit-scrollbar-thumb{border-color:#e9f1fa;background:linear-gradient(180deg,#a9bdd8,#7892b6)}
-html[data-theme="light"]::-webkit-scrollbar-thumb:hover,body.theme-light::-webkit-scrollbar-thumb:hover,html[data-theme="light"] *::-webkit-scrollbar-thumb:hover,body.theme-light *::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#b9cbe2,#879fc1)}
-html[data-theme="light"]::-webkit-scrollbar-corner,body.theme-light::-webkit-scrollbar-corner,html[data-theme="light"] *::-webkit-scrollbar-corner,body.theme-light *::-webkit-scrollbar-corner{background:#e9f1fa}
+html[data-theme="light"],
+body.theme-light {
+  --app-scroll-thumb: rgba(77, 108, 138, .38);
+  --app-scroll-thumb-hover: rgba(61, 96, 129, .58);
+  --app-scroll-glow: rgba(96, 135, 168, .17);
+}
+
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scroll-thumb) transparent;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  min-height: 34px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--app-scroll-thumb);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 8px var(--app-scroll-glow);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover { background: var(--app-scroll-thumb-hover); background-clip: padding-box; }
+
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* A Central da Home tinha uma cor própria definida depois deste arquivo. */
+.central-equipment-dialog::-webkit-scrollbar-thumb {
+  background: var(--app-scroll-thumb) !important;
+  background-clip: padding-box !important;
+  box-shadow: inset 0 0 8px var(--app-scroll-glow);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
 
 /* Nos módulos, a barra da página fica discreta sem ocultar as barras internas.
    Assim, tabelas largas continuam exibindo a navegação horizontal inferior. */
@@ -40,8 +85,8 @@ body.management-open::-webkit-scrollbar {
 .inventory-data-wrap::-webkit-scrollbar,
 .nfe-table-wrap::-webkit-scrollbar,
 .settings-user-table::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
   display: block;
 }
 

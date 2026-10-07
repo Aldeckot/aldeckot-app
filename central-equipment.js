@@ -140,7 +140,7 @@
     const value = norm(status);
     if (/manutencao|defeito|descart/.test(value)) return 'danger';
     if (/reserva|aguard|atencao|verific/.test(value)) return 'warning';
-    if (!value || /troca|substit/.test(value)) return 'neutral';
+    if (!value || /inativo|troca|substit/.test(value)) return 'neutral';
     return 'ok';
   }
 

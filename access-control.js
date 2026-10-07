@@ -9,7 +9,7 @@
   const managementDeletes = new Set(['confirm-delete', 'confirm-delete-log', 'delete', 'delete-log']);
   const managementBackups = new Set(['backup', 'confirm-backup-restore', 'create-backup', 'prepare-network-restore', 'restore-backup', 'toggle-backup-automatic', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore']);
   const nfeBackups = new Set(['create', 'restore', 'create-local', 'create-network', 'restore-local', 'restore-network', 'confirm-restore', 'toggle-auto']);
-  const moduleFromLocation = () => ({ 'inventory.html': 'inventory', 'management.html': 'management', 'control.html': 'control', 'flux.html': 'flux', 'nfe.html': 'nfe' })[window.location.pathname.split('/').pop().toLowerCase()] || '';
+  const moduleFromLocation = () => ({ 'inventory.html': 'inventory', 'management.html': 'management', 'control.html': 'control', 'flux.html': 'flux', 'nfe.html': 'nfe', 'supplies.html': 'supplies' })[window.location.pathname.split('/').pop().toLowerCase()] || '';
   const isStandard = () => document.body.classList.contains('is-standard');
   const isAgendaException = element => Boolean(element?.closest?.('.agenda-modal, .home-calendar, .agenda-today-panel, .agenda-upcoming-panel'));
 

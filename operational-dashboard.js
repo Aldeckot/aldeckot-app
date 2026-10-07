@@ -1,6 +1,7 @@
 (() => {
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const operationsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M7.5 16v1.5M12 12v5.5M16.5 8.5v9"/></svg>';
   const route = page => window.AldeckotRoute?.navigate ? window.AldeckotRoute.navigate(page) : (window.location.href = page);
   let homeData = window.AldeckotHomeData || null;
   let refreshTimer;
@@ -166,7 +167,7 @@
   const render = (metrics, isFallback = false, animate = false) => {
     const host = document.querySelector('[data-operational-dashboard]');
     if (!host) return;
-    host.innerHTML = `<header class="operations-heading"><div><span>▥</span><div><h2>Central de Operações</h2><p>${isFallback ? 'Indicadores carregados da visão atual.' : 'Indicadores consolidados em tempo real.'}</p></div></div><button class="operations-refresh" type="button" data-operations-refresh title="Atualizar indicadores">↻ Atualizar</button></header><div class="operations-metrics">${metric('inventory-active', 'Equipamentos ativos', metrics.inventoryActive, 'active', `de ${metrics.inventoryTotal || 0} no inventário`)}${metric('maintenance-open', 'Manutenções abertas', metrics.maintenanceOpen, 'warn', 'Controle TI e Gestão TI')}${metric('transfers-open', 'Transferências em curso', metrics.transfersOpen, 'info', 'Flux pendente ou em trânsito')}${metric('nfe-month', 'Ocorrências fiscais', metrics.nfeMonth, 'violet', 'registradas neste mês')}</div>`;
+    host.innerHTML = `<header class="operations-heading"><div><span>${operationsIcon}</span><div><h2>Central de Operações</h2><p>${isFallback ? 'Indicadores carregados da visão atual.' : 'Indicadores consolidados em tempo real.'}</p></div></div><button class="operations-refresh" type="button" data-operations-refresh title="Atualizar indicadores">↻ Atualizar</button></header><div class="operations-metrics">${metric('inventory-active', 'Equipamentos ativos', metrics.inventoryActive, 'active', `de ${metrics.inventoryTotal || 0} no inventário`)}${metric('maintenance-open', 'Manutenções abertas', metrics.maintenanceOpen, 'warn', 'Controle TI e Gestão TI')}${metric('transfers-open', 'Transferências em curso', metrics.transfersOpen, 'info', 'Flux pendente ou em trânsito')}${metric('nfe-month', 'Ocorrências fiscais', metrics.nfeMonth, 'violet', 'registradas neste mês')}</div>`;
     host.querySelectorAll('[data-operations-metric]').forEach(button => button.addEventListener('click', () => openMetric(button.dataset.operationsMetric)));
     host.querySelector('[data-operations-refresh]')?.addEventListener('click', () => load({ animate: true }));
     publishAlerts(metrics);
@@ -199,7 +200,7 @@
     panel.className = 'operations-panel';
     panel.dataset.operationalDashboard = 'true';
     panel.setAttribute('aria-live', 'polite');
-    panel.innerHTML = '<p class="operations-loading">Carregando indicadores operacionais…</p>';
+    panel.innerHTML = '<p class="operations-loading aldeckot-inline-loading" role="status">Carregando indicadores operacionais…</p>';
     slot.appendChild(panel);
     return true;
   };

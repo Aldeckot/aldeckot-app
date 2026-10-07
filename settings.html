@@ -12,24 +12,28 @@
   <link rel="stylesheet" href="settings-overrides.css">
   <link rel="stylesheet" href="settings-redesign.css">
   <link rel="stylesheet" href="official-logo.css?v=20260911-name-only1">
+  <link rel="stylesheet" href="mascot.css">
   <link rel="stylesheet" href="auth-ui.css">
   <link rel="stylesheet" href="page-transition.css">
   <link rel="stylesheet" href="light-theme-vivid.css">
   <link rel="stylesheet" href="mobile-optimization.css?v=20260909-1">
-  <link rel="stylesheet" href="loading-indicator.css">
+  <link rel="stylesheet" href="loading-indicator.css?v=2.0.64">
   <link rel="stylesheet" href="system-messages.css?v=20260909-1">
   <link rel="stylesheet" href="system-version.css?v=20260910-3">
   <link rel="stylesheet" href="typography-balance.css?v=20260914-1">
+  <link rel="stylesheet" href="settings-visual-refresh.css?v=2.0.65">
+  <link rel="stylesheet" href="wallpaper-standard.css?v=2.0.69">
 </head>
-<body class="settings-page">
+<body class="settings-page settings-sidebar-collapsed">
   <main class="settings-workspace">
     <aside class="settings-sidebar" aria-label="Navegação das configurações">
+      <button id="settingsSidebarToggle" class="settings-sidebar-toggle" type="button" aria-controls="settingsNavigation" aria-expanded="false" aria-label="Expandir menu de configurações" title="Expandir menu de configurações"><span aria-hidden="true">☰</span></button>
       <a class="settings-brand" href="index.html" aria-label="Voltar para a Home do Aldeckot">
         <span class="settings-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-logo.svg" alt=""></span>
         <b>Aldeckot</b>
       </a>
 
-      <nav class="settings-navigation" aria-label="Seções das configurações">
+      <nav id="settingsNavigation" class="settings-navigation" aria-label="Seções das configurações">
         <p class="nav-caption">Administração</p>
         <button class="settings-nav-item active" data-settings-tab="general" type="button"><span class="nav-symbol">☷</span>Geral</button>
         <button class="settings-nav-item" data-settings-tab="users" data-admin-only hidden type="button"><span class="nav-symbol">♧</span>Usuários e Permissões</button>
@@ -60,8 +64,9 @@
           <span class="title-icon" aria-hidden="true">⚙</span>
           <div><h1>Configurações do Sistema</h1><p>Central de Administração e Segurança</p></div>
         </div>
+        <img class="settings-mascot" src="assets/mascot-dark.png" alt="" aria-hidden="true">
         <div class="settings-topbar-actions">
-          <label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Buscar configurações…" autocomplete="off"><kbd>Ctrl + K</kbd></label>
+          <label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Buscar configurações…" autocomplete="off"></label>
           <span class="online-indicator"><i></i>Sistema online</span>
           <button id="settingsProfileButton" class="settings-profile-menu" type="button" title="Abrir credenciais da conta"><span class="admin-avatar" id="settingsAvatar">AD</span><span><b id="settingsProfileName">Conta conectada</b><small id="settingsProfileRole">Administrador</small></span><i>⌄</i></button>
         </div>
@@ -75,7 +80,7 @@
       </section>
 
       <div id="settingsContent" class="settings-content" aria-live="polite"></div>
-      <footer class="settings-footer">© 2026 ALDECKOT Sistema de Gestão <span>Central administrativa <i class="system-version">· Versão <b data-aldeckot-system-version>V2.0.62</b></i></span></footer>
+      <footer class="settings-footer">© 2026 ALDECKOT Sistema de Gestão <span>Central administrativa <i class="system-version">· Versão <b data-aldeckot-system-version>V2.0.69</b></i></span></footer>
     </section>
   </main>
   <input id="themeSwitch" class="theme-switch-native" type="checkbox" aria-label="Ativar tema claro">
@@ -86,12 +91,13 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="runtime-config.js"></script>
-  <script src="system-version.js?v=20260926-62"></script>
+  <script src="system-version.js?v=2.0.69"></script>
   <script src="supabase-client.js?v=20260912-silent-layout2"></script>
   <script src="auth-guard.js"></script>
   <script src="theme.js"></script>
   <script src="page-transition.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="settings.js?v=20260910-intelligent-alerts1"></script>
+  <script src="settings.js?v=2.0.65"></script>
+  <script src="settings-visual-refresh.js?v=2.0.65"></script>
 </body>
 </html>

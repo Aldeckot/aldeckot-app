@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aldeckot</title>
+  <link rel="icon" type="image/png" href="assets/aldeckot-favicon.png?v=20260910-1">
+  <script>document.documentElement.classList.add('auth-pending');</script>
+  <link rel="stylesheet" href="supplies.css?v=20261007-header-layout">
+  <link rel="stylesheet" href="loading-indicator.css?v=2.0.64">
+  <link rel="stylesheet" href="auth-ui.css">
+  <link rel="stylesheet" href="system-messages.css">
+  <link rel="stylesheet" href="module-notifications.css?v=20261007-translucent1">
+  <link rel="stylesheet" href="mascot.css">
+  <link rel="stylesheet" href="supplies-backup.css">
+  <link rel="stylesheet" href="scrollbars.css?v=20261007-translucent1">
+  <link rel="stylesheet" href="module-header-cards.css">
+  <link rel="stylesheet" href="official-logo.css">
+  <link rel="stylesheet" href="supplies-system.css?v=20261007-glass-motion3">
+  <link rel="stylesheet" href="wallpaper-standard.css?v=2.0.69">
+</head>
+<body class="supplies-open" data-module="supplies">
+  <main id="suppliesApp" class="supplies-app" aria-live="polite">
+    <div class="supplies-loading aldeckot-inline-loading" role="status">Conectando Suprimentos ao ALDECKOT…</div>
+  </main>
+  <div id="suppliesDialog" class="supplies-dialog-layer" hidden></div>
+  <div id="suppliesToast" class="supplies-toast" role="status" aria-live="polite"></div>
+  <script src="error-monitor.js"></script>
+  <script src="loading-indicator.js?v=20260912-silent-postit1"></script>
+  <script src="system-messages.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="runtime-config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="auth-guard.js"></script>
+  <script src="access-control.js"></script>
+  <script src="theme.js"></script>
+  <script src="supplies-inventory.js?v=20261006-integration061d"></script>
+  <script src="supplies-api.js?v=20261006-integration061c"></script>
+  <script src="supplies.js?v=2.0.64"></script>
+  <script src="supplies-backup.js?v=2.0.64"></script>
+  <script src="module-notifications.js"></script>
+</body>
+</html>

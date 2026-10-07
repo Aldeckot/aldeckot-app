@@ -1,0 +1,151 @@
+/* Sistema visual compartilhado: o mesmo wallpaper, escala e movimento em todas as telas. */
+:root {
+  --aldeckot-wallpaper-duration: 28s;
+  --aldeckot-wallpaper-start-position: 50% 50%;
+  --aldeckot-wallpaper-end-position: 50.6% 49.6%;
+  --aldeckot-wallpaper-start-transform: scale(1) translate3d(0, 0, 0);
+  --aldeckot-wallpaper-end-transform: scale(1.025) translate3d(-.55%, -.35%, 0);
+}
+
+/* Todas as animações legadas apontam para a mesma especificação física. */
+@keyframes aldeckot-wallpaper-drift {
+  0%, 100% { background-position: var(--aldeckot-wallpaper-start-position); }
+  50% { background-position: var(--aldeckot-wallpaper-end-position); }
+}
+@keyframes aldeckot-wallpaper-motion {
+  0%, 100% {
+    background-position: var(--aldeckot-wallpaper-start-position);
+    transform: var(--aldeckot-wallpaper-start-transform);
+  }
+  50% {
+    background-position: var(--aldeckot-wallpaper-end-position);
+    transform: var(--aldeckot-wallpaper-end-transform);
+  }
+}
+@keyframes inventory-wallpaper-motion {
+  0%, 100% {
+    background-position: var(--aldeckot-wallpaper-start-position);
+    transform: var(--aldeckot-wallpaper-start-transform);
+  }
+  50% {
+    background-position: var(--aldeckot-wallpaper-end-position);
+    transform: var(--aldeckot-wallpaper-end-transform);
+  }
+}
+@keyframes management-wallpaper {
+  0%, 100% {
+    background-position: var(--aldeckot-wallpaper-start-position);
+    transform: var(--aldeckot-wallpaper-start-transform);
+  }
+  50% {
+    background-position: var(--aldeckot-wallpaper-end-position);
+    transform: var(--aldeckot-wallpaper-end-transform);
+  }
+}
+@keyframes sp-wallpaper {
+  0%, 100% {
+    background-position: var(--aldeckot-wallpaper-start-position);
+    transform: var(--aldeckot-wallpaper-start-transform);
+  }
+  50% {
+    background-position: var(--aldeckot-wallpaper-end-position);
+    transform: var(--aldeckot-wallpaper-end-transform);
+  }
+}
+@keyframes nfe-wallpaper {
+  0%, 100% {
+    background-position: var(--aldeckot-wallpaper-start-position);
+    transform: var(--aldeckot-wallpaper-start-transform);
+  }
+  50% {
+    background-position: var(--aldeckot-wallpaper-end-position);
+    transform: var(--aldeckot-wallpaper-end-transform);
+  }
+}
+
+/* A mesma área de respiro evita bordas durante o zoom em qualquer viewport. */
+body.home-page .app::before,
+body.inventory-open::before,
+body.management-open::before,
+body.supplies-open::before {
+  inset: -2% !important;
+  background-position: var(--aldeckot-wallpaper-start-position);
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  transform-origin: center center;
+  will-change: transform, background-position;
+}
+
+/* NF-e reutiliza a camada do módulo-base e só precisa liberar o plano por baixo. */
+body.nfe-open {
+  position: relative;
+  isolation: isolate;
+  background: #06101d !important;
+}
+body.theme-light.nfe-open { background: #e5eff5 !important; }
+body.nfe-open .nfe-app { position: relative; z-index: 1; }
+
+/* Configurações acompanha o mesmo wallpaper sem cobrir as áreas de conteúdo. */
+body.settings-page {
+  position: relative;
+  isolation: isolate;
+  background: #020b19 !important;
+}
+body.settings-page::before {
+  content: '';
+  position: fixed;
+  inset: -2%;
+  z-index: -2;
+  pointer-events: none;
+  background: url('assets/background-dark.png') center / cover no-repeat;
+  animation: nfe-wallpaper var(--aldeckot-wallpaper-duration) ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform, background-position;
+}
+body.settings-page .settings-sidebar {
+  background: linear-gradient(165deg, #041626d8, #041120d6) !important;
+}
+body.settings-page .settings-main {
+  background: linear-gradient(155deg, #06172ba8, #041121a8 72%, #020b19bb) !important;
+}
+body.settings-page.theme-light { background: #dceef2 !important; }
+body.settings-page.theme-light::before { background-image: url('assets/background-light-v2.png'); }
+body.settings-page.theme-light .settings-sidebar {
+  background: linear-gradient(165deg, #f3fcffdc, #e4f3f8d8) !important;
+}
+body.settings-page.theme-light .settings-main {
+  background: linear-gradient(155deg, #f4fbffad, #e7f3faaf) !important;
+}
+
+/* Login usa a mesma imagem e a mesma velocidade, mantendo o desfoque do painel. */
+.login-wallpaper {
+  background: #06101c !important;
+}
+.login-wallpaper::before {
+  content: '';
+  position: absolute;
+  inset: -2%;
+  z-index: 0;
+  background: url('assets/background-dark.png') center / cover no-repeat;
+  animation: nfe-wallpaper var(--aldeckot-wallpaper-duration) ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform, background-position;
+}
+.login-wallpaper::after {
+  z-index: 1;
+  background: linear-gradient(115deg, #020a15dc, #071a2bda);
+}
+.login-dashboard-preview { z-index: 2; }
+.theme-light .login-wallpaper { background: #e6f1f4 !important; }
+.theme-light .login-wallpaper::before { background-image: url('assets/background-light-v2.png'); }
+
+@media (prefers-reduced-motion: reduce) {
+  body.home-page .app,
+  body.home-page .app::before,
+  body.inventory-open::before,
+  body.management-open::before,
+  body.supplies-open::before,
+  body.nfe-open::before,
+  body.settings-page::before,
+  .login-wallpaper::before { animation: none !important; }
+}

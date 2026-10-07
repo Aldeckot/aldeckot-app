@@ -35,6 +35,7 @@
     tags: ['Patrimônio', 'Localização', 'Status'], art: 'inventory'
   };
   const statuses = moduleConfig.statuses;
+  let inventoryIntegrationReady = false;
   const situations = moduleConfig.situations;
   const cleanings = moduleConfig.cleanings || [];
   const priorities = ['Alta', 'Média', 'Estável'];
@@ -85,7 +86,7 @@
     }
     if (source.includes('manut')) return 'Manutenção';
     if (source.includes('reserva')) return 'Reserva';
-    if (source.includes('troca') || source.includes('substitu')) return 'Troca';
+    if (source.includes('troca') || source.includes('inativ') || source.includes('substitu')) return inventoryIntegrationReady ? 'Inativo' : 'Troca';
     if (source.includes('defeito') || source.includes('queb')) return 'Defeito';
     if (source.includes('atenc')) return 'Atenção';
     return 'Ativo';
@@ -300,7 +301,7 @@
       shipping: { Motoboy: 'purple', Caminhão: 'orange', 'Transporte Interno': 'turquoise', Outro: 'gray' }
     }[kind]?.[value] || 'blue');
     return ({
-      status: { Ativo: 'green', 'Manutenção': 'red', Reserva: 'yellow', Troca: 'gray', Defeito: 'orange', 'Atenção': 'purple' },
+      status: { Ativo: 'green', 'Manutenção': 'red', Reserva: 'yellow', Troca: 'purple', Inativo: 'gray', Defeito: 'orange', 'Atenção': 'purple' },
       situation: { Normal: 'turquoise', 'Atenção': 'yellow', 'Substituído': 'blue', Verificando: 'purple' }
     }[kind]?.[value] || 'blue');
   };
@@ -573,6 +574,15 @@
     node.dataset.itemId = entry?.id || '';
   }
 
+  function replaceEquipmentForm(item) {
+    if (controlMode || fluxMode || !inventoryIntegrationReady || item?.status !== 'Ativo') return;
+    const candidates = activeTable()?.items.filter(row => row.id !== item.id && row.status === 'Reserva') || [];
+    if (!candidates.length) { window.AldeckotMessage.show('Não há equipamento em Reserva nesta tabela.'); return; }
+    const label = row => escape(row.tag || row.serial || row.equipment);
+    const node = modal(`<div class="inv-dialog-head"><h2>Substituir ${label(item)}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">O equipamento retirado e o substituto permanecerão no Inventário, com históricos vinculados. A troca será feita em uma única operação.</p><form data-inv-replace-form><div class="inv-fields equipment-fields"><label><span>Substituto em Reserva *</span><select name="installed" required><option value="" selected disabled>Selecione o substituto</option>${candidates.map(row => `<option value="${escape(row.id)}">${label(row)} · ${escape(row.brand)} ${escape(row.model)}</option>`).join('')}</select></label><label><span>Status da unidade retirada *</span><select name="removed_status" required><option value="" selected disabled>Selecione o status</option>${['Manutenção','Defeito','Inativo'].map(status => `<option>${status}</option>`).join('')}</select></label><label><span>Destino da unidade retirada *</span><input name="removed_location" required maxlength="160"></label><label class="inv-full"><span>Motivo da substituição *</span><textarea name="reason" required maxlength="500"></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button class="inv-primary" type="submit">Confirmar substituição</button></div></form>`, 'equipment-dialog');
+    node.dataset.itemId = item.id;
+  }
+
   function fluxItemForm(entry) {
     if (!activeTable()) { tableForm(); return; }
     const value = entry || {};
@@ -597,7 +607,7 @@
   }
 
   function itemActionMenu(item) {
-    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button><button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
+    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button>${!controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo' && activeTable()?.items.some(row => row.id !== item.id && row.status === 'Reserva') ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : ''}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
   }
 
   function details(item) {
@@ -904,6 +914,11 @@
   async function openInventorySafely() {
     try {
       if (!initialized) renderConnectionState(`Conectando ao ${moduleConfig.name}`, 'Preparando seus dados com segurança…');
+      if (!controlMode && !fluxMode) {
+        const result = await (await backend().init()).client.from('equipment_sync_events').select('id').limit(1);
+        inventoryIntegrationReady = !result.error && Array.isArray(result.data);
+        statuses[3] = inventoryIntegrationReady ? 'Inativo' : 'Troca';
+      }
       await reloadInventory();
       renderInventory();
     }
@@ -1040,6 +1055,13 @@
     const row = event.target.closest('[data-inv-item]'); if (row) { state.itemActionMenu = false; details(activeTable().items.find(item => item.id === row.dataset.invItem)); return; }
     if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
     const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
+    const replaceItem = event.target.closest('[data-inv-replace-item]');
+    if (replaceItem) {
+      if (!canManage()) return;
+      const item = activeTable()?.items.find(entry => entry.id === replaceItem.dataset.invReplaceItem);
+      if (item) replaceEquipmentForm(item);
+      return;
+    }
     const deleteItem = event.target.closest('[data-inv-delete-item]');
     if (deleteItem && canManage()) {
       const confirmed = await window.AldeckotMessage.confirm('Excluir este equipamento?', { title: 'Excluir equipamento', confirmText: 'Excluir' });
@@ -1061,7 +1083,7 @@
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('submit', event => {
-    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form]')) { event.preventDefault(); return; }
+    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form]')) { event.preventDefault(); return; }
     if (event.target.matches('[data-inv-table-form]')) {
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.target)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.tableId;
@@ -1069,6 +1091,21 @@
       request.then(async table => { state.active = table.id; state.sidebarOpen = false; await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
     if (event.target.matches('[data-inv-item-form]')) { event.preventDefault(); saveItem(event.target); }
+    if (event.target.matches('[data-inv-replace-form]')) {
+      event.preventDefault();
+      const form = event.target;
+      const itemId = form.closest('.inv-modal')?.dataset.itemId;
+      const values = new FormData(form);
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      moduleApi().replaceEquipment({ p_removed_item_id: itemId, p_installed_item_id: values.get('installed'),
+        p_removed_status: values.get('removed_status'), p_removed_location: values.get('removed_location'),
+        p_reason: values.get('reason') }).then(async () => {
+        await reloadInventory(); closeModal(); renderInventory();
+        window.AldeckotMessage.show('Substituição registrada nos dois equipamentos.');
+      }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { if (submit.isConnected) submit.disabled = false; });
+    }
     if (event.target.matches('[data-inv-log-form]')) {
       event.preventDefault();
       const modalNode = document.querySelector('.inv-modal'); const itemId = modalNode.dataset.itemId; const logId = modalNode.dataset.logId; const message = String(new FormData(event.target).get('message') || '').trim();

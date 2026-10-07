@@ -18,20 +18,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: #63bde0 #112b43;
   padding-right: 4px;
 }
 
-.module-notification-list::-webkit-scrollbar { width: 8px; }
-.module-notification-list::-webkit-scrollbar-track { border-radius: 8px; background: #112b43; }
-.module-notification-list::-webkit-scrollbar-thumb { border: 2px solid #112b43; border-radius: 8px; background: #63bde0; }
-.module-notification-list::-webkit-scrollbar-thumb:hover { background: #8ce5f7; }
 .module-notification-list:focus-visible { outline: 2px solid #63d9ef; outline-offset: -2px; }
-
-.theme-light .module-notification-list { scrollbar-color: #5495b6 #dcecf5; }
-.theme-light .module-notification-list::-webkit-scrollbar-track { background: #dcecf5; }
-.theme-light .module-notification-list::-webkit-scrollbar-thumb { border-color: #dcecf5; background: #5495b6; }
 
 @media (max-width: 760px) {
   .module-notification-panel { max-height: calc(100dvh - 94px); }

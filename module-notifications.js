@@ -2,7 +2,7 @@
   const key = document.body.classList.contains('nfe-open') ? 'nfe'
     : document.body.classList.contains('management-open') ? 'management'
       : (document.body.dataset.module || 'inventory');
-  const labels = { inventory: 'Inventário', management: 'Gestão TI', control: 'Controle TI', flux: 'Flux', nfe: 'Fiscal NF-e' };
+  const labels = { inventory: 'Inventário', management: 'Gestão TI', control: 'Controle TI', flux: 'Flux', nfe: 'Fiscal NF-e', supplies: 'Suprimentos' };
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const dateValue = value => {
@@ -41,7 +41,7 @@
 
   function moduleHeader() {
     if (key === 'nfe') return document.querySelector('.nfe-header');
-    return document.querySelector(key === 'management' ? '.management-header' : '.inventory-header');
+    return document.querySelector(key === 'management' ? '.management-header' : key === 'supplies' ? '.sp-header' : '.inventory-header');
   }
 
   function ensureMascotDock() {
@@ -55,7 +55,7 @@
     dock.dataset.moduleMascotDock = 'true';
     dock.setAttribute('aria-label', 'Mascote ALDECKOT');
     dock.innerHTML = '<img class="module-mascot-image" src="assets/mascot-dark.png" alt="" aria-hidden="true">';
-    const heading = header.querySelector(key === 'management' ? '.management-heading' : '.inventory-heading');
+    const heading = header.querySelector(key === 'management' ? '.management-heading' : key === 'supplies' ? '.sp-heading' : '.inventory-heading');
     if (heading) heading.insertAdjacentElement('afterend', dock);
     else header.prepend(dock);
     return dock;
@@ -122,7 +122,9 @@
     } else {
       list.innerHTML = notifications.map((notification, index) => {
         const item = notification.item;
-        const identifiers = key === 'nfe'
+        const identifiers = key === 'supplies'
+          ? (item.code || `Disponível ${item.available_stock} · mínimo ${item.minimum_stock}`)
+          : key === 'nfe'
           ? `PDV ${item.pdv || 'não informado'} · ${notification.occurrences || '4+'} ocorrências na semana`
           : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas');
         const action = notification.action || 'Analisar item';
@@ -235,6 +237,33 @@
     const api = window.AldeckotSupabase;
     if (!api) return [];
     await api.init?.();
+    if (key === 'supplies') {
+      let supplies; let maintenance;
+      try {
+        [supplies, maintenance] = await Promise.all([
+          window.AldeckotSupplies?.list?.() || [],
+          window.AldeckotSupplies?.maintenanceAlerts?.() || []
+        ]);
+      } catch (loadError) {
+        if (/supply_stock_summary|supply_units|PGRST205|42P01/i.test(loadError?.message || '')) return [];
+        throw loadError;
+      }
+      const stockAlerts = supplies.filter(item => !item.inactive && item.stock_status !== 'Normal').map(item => ({
+        item: { id: item.id, supplyId: item.id, module: key, equipment: item.name, status: item.stock_status,
+          available_stock: item.available_stock, minimum_stock: item.minimum_stock, updatedAt: item.updated_at },
+        rule: 'supplies-stock', level: item.available_stock === 0 ? 'Alta' : 'Média',
+        weight: item.available_stock === 0 ? 500 : 300, urgent: item.available_stock === 0,
+        action: 'Verificar reposição ou movimentação',
+        description: `${item.name}: ${item.available_stock} disponível(is), mínimo ${item.minimum_stock}.`
+      }));
+      const maintenanceAlerts = maintenance.map(unit => ({
+        item: { id: unit.id, unitId: unit.id, supplyId: unit.supply_id, module: key,
+          equipment: unit.supplies?.name || unit.code, code: unit.code, status: 'Manutenção', updatedAt: unit.updated_at },
+        rule: 'supplies-maintenance', level: 'Média', weight: 250, urgent: false,
+        action: 'Acompanhar ordem no Controle TI', description: `${unit.code} está em manutenção.`
+      }));
+      return [...stockAlerts, ...maintenanceAlerts].sort((first, second) => second.weight - first.weight);
+    }
     if (key === 'nfe') {
       const alerts = await api.nfe?.recurringPdvAlerts?.() || [];
       return alerts.map(alert => ({
@@ -270,7 +299,8 @@
     if (!notification) return;
     closePanel();
     const item = notification.item;
-    if (key === 'nfe') window.AldeckotNfeOpenDetails?.(item.id);
+    if (key === 'supplies') window.AldeckotSuppliesOpenDetails?.(item.supplyId, item.unitId);
+    else if (key === 'nfe') window.AldeckotNfeOpenDetails?.(item.id);
     else if (key === 'management') window.AldeckotManagementOpenDetails?.(item.id);
     else window.AldeckotInventoryOpenDetails?.({ id: item.id, tableId: item.tableId });
   }
@@ -284,7 +314,9 @@
   document.addEventListener('click', event => { if (event.target.closest('[data-module-notification-clear]')) clear(); });
   new MutationObserver(() => window.requestAnimationFrame(ensureToggle)).observe(document.body, { childList: true, subtree: true });
   window.addEventListener('aldeckot:realtime-change', event => {
-    const relevant = key === 'nfe'
+    const relevant = key === 'supplies'
+      ? ['supplies', 'supply_units', 'supply_variants', 'supply_maintenance_links', 'notification_acknowledgements']
+      : key === 'nfe'
       ? ['nfe_occurrences', 'nfe_investigation_resolutions', 'notification_acknowledgements']
       : key === 'management'
         ? ['module_records', 'notification_acknowledgements']
