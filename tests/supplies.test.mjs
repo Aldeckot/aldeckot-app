@@ -140,6 +140,8 @@ test('backup de Suprimentos tem histórico e frequência isolados, sem restaura�
   assert.match(backupSql, /app\.is_admin\(\)/);
   assert.match(api, /backup,\s*$/m);
   assert.match(backupUi, /state\.settings\.frequency_days \* 86400000/);
-  assert.match(backupUi, /A restauração automática ainda não é oferecida/);
+  assert.match(backupUi, /A restauração ainda não é oferecida/);
+  assert.match(backupUi, /data-sp-backup="create"/);
+  assert.match(backupUi, /type="button" disabled aria-describedby="spBackupRestoreNotice"/);
   assert.match(read('supplies.html'), /supplies-backup\.js/);
 });

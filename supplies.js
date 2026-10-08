@@ -152,7 +152,7 @@
     <div class="sp-header-actions" role="toolbar" aria-label="Ações de Suprimentos">
       <button class="sp-header-action sp-export-action" type="button" data-sp-action="export" title="Exportar em PDF" aria-label="Exportar em PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h4M8.5 14.5h1.2a1.2 1.2 0 0 0 0-2.4H8.5v4.8M12 16.9v-4.8h1.1a2.4 2.4 0 1 1 0 4.8H12ZM16.3 16.9v-4.8h2.5M16.3 14.5h2"/></svg></button>
       <button class="sp-header-action sp-backup-action" type="button" data-sp-action="backup" title="Sistema de backup" aria-label="Sistema de backup"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/></svg></button>
-      <a class="system-header-brand" href="index.html" aria-label="Voltar para a Home do Aldeckot"><span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-logo.svg" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span></a>
+      <a class="system-header-brand" href="index.html" aria-label="Voltar para a Home do Aldeckot"><span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span></a>
     </div>
   </header>`;
   const render = () => {
@@ -433,12 +433,13 @@
       notify(variant.inactive ? 'Variação reativada com sucesso.' : 'Variação inativada com sucesso.');
     });
   const exportPdf = () => {
+    const printBrand = new URL('assets/aldeckot-symbol.png?v=2.0.71', location.href).href;
     const rows = filtered().map(row => `<tr><td>${safe(row.name)}</td><td>${safe(row.category)}</td><td>${safe(inventoryField(row, 'brand', 'Várias marcas'))}</td><td>${safe(inventoryField(row, 'model', 'Vários modelos'))}</td><td>${quantityAvailable(row)}</td><td>${Number(row.minimum_stock || 0)}</td><td>${safe(row.stock_status)}</td></tr>`).join('')
       || '<tr><td colspan="7">Nenhum suprimento corresponde aos filtros atuais.</td></tr>';
     const popup = window.open('', '_blank', 'width=1100,height=760');
     if (!popup) { notify('Permita a abertura da janela de impressão para exportar o resumo.', true); return; }
     popup.onload = () => { popup.focus(); popup.print(); };
-    popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Suprimentos — ALDECKOT</title><style>body{font-family:Arial,sans-serif;color:#152c43;padding:28px}h1{margin:0;color:#087998}p{color:#58718a}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border-bottom:1px solid #c8d8e5;text-align:left;font-size:12px}th{background:#e9f6fb;color:#17617c}@media print{body{padding:10px}thead{display:table-header-group}}</style></head><body><h1>Suprimentos — ALDECKOT</h1><p>Resumo de estoque · ${new Date().toLocaleString('pt-BR')}</p><table><thead><tr><th>Item</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Estoque</th><th>Mínimo</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Suprimentos — ALDECKOT</title><style>body{font-family:Arial,sans-serif;color:#152c43;padding:28px}h1{margin:0;color:#087998}p{color:#58718a}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border-bottom:1px solid #c8d8e5;text-align:left;font-size:12px}th{background:#e9f6fb;color:#17617c}@media print{body{padding:10px}thead{display:table-header-group}}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><img class="print-brand" src="${printBrand}" alt=""><h1>Suprimentos — ALDECKOT</h1><p>Resumo de estoque · ${new Date().toLocaleString('pt-BR')}</p><table><thead><tr><th>Item</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Estoque</th><th>Mínimo</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
     popup.document.close();
   };
   app.addEventListener('click', async event => {

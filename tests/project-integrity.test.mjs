@@ -19,7 +19,7 @@ test('todas as páginas principais usam o ícone oficial na aba do navegador', (
   assert.equal(existsSync(resolve(root, 'assets/aldeckot-favicon.png')), true);
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /rel="icon" type="image\/png" href="assets\/aldeckot-favicon\.png\?v=20260910-1"/);
+    assert.match(source, /rel="icon" type="image\/png" href="assets\/aldeckot-favicon\.png\?v=2\.0\.71"/);
   }
 });
 
@@ -256,7 +256,7 @@ test('Fiscal NF-e registra os valores total e pendente com validação financeir
   assert.match(migration, /add column if not exists total_value numeric\(14, 2\)/);
   assert.match(migration, /pending_value <= total_value/);
   assert.match(migration, /create or replace function app\.audit_nfe_occurrence\(\)/);
-  assert.match(page, /nfe\.js\?v=20260926-nfe-layout2/);
+  assert.match(page, /nfe\.js\?v=2\.0\.71/);
   assert.match(page, /nfe-metric-icons\.css\?v=20260926-metric-icon2/);
   assert.match(page, /nfe-header-layout\.css\?v=20260926-nfe-layout4/);
   assert.match(metricStyles, /\.nfe-metric-main\s*\{\s*align-items: center;/);

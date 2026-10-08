@@ -22,6 +22,7 @@
   const ensureHomeBackend = () => window.AldeckotHomeStage?.ready?.()
     || (typeof backend()?.init === 'function' ? backend().init() : Promise.resolve());
   const localeMonth = date => date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, char => char.toUpperCase());
+  const calendarIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>';
   const priorityInfo = {
     urgent: { label: 'Urgente', icon: '🚨' },
     periodic: { label: 'Periódico', icon: '📅' },
@@ -68,7 +69,7 @@
     const selectedLabel = new Date(`${selectedDate}T12:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
     widget.innerHTML = `
       <div class="agenda-head">
-        <div class="home-cal-title"><i>▣</i>${localeMonth(view)}</div>
+        <div class="home-cal-title"><span class="home-cal-title-icon" aria-hidden="true">${calendarIcon}</span>${localeMonth(view)}</div>
         <button type="button" class="postit-archive-trigger" data-postit-archive-trigger hidden aria-label="Abrir notas finalizadas"></button>
         <div class="agenda-nav"><button data-agenda-nav="prev" title="Mês anterior">‹</button><button data-agenda-nav="next" title="Próximo mês">›</button></div>
       </div>

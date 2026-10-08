@@ -793,10 +793,11 @@
 
   function exportSummary() {
     const items = filteredItems();
+    const printBrand = new URL('assets/aldeckot-symbol.png?v=2.0.71', location.href).href;
     const rows = items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.tag || '—')}</td><td>${escape(item.ip || '—')}</td><td>${escape(item.area)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td></tr>`).join('') || '<tr><td colspan="6">Nenhum equipamento para exportar.</td></tr>';
     const popup = window.open('', '_blank', 'width=1100,height=760');
     if (!popup) { notify('Permita a abertura da janela de impressão para exportar o resumo.'); return; }
-    popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gestão TI — ALDECKOT</title><style>body{font-family:Arial,sans-serif;color:#152c43;padding:28px}h1{margin:0;color:#087998}p{color:#58718a}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border-bottom:1px solid #c8d8e5;text-align:left;font-size:12px}th{background:#e9f6fb;color:#17617c}</style></head><body><h1>Gestão TI — ALDECKOT</h1><p>Resumo de monitoramento · ${new Date().toLocaleString('pt-BR')}</p><table><thead><tr><th>Equipamento</th><th>TAG</th><th>IP</th><th>Área</th><th>Situação</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
+    popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gestão TI — ALDECKOT</title><style>body{font-family:Arial,sans-serif;color:#152c43;padding:28px}h1{margin:0;color:#087998}p{color:#58718a}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border-bottom:1px solid #c8d8e5;text-align:left;font-size:12px}th{background:#e9f6fb;color:#17617c}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><img class="print-brand" src="${printBrand}" alt=""><h1>Gestão TI — ALDECKOT</h1><p>Resumo de monitoramento · ${new Date().toLocaleString('pt-BR')}</p><table><thead><tr><th>Equipamento</th><th>TAG</th><th>IP</th><th>Área</th><th>Situação</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>{window.focus();window.print();};</script></body></html>`);
     popup.document.close();
   }
 

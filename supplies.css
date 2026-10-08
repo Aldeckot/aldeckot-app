@@ -16,7 +16,7 @@
 .sp-brand{gap:7px;font-size:20px;letter-spacing:0;white-space:nowrap}
 .sp-brand img{width:30px;height:30px;object-fit:contain}
 .sp-brand img{display:none}
-.sp-brand::before{content:"";width:30px;height:30px;flex:none;background:url("assets/aldeckot-favicon.png") center/contain no-repeat}
+.sp-brand::before{content:"";width:30px;height:30px;flex:none;background:url("assets/aldeckot-favicon.png?v=2.0.71") center/contain no-repeat}
 .sp-heading{order:3;margin-left:4px;min-width:255px;z-index:1}
 .sp-heading h1{font-size:16px;line-height:1.15;margin-bottom:3px}
 .sp-heading p{font-size:10px;color:#a0b6cd}

@@ -1,4 +1,6 @@
 const { ensureConfig, requestSupabase, send } = require('../server/supabase-admin');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 
 const pad = value => String(value).padStart(2, '0');
 const isoDate = value => `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
@@ -6,24 +8,40 @@ const monthLabel = period => new Intl.DateTimeFormat('pt-BR', { month: 'long', y
 const plain = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\\()]/g, char => `\\${char}`).replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
 const pdfLines = (title, lines) => {
   const pages = [];
-  const all = [title, '', ...lines];
+  const all = [...lines];
   while (all.length) pages.push(all.splice(0, 42));
   const objects = new Map();
-  const pageIds = pages.map((_, index) => 4 + index * 2);
+  const pageIds = pages.map((_, index) => 5 + index * 2);
+  const logo = readFileSync(join(__dirname, '..', 'assets', 'aldeckot-symbol-pdf.jpg'));
   objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
   objects.set(2, `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   objects.set(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  objects.set(4, Buffer.concat([
+    Buffer.from(`<< /Type /XObject /Subtype /Image /Width 300 /Height 200 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.length} >>\nstream\n`, 'ascii'),
+    logo,
+    Buffer.from('\nendstream', 'ascii')
+  ]));
   pages.forEach((page, index) => {
     const pageId = pageIds[index]; const contentId = pageId + 1;
-    const body = ['BT', '/F1 10 Tf', '52 796 Td', ...page.map((line, lineIndex) => `${lineIndex ? '0 -17 Td' : ''} (${plain(line).slice(0, 125)}) Tj`).filter(Boolean), 'ET'].join('\n');
-    objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
+    const body = [
+      'q 0.03 0.10 0.17 rg 0 804 595 38 re f Q',
+      'q 48 0 0 32 52 807 cm /Logo Do Q',
+      `BT /F1 10 Tf 1 1 1 rg 110 821 Td (${plain(title).slice(0, 100)}) Tj ET`,
+      'BT /F1 10 Tf 0 0 0 rg 52 786 Td',
+      ...page.map((line, lineIndex) => `${lineIndex ? '0 -17 Td' : ''} (${plain(line).slice(0, 125)}) Tj`).filter(Boolean),
+      'ET'
+    ].join('\n');
+    objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Logo 4 0 R >> >> /Contents ${contentId} 0 R >>`);
     objects.set(contentId, `<< /Length ${Buffer.byteLength(body, 'utf8')} >>\nstream\n${body}\nendstream`);
   });
-  const count = Math.max(...objects.keys()); let output = '%PDF-1.4\n'; const offsets = [0];
-  for (let id = 1; id <= count; id += 1) { offsets[id] = Buffer.byteLength(output, 'utf8'); output += `${id} 0 obj\n${objects.get(id)}\nendobj\n`; }
-  const xref = Buffer.byteLength(output, 'utf8'); output += `xref\n0 ${count + 1}\n0000000000 65535 f \n`;
-  for (let id = 1; id <= count; id += 1) output += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
-  return Buffer.from(`${output}trailer\n<< /Size ${count + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`, 'utf8');
+  const count = Math.max(...objects.keys()); const chunks = []; const offsets = [0]; let length = 0;
+  const append = value => { const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8'); chunks.push(buffer); length += buffer.length; };
+  append('%PDF-1.4\n');
+  for (let id = 1; id <= count; id += 1) { offsets[id] = length; append(`${id} 0 obj\n`); append(objects.get(id)); append('\nendobj\n'); }
+  const xref = length; append(`xref\n0 ${count + 1}\n0000000000 65535 f \n`);
+  for (let id = 1; id <= count; id += 1) append(`${String(offsets[id]).padStart(10, '0')} 00000 n \n`);
+  append(`trailer\n<< /Size ${count + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return Buffer.concat(chunks);
 };
 const storagePath = path => path.split('/').map(encodeURIComponent).join('/');
 const textForEvent = event => {

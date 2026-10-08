@@ -655,8 +655,11 @@
     const rows = await exportRows(); if (!rows) return;
     const JsPdf = window.jspdf?.jsPDF;
     if (!JsPdf) return toast('O gerador de PDF não foi carregado. Tente novamente.', true);
+    let brandImage;
+    try { brandImage = await window.AldeckotBrand.pdfDataUrl(); }
+    catch { return toast('Não foi possível carregar o símbolo do Aldeckot para o PDF.', true); }
     const pdf = new JsPdf({ unit: 'pt', format: 'a4' });
-    pdf.setFillColor(7, 25, 43); pdf.rect(0, 0, 595, 88, 'F'); pdf.setTextColor(235, 248, 255); pdf.setFontSize(19); pdf.text('ALDECKOT · Fiscal NF-e', 40, 44); pdf.setFontSize(10); pdf.setTextColor(148, 191, 214); pdf.text(`Relatório gerado em ${dateTime(new Date())} · ${rows.length} ocorrência(s)`, 40, 65);
+    pdf.setFillColor(7, 25, 43); pdf.rect(0, 0, 595, 88, 'F'); pdf.addImage(brandImage, 'JPEG', 40, 16, 72, 48); pdf.setTextColor(235, 248, 255); pdf.setFontSize(19); pdf.text('ALDECKOT · Fiscal NF-e', 122, 44); pdf.setFontSize(10); pdf.setTextColor(148, 191, 214); pdf.text(`Relatório gerado em ${dateTime(new Date())} · ${rows.length} ocorrência(s)`, 122, 65);
     let y = 112; pdf.setTextColor(32, 54, 76); pdf.setFontSize(9);
     rows.forEach((row, index) => { if (y > 750) { pdf.addPage(); y = 48; } pdf.setFont('helvetica', 'bold'); pdf.text(`${row.nfeNumber} · ${row.pdv}`, 40, y); pdf.setFont('helvetica', 'normal'); pdf.text(`${dateTime(row.occurredAt)}  |  ${row.operator}  |  ${row.fiscal}`, 40, y + 14); pdf.text(`${row.reason} — Total: ${currency(row.totalValue)} | Pendente: ${currency(row.pendingValue)}`, 40, y + 28); pdf.text(String(row.notes || 'Sem observação').slice(0, 94), 40, y + 41); pdf.setDrawColor(205, 220, 232); pdf.line(40, y + 50, 555, y + 50); y += 64; });
     pdf.save(`aldeckot-fiscal-nfe-${new Date().toISOString().slice(0, 10)}.pdf`);

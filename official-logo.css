@@ -1,10 +1,10 @@
 /* Identidade visual oficial Aldeckot. */
-.official-logo-image{display:block;width:100%;height:auto}
+.official-logo-image{display:block;width:100%;height:100%;object-fit:contain}
 
 /* A marca usa só o símbolo e o nome, sem subtítulo ou versão. */
 .home-page .brand{display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:7px;row-gap:2px;padding:0 11px!important}
 .home-brand-mark,.settings-brand-mark{display:block;flex:0 0 46px;width:46px;height:44px;overflow:hidden}
-.home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:136px;max-width:none;filter:drop-shadow(0 4px 9px #0006)}
+.home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:100%;max-width:100%;filter:drop-shadow(0 4px 9px #0006)}
 .home-page .home-brand-mark{grid-row:1 / span 2;align-self:center}
 .home-page .brand b{grid-column:2;letter-spacing:.015em!important;text-transform:none}
 .home-page .home-brand-subtitle{display:block;grid-column:2;color:#a29daf;font-size:9px;letter-spacing:.2px;line-height:1.1;white-space:nowrap}
@@ -42,8 +42,8 @@
 }
 
 .system-header-brand-mark .official-logo-image {
-  width: 164px;
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
   filter: drop-shadow(0 4px 9px #0006);
 }
 
@@ -76,10 +76,10 @@
 @media(max-width:760px){
   .home-page .brand{grid-template-columns:42px minmax(0,1fr);column-gap:6px}
   .home-brand-mark,.settings-brand-mark{flex-basis:42px;width:42px;height:40px}
-  .home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:124px}
+  .home-brand-mark .official-logo-image,.settings-brand-mark .official-logo-image{width:100%}
   .system-header-brand { gap: 6px; padding-left: 3px; }
   .system-header-brand-mark { flex-basis:43px; width:43px; height:42px; }
-  .system-header-brand-mark .official-logo-image { width:128px; }
+  .system-header-brand-mark .official-logo-image { width:100%; }
   .system-header-brand-copy { display:block; }
   .system-header-brand-copy b { font-size:14px; }
 }

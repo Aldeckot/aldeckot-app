@@ -285,11 +285,14 @@
     return text || fallback || 'Não informado';
   }
 
-  function exportPdf() {
+  async function exportPdf() {
     const data = modalState?.data;
     const JsPdf = window.jspdf?.jsPDF;
     if (!data) return;
     if (!JsPdf) return window.AldeckotMessage.show('O gerador de PDF não foi carregado. Verifique sua conexão e tente novamente.');
+    let brandImage;
+    try { brandImage = await window.AldeckotBrand.pdfDataUrl(); }
+    catch { return window.AldeckotMessage.show('Não foi possível carregar o símbolo do Aldeckot para o PDF.'); }
     const doc = new JsPdf({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
     const width = doc.internal.pageSize.getWidth();
     const height = doc.internal.pageSize.getHeight();
@@ -298,8 +301,9 @@
     let y = margin;
     const header = () => {
       doc.setFillColor(9, 27, 50); doc.rect(0, 0, width, 22, 'F');
-      doc.setTextColor(82, 220, 245); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('ALDECKOT', margin, 9);
-      doc.setTextColor(242, 248, 255); doc.setFontSize(10); doc.text('Central do Equipamento', margin, 15);
+      doc.addImage(brandImage, 'JPEG', margin, 3, 18, 12);
+      doc.setTextColor(82, 220, 245); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('ALDECKOT', margin + 21, 9);
+      doc.setTextColor(242, 248, 255); doc.setFontSize(10); doc.text('Central do Equipamento', margin + 21, 15);
       doc.setTextColor(176, 202, 226); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
       doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), width - margin, 15, { align: 'right' }); y = 31;
     };

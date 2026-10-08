@@ -15,3 +15,14 @@ test('os painéis da Home usam ícones vetoriais próprios em todos os estados',
   assert.doesNotMatch(operations, /<span>▥<\/span>/);
   assert.match(read('operational-dashboard.css'), /\.home-recent-icon svg,\.operations-heading>div>span svg/);
 });
+
+test('a busca e o calendário da Home usam ícones vetoriais consistentes', () => {
+  const agenda = read('agenda.js');
+  const iconStyles = read('home-icon-refresh.css');
+  const index = read('index.html');
+  assert.match(agenda, /calendarIcon = '<svg[^']+aria-hidden="true"/);
+  assert.match(agenda, /home-cal-title-icon/);
+  assert.match(iconStyles, /\.home-cal-title > i::before/);
+  assert.match(iconStyles, /\.home-search \.search-icon::before/);
+  assert.match(index, /home-icon-refresh\.css\?v=2\.0\.71/);
+});

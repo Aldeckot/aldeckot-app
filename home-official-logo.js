@@ -4,7 +4,7 @@
 
   brand.setAttribute('aria-label', 'Aldeckot');
   brand.innerHTML = '<span class="home-brand-mark" aria-hidden="true">'
-    + '<img class="official-logo-image" src="assets/aldeckot-logo.svg" alt="">'
+    + '<img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt="">'
     + '</span><b>Aldeckot</b>'
     + '<span class="home-brand-subtitle" data-aldeckot-brand-subtitle="SISTEMA DE GESTÃO">SISTEMA DE GESTÃO</span>';
 })();

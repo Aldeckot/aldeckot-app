@@ -81,7 +81,7 @@
   function showGeneral() {
     selectTab('general');
     const profile = state.profile;
-    const version = window.AldeckotSystemVersion?.label || 'V2.0.69';
+    const version = window.AldeckotSystemVersion?.label || 'V2.0.71';
     const detail = (icon, label, value, description, target, status = '') => `<button class="settings-detail is-button" type="button" data-open-section="${target}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${escape(value)}</b><small>${description}</small>${status ? `<em class="detail-status">${status}</em>` : '<em aria-hidden="true">›</em>'}</button>`;
     content.innerHTML = `<div class="settings-layout">
       ${panel('Visão geral', 'Informações centrais da conta e do ambiente ALDECKOT.', `<div class="panel-body"><div class="settings-detail-grid">${detail('●', 'Conta conectada', profile.full_name, roleName(profile.role), 'security')}${detail('▣', 'Perfil de acesso', roleName(profile.role), state.isAdmin ? 'Acesso administrativo integral' : 'Permissões atribuídas à conta', 'security')}${detail('◉', 'Estado da conta', statusName(profile.status), 'Conta habilitada para o sistema', 'security', statusName(profile.status))}${detail('⌘', 'Dados compartilhados', 'Sincronização central ativa', 'Supabase e módulos conectados', 'integrations')}${detail('◇', 'Versão do sistema', version, 'Identificação atual da entrega do ALDECKOT', 'general', 'Atual')}</div></div>`, '', '▦')}
@@ -212,7 +212,7 @@
   const auditIsFinal = data => data.cutoff === auditLastDay(data.periodStart) && saoPauloDate() > data.cutoff;
   const auditFileName = data => `auditoria-${auditPeriod(data.periodStart)}-${data.cutoff}.pdf`;
 
-  function createNativeAuditPdf(data) {
+  function createNativeAuditPdf(data, brandImage) {
     const pageWidth = 595; const pageHeight = 842; const margin = 42; const bottom = 54;
     const pages = []; let current; let y; const summary = auditSummary(data);
     const escapePdf = value => pdfText(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -236,9 +236,10 @@
     const startPage = () => {
       current = []; pages.push(current); y = 47;
       fill(0.02, 0.10, 0.19); rect(0, 0, pageWidth, 35);
-      text('ALDECKOT', margin, 13, 10, true, [0.28, 0.88, 1]);
-      text(pages.length === 1 ? 'Relatorio mensal de auditoria' : 'Relatorio mensal de auditoria - continuacao', margin, 25, 15, true, [0.96, 0.99, 1]);
-      text(`${auditMonthLabel(data.periodStart)} - apurado ate ${auditDate(data.cutoff)}`, margin, 31, 7.8, false, [0.70, 0.84, 0.94]);
+      command(`q 28 0 0 19 ${margin} ${pageHeight - 27} cm /Logo Do Q`);
+      text('ALDECKOT', margin + 34, 13, 10, true, [0.28, 0.88, 1]);
+      text(pages.length === 1 ? 'Relatorio mensal de auditoria' : 'Relatorio mensal de auditoria - continuacao', margin + 34, 25, 15, true, [0.96, 0.99, 1]);
+      text(`${auditMonthLabel(data.periodStart)} - apurado ate ${auditDate(data.cutoff)}`, margin + 34, 31, 7.8, false, [0.70, 0.84, 0.94]);
     };
     const need = amount => { if (y + amount > pageHeight - bottom) { footer(); startPage(); } };
     const heading = (title, subtitle = '') => {
@@ -277,26 +278,37 @@
 
     const objects = [
       '<< /Type /Catalog /Pages 2 0 R >>',
-      `<< /Type /Pages /Kids [${pages.map((_, index) => `${5 + index * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+      `<< /Type /Pages /Kids [${pages.map((_, index) => `${6 + index * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`,
       '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>'
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+      null
     ];
     pages.forEach((commands, index) => {
-      const pageId = 5 + index * 2; const contentId = pageId + 1; const stream = commands.join('\n');
-      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);
+      const pageId = 6 + index * 2; const contentId = pageId + 1; const stream = commands.join('\n');
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents ${contentId} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     });
-    let output = '%PDF-1.4\n'; const offsets = [0];
-    objects.forEach((object, index) => { offsets.push(output.length); output += `${index + 1} 0 obj\n${object}\nendobj\n`; });
-    const xref = output.length; output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-    offsets.slice(1).forEach(offset => { output += `${String(offset).padStart(10, '0')} 00000 n \n`; });
-    output += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    return new Blob([new TextEncoder().encode(output)], { type: 'application/pdf' });
+    const jpeg = Uint8Array.from(atob(brandImage.split(',')[1]), character => character.charCodeAt(0));
+    objects[4] = { header: `<< /Type /XObject /Subtype /Image /Width 300 /Height 200 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`, bytes: jpeg };
+    const encoder = new TextEncoder(); const chunks = []; const offsets = [0]; let length = 0;
+    const append = value => { const bytes = typeof value === 'string' ? encoder.encode(value) : value; chunks.push(bytes); length += bytes.length; };
+    append('%PDF-1.4\n');
+    objects.forEach((object, index) => {
+      offsets.push(length); append(`${index + 1} 0 obj\n`);
+      if (typeof object === 'string') append(object);
+      else { append(object.header); append(object.bytes); append('\nendstream'); }
+      append('\nendobj\n');
+    });
+    const xref = length; append(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
+    offsets.slice(1).forEach(offset => append(`${String(offset).padStart(10, '0')} 00000 n \n`));
+    append(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(chunks, { type: 'application/pdf' });
   }
 
-  function createAuditPdf(data) {
+  async function createAuditPdf(data) {
+    const brandImage = await window.AldeckotBrand.pdfDataUrl();
     const JsPdf = window.jspdf?.jsPDF;
-    if (!JsPdf) return createNativeAuditPdf(data);
+    if (!JsPdf) return createNativeAuditPdf(data, brandImage);
     const doc = new JsPdf({ unit: 'mm', format: 'a4' });
     const width = doc.internal.pageSize.getWidth(); const height = doc.internal.pageSize.getHeight();
     const margin = 15; const usable = width - margin * 2; let y = 16; let page = 1;
@@ -323,11 +335,11 @@
       y += lines.length * 4.4 + 5;
     };
 
-    doc.setFillColor(4, 25, 47); doc.rect(0, 0, width, 36, 'F');
-    doc.setTextColor(70, 224, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('ALDECKOT', margin, 13);
-    doc.setTextColor(244, 250, 255); doc.setFontSize(19); doc.text('Relatório mensal de auditoria', margin, 23);
+    doc.setFillColor(4, 25, 47); doc.rect(0, 0, width, 36, 'F'); doc.addImage(brandImage, 'JPEG', margin, 5, 25, 17);
+    doc.setTextColor(70, 224, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('ALDECKOT', margin + 29, 13);
+    doc.setTextColor(244, 250, 255); doc.setFontSize(19); doc.text('Relatório mensal de auditoria', margin + 29, 23);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(174, 208, 234);
-    doc.text(`${auditMonthLabel(data.periodStart)} · apurado até ${auditDate(data.cutoff)}`, margin, 30);
+    doc.text(`${auditMonthLabel(data.periodStart)} · apurado até ${auditDate(data.cutoff)}`, margin + 29, 30);
     y = 45;
     heading('Resumo executivo', 'Consolidação das atividades concluídas e das atualizações que alimentam os módulos.');
     const cards = [
@@ -411,7 +423,7 @@
 
   async function makeAuditPdf({ download = false, save = false }) {
     if (!auditState.data) return;
-    const blob = createAuditPdf(auditState.data);
+    const blob = await createAuditPdf(auditState.data);
     if (download) downloadAuditBlob(blob, auditState.data);
     if (!save) return { saved: false, finalized: auditIsFinal(auditState.data) };
     const finalized = auditIsFinal(auditState.data);
@@ -448,12 +460,12 @@
       } finally { button.disabled = false; }
     };
     modal.querySelector('[data-audit-save-system]').addEventListener('click', event => save(event.currentTarget, async () => {
-      const blob = createAuditPdf(auditState.data); const finalized = auditIsFinal(auditState.data);
+      const blob = await createAuditPdf(auditState.data); const finalized = auditIsFinal(auditState.data);
       await persistAuditPdf(auditState.data, blob, finalized); closeModal();
       await showAudit(`O relatório ${finalized ? 'finalizado' : 'parcial'} foi salvo na pasta do ALDECKOT.`, 'success');
     }));
     modal.querySelector('[data-audit-save-computer]').addEventListener('click', event => save(event.currentTarget, async () => {
-      const blob = createAuditPdf(auditState.data); const usedPicker = await saveAuditPdfToComputer(blob, auditState.data); closeModal();
+      const blob = await createAuditPdf(auditState.data); const usedPicker = await saveAuditPdfToComputer(blob, auditState.data); closeModal();
       await showAudit(usedPicker ? 'O relatório foi salvo no local escolhido no computador.' : 'O relatório foi preparado para download. Escolha o local nas opções do navegador.', 'success');
     }));
   }
@@ -482,9 +494,9 @@
     };
     content.querySelector('[data-audit-generate]')?.addEventListener('click', event => runAction(event, { download: true, save: true }, 'O PDF foi gerado e baixado.'));
     content.querySelector('[data-audit-save]')?.addEventListener('click', openAuditSaveDialog);
-    content.querySelector('[data-audit-preview]')?.addEventListener('click', event => {
+    content.querySelector('[data-audit-preview]')?.addEventListener('click', async event => {
       const button = event.currentTarget; if (!auditState.data) return; button.disabled = true;
-      try { openAuditPreview({ blob: createAuditPdf(auditState.data), data: auditState.data, title: 'Visualização do relatório' }); }
+      try { openAuditPreview({ blob: await createAuditPdf(auditState.data), data: auditState.data, title: 'Visualização do relatório' }); }
       catch (error) { window.AldeckotMessage.show(error.message || 'Não foi possível abrir a visualização do relatório.'); }
       finally { button.disabled = false; }
     });

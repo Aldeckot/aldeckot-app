@@ -2,7 +2,7 @@
   const headers = '.inventory-header, .management-header, .nfe-header';
   const brandMarkup = `
     <span class="system-header-brand-mark" aria-hidden="true">
-      <img class="official-logo-image" src="assets/aldeckot-logo.svg" alt="">
+      <img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt="">
     </span>
     <span class="system-header-brand-copy">
       <b>Aldeckot</b>
