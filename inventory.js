@@ -58,6 +58,13 @@
   const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const moduleApi = () => backend()?.[moduleConfig.key];
   const backupApi = () => backend()?.[moduleConfig.backupKey];
+  const pageSizes = [10, 25, 50, 100];
+  const pageSizeKey = `aldeckot:${moduleConfig.key}:page-size`;
+  const savedPageSize = (() => {
+    try { return Number(window.localStorage.getItem(pageSizeKey)); } catch { return 0; }
+  })();
+  state.page = 1;
+  state.pageSize = pageSizes.includes(savedPageSize) ? savedPageSize : 25;
   const moduleHeaderSummaryMarkup = () => `<div class="inventory-heading module-header-summary module-header-summary-${moduleHeader.art}"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">${moduleHeader.title}</h1><p class="module-header-summary-description">${moduleHeader.description}</p><div class="module-header-summary-tags">${moduleHeader.tags.map(tag => `<span>${tag}</span>`).join('')}</div></div><span class="module-header-summary-art ${moduleHeader.art}" aria-hidden="true"></span></div>`;
   const backendMessage = error => {
     const message = error?.message || 'Não foi possível comunicar com o Supabase.';
@@ -341,12 +348,23 @@
   function applyInventoryFilters() {
     const table = activeTable();
     if (!table) return;
-    const matchedIds = new Set((table.items || []).filter(matchesActiveFilters).map(item => item.id));
+    const matched = (table.items || []).filter(matchesActiveFilters);
+    const lastPage = Math.max(1, Math.ceil(matched.length / state.pageSize));
+    state.page = Math.max(1, Math.min(state.page, lastPage));
+    const shown = matched.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+    const matchedIds = new Set(shown.map(item => item.id));
     document.querySelectorAll('.inventory-data tbody tr[data-inv-item]').forEach(row => {
       row.hidden = !matchedIds.has(row.dataset.invItem);
     });
     const emptyRow = document.querySelector('.inventory-filter-empty-row');
-    if (emptyRow) emptyRow.hidden = !(table.items?.length && !matchedIds.size);
+    if (emptyRow) emptyRow.hidden = !(table.items?.length && !matched.length);
+    let footer = document.querySelector('.inventory-pagination');
+    if (!footer) {
+      footer = document.createElement('footer');
+      footer.className = 'inventory-panel inventory-pagination';
+      document.querySelector('.inventory-workspace')?.appendChild(footer);
+    }
+    footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, matched.length)} de ${matched.length} itens</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
   }
 
   function ensureFilterEmptyRow(table) {
@@ -367,7 +385,7 @@
     if (!data.tables.length) return '<p class="inventory-no-tables">Nenhuma tabela criada.</p>';
     return data.tables.map(entry => {
       const icon = entry.icon && entry.icon !== '📁' ? ` ${escape(entry.icon)}` : '';
-      return `<div class="inventory-table-choice ${entry.id === state.active ? 'active' : ''}"><button class="inventory-table-select" data-inv-table="${entry.id}" aria-label="Abrir tabela ${escape(entry.name)}, ${entry.items.length} itens"><b>${escape(entry.name)}${icon}</b></button></div>`;
+      return `<div class="inventory-table-choice ${entry.id === state.active ? 'active' : ''}"><button class="inventory-table-select" data-inv-table="${entry.id}" aria-label="Abrir tabela ${escape(entry.name)}, ${entry.items.length} ${entry.items.length === 1 ? 'item' : 'itens'}"><b>${escape(entry.name)}${icon}</b></button></div>`;
     }).join('');
   }
 
@@ -961,6 +979,12 @@
   document.addEventListener('click', async event => {
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
+    const pageButton = event.target.closest('[data-inv-page]');
+    if (pageButton && !pageButton.disabled) {
+      state.page = Number(pageButton.dataset.invPage);
+      applyInventoryFilters();
+      return;
+    }
     if (!event.target.closest('.inventory-table-action-menu-wrap') && state.tableActionMenu) {
       state.tableActionMenu = false; renderInventory(); return;
     }
@@ -975,7 +999,7 @@
       }
       renderInventory(); return;
     }
-    const chosen = event.target.closest('[data-inv-table]'); if (chosen && !event.target.closest('[data-inv-edit-table],[data-inv-delete-table],[data-inv-table-menu]')) { state.active = chosen.dataset.invTable; state.query = ''; state.status = ''; state.situation = ''; state.sidebarOpen = false; state.tableMenu = null; state.tableMenuPosition = null; state.tableActionMenu = false; renderInventory(); return; }
+    const chosen = event.target.closest('[data-inv-table]'); if (chosen && !event.target.closest('[data-inv-edit-table],[data-inv-delete-table],[data-inv-table-menu]')) { state.active = chosen.dataset.invTable; state.query = ''; state.status = ''; state.situation = ''; state.page = 1; state.sidebarOpen = false; state.tableMenu = null; state.tableMenuPosition = null; state.tableActionMenu = false; renderInventory(); return; }
     const editTable = event.target.closest('[data-inv-edit-table]'); if (editTable) { event.stopPropagation(); state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove(); tableForm(data.tables.find(table => table.id === editTable.dataset.invEditTable)); return; }
     const deleteTable = event.target.closest('[data-inv-delete-table]'); if (deleteTable) {
       state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove();
@@ -1069,16 +1093,25 @@
       if (confirmed) moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
   }, true);
-  document.addEventListener('input', event => { if (event.target.matches('[data-inv-search]')) { state.query = event.target.value; applyInventoryFilters(); } });
+  document.addEventListener('input', event => { if (event.target.matches('[data-inv-search]')) { state.query = event.target.value; state.page = 1; applyInventoryFilters(); } });
   document.addEventListener('change', event => {
+    if (event.target.matches('[data-inv-page-size]')) {
+      const size = Number(event.target.value);
+      if (!pageSizes.includes(size)) return;
+      state.pageSize = size;
+      state.page = 1;
+      try { window.localStorage.setItem(pageSizeKey, String(size)); } catch { /* A preferência não impede a navegação. */ }
+      applyInventoryFilters();
+      return;
+    }
     if (event.target.matches('[data-inv-status-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('status', event.target.value));
     if (event.target.matches('[data-inv-situation-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('situation', event.target.value));
     if (event.target.matches('[data-inv-cleaning-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('cleaning', event.target.value));
     if (event.target.matches('[data-inv-priority-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('priority', event.target.value));
     if (event.target.matches('[data-inv-movement-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('movement', event.target.value));
     if (event.target.matches('[data-inv-shipping-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('shipping', event.target.value));
-    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; applyInventoryFilters(); }
-    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; state.page = 1; applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; state.page = 1; applyInventoryFilters(); }
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);

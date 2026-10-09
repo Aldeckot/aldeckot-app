@@ -102,7 +102,7 @@
     badge.textContent = notifications.length;
     toggle.dataset.hasNotifications = String(Boolean(notifications.length));
     toggle.dataset.hasUrgent = String(notifications.some(notification => notification.urgent));
-    toggle.setAttribute('aria-label', notifications.length ? `Abrir ${notifications.length} alertas de ${labels[key]}` : `Abrir Central de notificações de ${labels[key]}`);
+    toggle.setAttribute('aria-label', notifications.length ? `Abrir ${notifications.length} ${notifications.length === 1 ? 'alerta' : 'alertas'} de ${labels[key]}` : `Abrir Central de notificações de ${labels[key]}`);
   }
 
   function render() {

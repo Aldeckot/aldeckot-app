@@ -32,7 +32,7 @@ test('estoque disponível ignora unidades não disponíveis e catálogo inativo'
   assert.match(sql, /when \(case when s\.tracking_type = 'unit'.*\) = 0 then 'Sem estoque'/);
   assert.match(sql, /then 'Estoque baixo'/);
   assert.match(ui, /filter\(row => !row\.inactive\)/);
-  assert.match(ui, /row\.stock_status === 'Estoque baixo'/);
+  assert.match(ui, /variations\.alerts\(operational\)\.length/);
 });
 
 test('operações críticas são atômicas e evitam estados impossíveis', () => {
@@ -85,6 +85,13 @@ test('imagens ficam em bucket privado com limite e políticas de acesso', () => 
   assert.match(sql, /app\.is_admin\(\)/);
   assert.match(api, /createSignedUrl\(path, 3600\)/);
   assert.match(api, /file\.size > 5242880/);
+  assert.match(api, /const optimizedImage = async file =>/);
+  assert.match(api, /createImageBitmap\(file\)/);
+  assert.match(api, /canvas\.toBlob\(resolve, 'image\/webp', 0\.82\)/);
+  assert.match(api, /const imageStillReferenced = async \(db, path\) =>/);
+  assert.match(api, /db\.from\('supplies'\)\.select\('id'\)\.eq\('image_path', path\)/);
+  assert.match(api, /db\.from\('supply_variants'\)\.select\('id'\)\.eq\('image_path', path\)/);
+  assert.match(api, /if \(await imageStillReferenced\(db, path\)\) return false/);
 });
 
 test('composição visual preserva painel, variações e formulário sem dados fictícios na aplicação', () => {
@@ -106,13 +113,82 @@ test('composição visual preserva painel, variações e formulário sem dados f
   assert.match(read('supplies.html'), /scrollbars\.css/);
 });
 
+test('tabela principal mantém sete colunas sem confundir agregados com marca ou modelo', () => {
+  const headers = ui.match(/<table class="sp-table"><thead><tr>(.*?)<\/tr>/)?.[1];
+  assert.equal(headers, '<th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status</th>');
+  assert.match(ui, /<td colspan="7" class="sp-empty">/);
+  assert.ok(ui.includes('<td>${Number(row.active_count || 0)}</td>'));
+  assert.match(css, /@media\(max-width:700px\)\{\.sp-table\{min-width:620px/);
+  assert.doesNotMatch(css, /\.sp-table (?:th|td):nth-child\(3\)[^{]*\{[^}]*display:none/s);
+});
+
+test('paginação de Suprimentos usa 25 por padrão, permite escolha persistente e mantém filtros globais', () => {
+  assert.match(ui, /const pageSizes = \[10, 25, 50, 100\]/);
+  assert.match(ui, /pageSize: pageSizes\.includes\(savedPageSize\) \? savedPageSize : 25/);
+  assert.match(ui, /rows\.slice\(\(state\.page - 1\) \* state\.pageSize, state\.page \* state\.pageSize\)/);
+  assert.match(ui, /data-sp-page-size aria-label="Itens por página"/);
+  assert.match(ui, /localStorage\.setItem\(pageSizeKey, String\(size\)\)/);
+  assert.match(ui, /if \(state\.page > max\) state\.page = max/);
+  assert.match(ui, /const rows = filtered\(\)/);
+  assert.match(ui, /aria-current="page"/);
+  assert.match(css, /\.sp-page-size select\{/);
+});
+
+test('exportação em PDF usa apenas campos válidos e respeita o conjunto filtrado', () => {
+  assert.match(ui, /const rows = filtered\(\)\.map\(row => `<tr>/);
+  assert.doesNotMatch(ui, /inventoryField\(/);
+  assert.match(ui, /<th>Categoria<\/th><th>Estoque<\/th><th>Mínimo<\/th><th>Indicador<\/th><th>Status<\/th>/);
+});
+
+test('entrada por quantidade escolhe variação existente ou base sem duplicar grupos', () => {
+  assert.match(ui, /const quantityChoices = item => .*filter\(row => !row\.base && !row\.disabled\)/);
+  assert.match(ui, /data-sp-variation-search placeholder="Nome, marca, modelo ou característica"/);
+  assert.match(ui, /<option value="base".*Item principal — Base sem variação/);
+  assert.match(ui, /data-sp-quantity-new-variant>Cadastrar nova variação/);
+  assert.match(ui, /p_variant_id: chosen\?\.id \|\| null/);
+  assert.match(ui, /direction === 'exit' && quantity > current/);
+  assert.match(sql, /where id = p_variant_id and supply_id = p_supply_id for update/);
+  assert.match(sql, /if next_stock < 0 then raise exception 'Estoque insuficiente\.'/);
+});
+
+test('cadastro durante a entrada preserva rascunho e só movimenta estoque após confirmação', () => {
+  assert.match(ui, /variantDialog\(null, captureMovementDraft\(form\)\)/);
+  assert.match(ui, /return \(\) => reopenMovement\(resume, id\)/);
+  assert.match(ui, /const continuation = await state\.onSubmit\(event\.target\)/);
+  assert.match(ui, /await refresh\(\);\s*if \(typeof continuation === 'function'\)/);
+  assert.match(ui, /const restoreMovementDraft = \(form, draft\) =>/);
+  assert.match(ui, /row\.querySelector\('\[name=unit_serial\]'\)\.value = unit\.serial/);
+  assert.match(ui, /data-sp-variant-back>Voltar à entrada/);
+});
+
+test('movimentação por quantidade exige motivo contextual e descreve Outro no histórico', () => {
+  assert.match(ui, /entry: \['Compra \/ Reabastecimento', 'Devolução', 'Recebimento', 'Transferência recebida', 'Ajuste de inventário', 'Outro'\]/);
+  assert.match(ui, /exit: \['Instalação em PDV', 'Substituição por defeito', 'Consumo', 'Envio para manutenção', 'Transferência'/);
+  assert.match(ui, /name="reason_choice" data-sp-reason-choice required/);
+  assert.match(ui, /data-sp-reason-other hidden/);
+  assert.match(ui, /choice === 'Outro' && other\.length < 5/);
+  assert.match(ui, /const reason = `\$\{choice === 'Outro'/);
+  assert.match(ui, /p_reason: reason/);
+  assert.match(sql, /insert into public\.supply_movements\(supply_id, variant_id, type, quantity, previous_stock, new_stock, reason, actor_id\)/);
+});
+
+test('detalhe da variação mantém seis campos essenciais e oculta contadores auxiliares zerados', () => {
+  assert.match(ui, /<span>Marca<\/span><b>\$\{safe\(variant\.brand \|\| '—'\)\}<\/b><span>Modelo<\/span>/);
+  assert.match(ui, /<span>Total<\/span><b>\$\{variant\.total\}<\/b><span>Estoque disponível<\/span>/);
+  assert.match(ui, /<span>Mínimo<\/span><b>\$\{variant\.minimum_stock\}<\/b><span>Situação<\/span>/);
+  assert.match(ui, /\['Manutenção', variant\.maintenance\], \['Defeito', variant\.defect\], \['Inativo', variant\.inactive\]/);
+  assert.match(ui, /\.filter\(\(\[, count\]\) => Number\(count \|\| 0\) > 0\)/);
+});
+
 test('quadros de Suprimentos exibem o fundo animado através do blur', () => {
   assert.match(systemCss, /body\.supplies-open::before\s*\{[^}]*z-index:\s*0[^}]*animation:\s*sp-wallpaper 28s ease-in-out infinite/s);
   assert.match(systemCss, /body\.supplies-open \.supplies-app\s*\{[^}]*z-index:\s*2/s);
   assert.match(systemCss, /body\.supplies-open \.sp-metric,[\s\S]*backdrop-filter:\s*blur\(18px\)/);
   assert.match(systemCss, /body\.supplies-open \.sp-card,[\s\S]*backdrop-filter:\s*blur\(18px\)/);
   assert.match(systemCss, /body\.theme-light\.supplies-open \.sp-card,[\s\S]*backdrop-filter:\s*blur\(18px\)/);
-  assert.match(read('supplies.html'), /supplies-system\.css\?v=20261007-glass-motion3/);
+  assert.match(systemCss, /body\.supplies-open \.sp-header\s*\{[^}]*backdrop-filter:\s*blur\(30px\)/s);
+  assert.match(systemCss, /body\.supplies-open \.sp-metric\s*\{[^}]*backdrop-filter:\s*blur\(27px\)/s);
+  assert.match(read('supplies.html'), /supplies-system\.css\?v=\d+\.\d+\.\d+/);
 });
 
 test('indicadores e imagens sem foto usam ícones distintos e acessíveis', () => {

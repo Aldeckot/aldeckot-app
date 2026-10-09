@@ -29,6 +29,9 @@ body.inventory-open>.app{background:linear-gradient(110deg,#03071580,#07112660 5
 .theme-light .inventory-table-choice,.theme-light .inventory-sidebar-toggle,.theme-light .inventory-table-add{background:#f6faff72;backdrop-filter:blur(7px) saturate(110%);-webkit-backdrop-filter:blur(7px) saturate(110%)}.theme-light .inventory-table-choice.active{background:#d6e8f787}
 /* Sem seleção, o Inventário mostra apenas a barra de tabelas. A área de dados só nasce após a escolha. */
 .inventory-layout.no-table-selected{grid-template-columns:48px minmax(0,1fr);min-height:530px}.inventory-layout.no-table-selected.tables-open{grid-template-columns:210px minmax(0,1fr)}@media(max-width:700px){.inventory-layout.no-table-selected,.inventory-layout.no-table-selected.tables-open{grid-template-columns:1fr;min-height:0}}
+/* A lateral recolhida ocupa apenas a altura do botão, sem barra vertical vazia. */
+.inventory-layout .inventory-table-sidebar{min-height:0;align-self:start}
+@media(max-width:700px){.inventory-layout:not(.tables-open) .inventory-table-sidebar{bottom:auto}}
 /* Busca compacta: deixa mais espaço visual para filtros e ações da tabela. */
 .inventory-toolbar .inventory-search-wrap{flex:0 1 260px;width:260px}
 .inventory-toolbar [data-inv-status]{margin-left:auto}

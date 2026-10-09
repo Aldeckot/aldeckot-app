@@ -336,3 +336,54 @@ body.theme-light.settings-page .settings-note {
 body.theme-light.login-page .login-wallpaper { background-image: linear-gradient(115deg, rgba(170, 191, 202, .52), rgba(186, 204, 214, .55)), url('assets/background-light-v2.png'); }
 body.theme-light.login-page .auth-modal,
 body.theme-light.login-page .request-processing { background: linear-gradient(145deg, rgba(216, 226, 232, .75), rgba(175, 193, 204, .66)); }
+
+/* Um toque de violeta nas superfícies do tema claro, mantendo o azul como base. */
+html[data-theme="light"],
+body.theme-light {
+  --light-violet-line: rgba(120, 103, 158, .38);
+  --light-violet-wash: rgba(149, 133, 190, .10);
+}
+body.theme-light.home-page .side {
+  background: linear-gradient(155deg, rgba(215, 220, 235, .75), rgba(175, 189, 210, .65));
+}
+body.theme-light.home-page .home-calendar,
+body.theme-light.home-page .agenda-upcoming-panel,
+body.theme-light.home-page .agenda-today-panel,
+body.theme-light.home-page .home-recent-panel {
+  border-color: var(--light-violet-line);
+  background: linear-gradient(145deg, rgba(215, 225, 237, .74), rgba(186, 195, 215, .63));
+}
+body.theme-light.inventory-open .inventory-header,
+body.theme-light.management-open .management-header {
+  border-color: var(--light-violet-line) !important;
+  background: linear-gradient(135deg, rgba(214, 222, 235, .73), rgba(177, 188, 207, .62)) !important;
+}
+body.theme-light .nfe-header,
+body.theme-light.settings-page .settings-sidebar {
+  border-color: var(--light-violet-line);
+  background: linear-gradient(145deg, rgba(215, 224, 235, .74), rgba(181, 193, 211, .64));
+}
+body.theme-light .inventory-table-choice.active,
+body.theme-light .management-tab.active,
+body.theme-light.settings-page .settings-nav-item.active {
+  border-color: rgba(117, 100, 157, .46) !important;
+  box-shadow: inset 3px 0 rgba(126, 105, 169, .45);
+}
+
+/* No tema escuro, o violeta aparece como detalhe, sem substituir o azul. */
+body:not(.theme-light).home-page .home-calendar,
+body:not(.theme-light).home-page .agenda-upcoming-panel,
+body:not(.theme-light).home-page .home-recent-panel,
+body:not(.theme-light).settings-page .settings-sidebar,
+body:not(.theme-light).login-page .auth-modal {
+  border-color: rgba(136, 109, 186, .42);
+}
+body:not(.theme-light).inventory-open .inventory-header,
+body:not(.theme-light).management-open .management-header,
+body:not(.theme-light).nfe-open .nfe-header {
+  border-color: rgba(132, 110, 180, .45) !important;
+}
+body:not(.theme-light) .module-header-summary-tags span:first-child {
+  border-color: rgba(159, 128, 212, .42);
+  background: rgba(114, 81, 159, .16);
+}

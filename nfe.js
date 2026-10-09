@@ -1,5 +1,10 @@
 (() => {
-  const defaultPageSize = 10;
+  const pageSizes = [10, 25, 50, 100];
+  const pageSizeKey = 'aldeckot:nfe:page-size';
+  const savedPageSize = (() => {
+    try { return Number(window.localStorage.getItem(pageSizeKey)); } catch { return 0; }
+  })();
+  const defaultPageSize = pageSizes.includes(savedPageSize) ? savedPageSize : 25;
   const reasons = ['Erro no SASII', 'Erro no Pin Pad', 'Travamento do PC', 'Erro no cartão'];
   const reasonClass = value => ({ 'Erro no SASII': 'sasii', 'Erro no Pin Pad': 'pin-pad', 'Travamento do PC': 'travamento', 'Erro no cartão': 'cartao' })[value] || '';
   const escape = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -203,7 +208,7 @@
     <div class="nfe-grid"><section class="nfe-workspace">
       <section class="nfe-metrics">${metric('Total de ocorrências', state.dashboard.total, 'Base corporativa', 'document', 'blue')}${metric('Registradas hoje', state.dashboard.today, 'Atualização em tempo real', 'calendar', 'blue')}${metric('No mês atual', state.dashboard.month, 'Histórico fiscal', 'bars', 'green')}${metric('Motivo mais recorrente', dominant[1], dominant[0] || 'Sem ocorrências', 'alert', 'gold')}</section>
       <section class="nfe-toolbar"><div class="nfe-quick-filters"><button class="nfe-filter-chip ${!state.filters.reason ? 'is-active' : ''}" type="button" data-nfe-quick-all>${icon('filter')}Todos</button>${reasons.map(reason => `<button class="nfe-filter-chip ${reasonClass(reason)} ${state.filters.reason === reason ? 'is-active' : ''}" type="button" data-nfe-quick-reason="${escape(reason)}"><i></i>${escape(reason)}</button>`).join('')}</div><div class="nfe-toolbar-actions"><button class="nfe-action-button" type="button" data-nfe-advanced>${icon('filter')}Filtros avançados</button>${canManage ? `<button class="nfe-action-button primary" type="button" data-nfe-new>${icon('plus')}Nova NF-e</button>` : ''}</div><section class="nfe-advanced" ${state.advancedOpen ? '' : 'hidden'} data-nfe-advanced-panel><div class="nfe-advanced-grid"><label class="nfe-field">PDV<input class="nfe-input" data-nfe-filter="pdv" value="${escape(state.filters.pdv)}" placeholder="Ex.: Caixa 12"></label><label class="nfe-field">Operador<input class="nfe-input" data-nfe-filter="operator" value="${escape(state.filters.operator)}" placeholder="Nome do operador"></label><label class="nfe-field">De<input class="nfe-input" data-nfe-filter="dateFrom" value="${escape(state.filters.dateFrom)}" type="date"></label><label class="nfe-field">Até<input class="nfe-input" data-nfe-filter="dateTo" value="${escape(state.filters.dateTo)}" type="date"></label></div></section></section>
-      <section class="nfe-table-panel"><header class="nfe-table-head"><div class="nfe-table-title">${icon('server')}<div><h2>Últimas ocorrências</h2><p>${state.loading ? 'Carregando dados…' : `${number(state.total)} registro${state.total === 1 ? '' : 's'} localizado${state.total === 1 ? '' : 's'} na base`}</p></div></div><div class="nfe-table-actions"><div class="nfe-export-wrap"><button class="nfe-action-button" type="button" data-nfe-export-toggle>${icon('download')}Exportar${icon('chevron')}</button><div class="nfe-export-menu" data-nfe-export-menu hidden><button type="button" data-nfe-export="excel">${icon('document')}Excel</button><button type="button" data-nfe-export="pdf">${icon('file')}PDF</button></div></div><button class="nfe-action-button" type="button" data-nfe-clear-filters>${icon('broom')}Limpar filtros</button></div></header><div class="nfe-table-wrap"><table class="nfe-table"><thead><tr><th>NF-e / PDV</th><th>Operador</th><th>Código</th><th>Fiscal</th><th>Data / Hora</th><th>Motivo</th><th>PDF</th><th>Ações</th></tr></thead><tbody>${tableBody}</tbody></table></div><footer class="nfe-pagination"><label><select class="nfe-page-size" data-nfe-page-size>${[10, 15, 25, 50].map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select> por página</label><span>Página ${state.page} de ${totalPages}</span><button type="button" data-nfe-page="first" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronsLeft')}</button><button type="button" data-nfe-page="prev" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronLeft')}</button><b>${state.page}</b><button type="button" data-nfe-page="next" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronRight')}</button><button type="button" data-nfe-page="last" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronsRight')}</button></footer></section>
+      <section class="nfe-table-panel"><header class="nfe-table-head"><div class="nfe-table-title">${icon('server')}<div><h2>Últimas ocorrências</h2><p>${state.loading ? 'Carregando dados…' : `${number(state.total)} registro${state.total === 1 ? '' : 's'} localizado${state.total === 1 ? '' : 's'} na base`}</p></div></div><div class="nfe-table-actions"><div class="nfe-export-wrap"><button class="nfe-action-button" type="button" data-nfe-export-toggle>${icon('download')}Exportar${icon('chevron')}</button><div class="nfe-export-menu" data-nfe-export-menu hidden><button type="button" data-nfe-export="excel">${icon('document')}Excel</button><button type="button" data-nfe-export="pdf">${icon('file')}PDF</button></div></div><button class="nfe-action-button" type="button" data-nfe-clear-filters>${icon('broom')}Limpar filtros</button></div></header><div class="nfe-table-wrap"><table class="nfe-table"><thead><tr><th>NF-e / PDV</th><th>Operador</th><th>Código</th><th>Fiscal</th><th>Data / Hora</th><th>Motivo</th><th>PDF</th><th>Ações</th></tr></thead><tbody>${tableBody}</tbody></table></div><footer class="nfe-pagination"><label><select class="nfe-page-size" data-nfe-page-size>${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select> por página</label><span>Página ${state.page} de ${totalPages}</span><button type="button" data-nfe-page="first" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronsLeft')}</button><button type="button" data-nfe-page="prev" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronLeft')}</button><b>${state.page}</b><button type="button" data-nfe-page="next" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronRight')}</button><button type="button" data-nfe-page="last" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronsRight')}</button></footer></section>
     </section><aside class="nfe-side"><section class="nfe-side-panel nfe-reasons-panel"><header>${icon('filter')}<div><h2>Ocorrências por motivo</h2><p>Selecione um motivo para filtrar a tabela</p></div></header><div class="nfe-reason-list">${counts.map(([reason, count]) => `<button class="nfe-reason-row ${reasonClass(reason)}" type="button" data-nfe-quick-reason="${escape(reason)}"><span class="nfe-side-reason-icon">${icon({ sasii: 'server', 'pin-pad': 'terminal', travamento: 'monitor', cartao: 'card' }[reasonClass(reason)])}</span><span>${escape(reason)}</span><b>${number(count)}</b></button>`).join('')}</div></section><section class="nfe-side-panel nfe-side-alert"><header>${icon('monitor')}<div><h2>PDVs para investigar</h2><p>Mais de 3 ocorrências do mesmo PDV nesta semana</p></div></header><div class="nfe-alert-list">${alertHtml}</div><button class="nfe-alert-history" type="button" data-nfe-alert-history>Ver histórico completo${icon('chevron')}</button></section></aside></div>`;
     const tableHead = root.querySelector('.nfe-table-head');
     const tableActions = tableHead?.querySelector('.nfe-table-actions');
@@ -233,7 +238,14 @@
     root.querySelectorAll('[data-nfe-quick-reason]').forEach(button => button.addEventListener('click', () => { state.filters.reason = button.dataset.nfeQuickReason; state.page = 1; refresh(); }));
     root.querySelectorAll('[data-nfe-open]').forEach(button => button.addEventListener('click', () => openDetails(button.dataset.nfeOpen)));
     root.querySelectorAll('[data-nfe-open-action]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); openDetails(button.dataset.nfeOpenAction); }));
-    root.querySelector('[data-nfe-page-size]')?.addEventListener('change', event => { state.pageSize = Number(event.target.value); state.page = 1; refresh(); });
+    root.querySelector('[data-nfe-page-size]')?.addEventListener('change', event => {
+      const size = Number(event.target.value);
+      if (!pageSizes.includes(size)) return;
+      state.pageSize = size;
+      state.page = 1;
+      try { window.localStorage.setItem(pageSizeKey, String(size)); } catch { /* A preferência não impede a navegação. */ }
+      refresh();
+    });
     root.querySelectorAll('[data-nfe-page]').forEach(button => button.addEventListener('click', () => { const page = button.dataset.nfePage; const total = Math.max(1, Math.ceil(state.total / state.pageSize)); if (page === 'first') state.page = 1; if (page === 'prev') state.page -= 1; if (page === 'next') state.page += 1; if (page === 'last') state.page = total; refresh(); }));
     root.querySelectorAll('[data-nfe-export]').forEach(button => button.addEventListener('click', () => button.dataset.nfeExport === 'excel' ? exportExcel() : exportPdf()));
     root.querySelector('[data-nfe-export-toggle]')?.addEventListener('click', () => { const menu = root.querySelector('[data-nfe-export-menu]'); menu.hidden = !menu.hidden; });
@@ -250,8 +262,16 @@
         api().dashboard(),
         api().recurringPdvAlerts()
       ]);
-      state.items = records.items;
-      state.total = records.count;
+      const lastPage = Math.max(1, Math.ceil(records.count / state.pageSize));
+      if (state.page > lastPage) {
+        state.page = lastPage;
+        const corrected = await api().load({ ...state.filters, page: state.page, pageSize: state.pageSize });
+        state.items = corrected.items;
+        state.total = corrected.count;
+      } else {
+        state.items = records.items;
+        state.total = records.count;
+      }
       state.dashboard = dashboard;
       state.alerts = alerts;
       state.error = '';

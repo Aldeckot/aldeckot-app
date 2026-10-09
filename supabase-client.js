@@ -1278,7 +1278,8 @@
     async load(filters = {}) {
       await init();
       const page = Math.max(1, Number(filters.page || 1));
-      const pageSize = Math.min(50, Math.max(10, Number(filters.pageSize || 15)));
+      const requestedPageSize = Number(filters.pageSize || 25);
+      const pageSize = [10, 25, 50, 100].includes(requestedPageSize) ? requestedPageSize : 25;
       let request = client.from('nfe_occurrences')
         .select('id, operator, operator_code, fiscal, occurred_at, pdv, nfe_number, reason, total_value, pending_value, notes, pdf_path, pdf_name, pdf_size, created_at, updated_at', { count: 'exact' })
         .order('occurred_at', { ascending: false })

@@ -1,0 +1,32 @@
+.inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  color: #bfcee2;
+  font-size: 12px;
+}
+.inventory-pagination label,
+.inventory-pagination nav { display: inline-flex; align-items: center; gap: 8px; }
+.inventory-pagination select,
+.inventory-pagination button {
+  min-height: 30px;
+  border: 1px solid #4c6688;
+  border-radius: 7px;
+  background: #142742;
+  color: #eef5ff;
+}
+.inventory-pagination select { padding: 0 8px; }
+.inventory-pagination button { min-width: 31px; cursor: pointer; }
+.inventory-pagination button:disabled { opacity: .45; cursor: default; }
+.inventory-pagination button:not(:disabled):hover { border-color: #55b8fa; }
+body.theme-light .inventory-pagination { color: #203b53; }
+body.theme-light .inventory-pagination select,
+body.theme-light .inventory-pagination button {
+  background: #e7f2f8;
+  color: #18364d;
+  border-color: #8eacc0;
+}

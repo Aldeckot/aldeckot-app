@@ -139,6 +139,56 @@ body.settings-page.theme-light .settings-main {
 .theme-light .login-wallpaper { background: #e6f1f4 !important; }
 .theme-light .login-wallpaper::before { background-image: url('assets/background-light-v2.png'); }
 
+/* Um único plano de fundo para todas as telas: escala e percurso iguais nos dois temas. */
+:root {
+  --aldeckot-wallpaper-dark: url('assets/background-dark.png?v=2.0.89');
+  --aldeckot-wallpaper-light: url('assets/background-light-v2.png?v=2.0.89');
+  --aldeckot-wallpaper-phase: 0ms;
+}
+@keyframes aldeckot-wallpaper-orbit {
+  0%, 100% { background-position: 50% 50%; transform: scale(1.05) translate3d(0, 0, 0); }
+  25% { background-position: 51% 49.2%; transform: scale(1.07) translate3d(-.75%, -.45%, 0); }
+  50% { background-position: 49.4% 48.9%; transform: scale(1.06) translate3d(.45%, -.85%, 0); }
+  75% { background-position: 48.8% 50.7%; transform: scale(1.075) translate3d(.8%, .35%, 0); }
+}
+body.home-page .app::before,
+body.inventory-open::before,
+body.management-open::before,
+body.supplies-open::before,
+body.settings-page::before,
+.login-wallpaper::before {
+  position: fixed !important;
+  inset: -3% !important;
+  background-image: var(--aldeckot-wallpaper-dark) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  transform-origin: center center;
+  filter: none !important;
+  animation: aldeckot-wallpaper-orbit var(--aldeckot-wallpaper-duration) ease-in-out infinite !important;
+  animation-delay: var(--aldeckot-wallpaper-phase) !important;
+  will-change: transform, background-position;
+}
+body.home-page .app:has(.theme-switch:checked)::before,
+body.theme-light.home-page .app::before,
+body.theme-light.inventory-open::before,
+body.theme-light.management-open::before,
+body.theme-light.supplies-open::before,
+body.theme-light.settings-page::before,
+body.theme-light .login-wallpaper::before {
+  background-image: var(--aldeckot-wallpaper-light) !important;
+}
+/* A Home tinha duas cópias estáticas da imagem sobre o plano animado. */
+body.home-page .app { background-image: none !important; animation: none !important; }
+body.home-page main::before {
+  background: linear-gradient(90deg, #050912b8 0%, #07101ac2 43%, #050912a8 100%) !important;
+  animation: none !important;
+  transform: none !important;
+}
+body.home-page .theme-switch:checked ~ main::before,
+body.theme-light.home-page main::before {
+  background: linear-gradient(90deg, #e7f0fb26 0%, #eaf2fb16 46%, #e6f0fb2e 100%) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body.home-page .app,
   body.home-page .app::before,

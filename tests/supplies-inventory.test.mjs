@@ -29,6 +29,16 @@ test('agrupamento usa IDs físicos e não duplica tabela, unidade ou modelo', ()
   assert.equal(group.units.find(row => row.id === 'a').location, 'Caixa 01');
 });
 
+test('unidade mais recente e grupo espelhado preservam a data de atividade', () => {
+  const dated = inventory.map((row, index) => ({ ...row,
+    updated_at: `2026-10-0${index + 1}T10:00:00Z` }));
+  const group = groupInventory(tables, dated)[0];
+  assert.equal(group.units[0].id, 'd');
+  assert.equal(group.variants.find(row => row.total === 2).units[0].id, 'b');
+  const projected = project([], [group])[0];
+  assert.equal(projected.activity_at, dated[3].updated_at);
+});
+
 test('Estoque e Indicador vêm apenas dos status reais; sincronizar novamente é idempotente', () => {
   const manual = [{ id: 'metadata', name: 'impressora', tracking_type: 'quantity', available_stock: 0,
     total_units: 0, minimum_stock: 2, image_path: 'metadata/photo.webp' }];
@@ -40,12 +50,12 @@ test('Estoque e Indicador vêm apenas dos status reais; sincronizar novamente é
   assert.equal(first[0].image_path, 'metadata/photo.webp');
   assert.equal(first[0].available_stock, 1);
   assert.equal(first[0].active_count, 2);
-  assert.equal(first[0].stock_status, 'Estoque baixo');
+  assert.equal(first[0].stock_status, 'Normal', 'mínimo legado sem modelo não é aplicado arbitrariamente');
   const changed = inventory.map(row => row.id === 'a' ? { ...row, status: 'Reserva' } : row);
   const after = project(manual, groupInventory(tables, changed))[0];
   assert.equal(after.available_stock, 2);
   assert.equal(after.active_count, 1);
-  assert.equal(after.stock_status, 'Estoque baixo');
+  assert.equal(after.stock_status, 'Normal');
   assert.equal(after.inventory_group.units.find(row => row.id === 'a').tag, 'IMPR001');
   const restored = changed.map(row => row.id === 'b' ? { ...row, status: 'Ativo' } : row);
   const afterReturn = project(manual, groupInventory(tables, restored))[0];

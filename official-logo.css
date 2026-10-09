@@ -33,6 +33,11 @@
   text-decoration: none;
 }
 
+.system-header-brand:hover,
+.system-header-brand:active {
+  text-decoration: none;
+}
+
 .system-header-brand-mark {
   display: block;
   flex: 0 0 56px;

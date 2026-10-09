@@ -169,13 +169,13 @@
     if (!visible) closePanel();
     badge.hidden = !count;
     badge.textContent = count;
-    button.setAttribute('aria-label', count ? `Abrir ${count} notificações prioritárias` : 'Abrir Central de Notificações');
+    button.setAttribute('aria-label', count ? `Abrir ${count} ${count === 1 ? 'notificação prioritária' : 'notificações prioritárias'}` : 'Abrir Central de Notificações');
     root.dataset.hasNotifications = String(Boolean(count));
     root.dataset.hasUrgent = String(notifications.some(notification => notification.urgent));
-    root.querySelector('[data-home-notification-count]').textContent = dataError ? 'Atualização indisponível' : (count ? `${count} alertas prioritários` : 'Sem alertas pendentes');
+    root.querySelector('[data-home-notification-count]').textContent = dataError ? 'Atualização indisponível' : (count ? `${count} ${count === 1 ? 'alerta prioritário' : 'alertas prioritários'}` : 'Sem alertas pendentes');
     const clear = root.querySelector('[data-home-notification-clear]');
     clear.hidden = !count;
-    clear.setAttribute('aria-label', `Limpar ${count} notificações`);
+    clear.setAttribute('aria-label', `Limpar ${count} ${count === 1 ? 'notificação' : 'notificações'}`);
     if (dataError) {
       list.innerHTML = '<div class="home-notification-empty"><span>!</span><div><b>Atualização indisponível</b><p>Não foi possível consultar os alertas neste momento.</p></div></div>';
       return;

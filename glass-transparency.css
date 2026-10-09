@@ -1,0 +1,165 @@
+/* Vidro compartilhado: reduzir também o véu atrás dos painéis para o relevo do wallpaper aparecer. */
+body.supplies-open:not(.theme-light)::after {
+  background: linear-gradient(135deg, #020b1845, #06182d32 54%, #02081447),
+    radial-gradient(ellipse 58% 50% at 54% 29%, #0c4e6c19, transparent 70%) !important;
+}
+body.theme-light.supplies-open::after {
+  background: linear-gradient(135deg, #e3e1f42e, #eef7fa20),
+    radial-gradient(ellipse 58% 50% at 54% 29%, #a99bd619, transparent 70%) !important;
+}
+body.inventory-open:not(.theme-light) > .app {
+  background: linear-gradient(110deg, #03071538, #07112624 50%, #0308153b) !important;
+}
+body.management-open:not(.theme-light)::after {
+  background: radial-gradient(ellipse 58% 50% at 54% 29%, #0c4e6c16, transparent 70%), #03091640 !important;
+}
+
+/* Home: a navegação e os painéis laterais não podem esconder o mesmo wallpaper. */
+body.home-page main::before {
+  background: linear-gradient(90deg, #05091247, #07101a3d 43%, #05091240) !important;
+}
+/* Os cards da Home preservam a cor própria de cada módulo. */
+body.home-page .nav .module-nav-card {
+  backdrop-filter: blur(15px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(15px) saturate(140%) !important;
+}
+body.home-page :is(.home-calendar, .agenda-upcoming-panel, .home-recent-panel) {
+  background: linear-gradient(145deg, #1026415c, #07182c4a) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+}
+body.home-page :is(.home-recent-item, .operations-metric) {
+  background: #102b465c !important;
+  backdrop-filter: blur(12px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(135%) !important;
+}
+body.home-page:has(.theme-switch:checked) :is(.home-calendar, .agenda-upcoming-panel, .home-recent-panel) {
+  background: linear-gradient(145deg, #f7fcff8a, #e1eff775) !important;
+}
+body.home-page:has(.theme-switch:checked) :is(.home-recent-item, .operations-metric) {
+  background: #f4faff91 !important;
+}
+
+/* Superfícies funcionais continuam legíveis, sem virar blocos sólidos. */
+body:not(.theme-light):is(.inventory-open, .management-open, .nfe-open) :is(
+  .inventory-header,
+  .inventory-panel:not(.inventory-table-sidebar),
+  .management-header,
+  .management-toolbar,
+  .management-area,
+  .management-chart,
+  .management-summary-card,
+  .nfe-header,
+  .nfe-toolbar,
+  .nfe-metric,
+  .nfe-table-panel,
+  .nfe-side-panel
+) {
+  background: linear-gradient(145deg, rgba(13, 39, 65, .32), rgba(5, 20, 38, .25)) !important;
+  backdrop-filter: blur(16px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(145%) !important;
+}
+
+body.theme-light:is(.inventory-open, .management-open, .nfe-open) :is(
+  .inventory-header,
+  .inventory-panel:not(.inventory-table-sidebar),
+  .management-header,
+  .management-toolbar,
+  .management-area,
+  .management-chart,
+  .management-summary-card,
+  .nfe-header,
+  .nfe-toolbar,
+  .nfe-metric,
+  .nfe-table-panel,
+  .nfe-side-panel
+) {
+  background: linear-gradient(145deg, rgba(243, 249, 255, .42), rgba(210, 227, 241, .32)) !important;
+  backdrop-filter: blur(16px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(125%) !important;
+}
+
+body.supplies-open:not(.theme-light) .sp-header {
+  background: linear-gradient(115deg, rgba(13, 37, 63, .28), rgba(5, 19, 37, .21)) !important;
+}
+body.supplies-open:not(.theme-light) .sp-metric {
+  background: linear-gradient(145deg, rgba(14, 40, 65, .24), rgba(5, 19, 37, .18)) !important;
+}
+body.supplies-open:not(.theme-light) .sp-detail {
+  background: linear-gradient(145deg, rgba(14, 40, 65, .32), rgba(5, 19, 37, .25)) !important;
+}
+body.supplies-open:not(.theme-light) .sp-toolbar,
+body.supplies-open:not(.theme-light) .sp-table-wrap {
+  background: linear-gradient(145deg, rgba(14, 40, 65, .33), rgba(5, 19, 37, .26)) !important;
+}
+body.supplies-open .sp-detail {
+  backdrop-filter: blur(16px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(145%) !important;
+}
+body.supplies-open .sp-header {
+  backdrop-filter: blur(18px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
+}
+body.supplies-open .sp-metric {
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+}
+
+/* A tabela possui cores próprias: cabeçalho e linha selecionada também precisam ser vidro. */
+body.supplies-open:not(.theme-light) .sp-table th { background: #0b254057 !important; }
+body.supplies-open:not(.theme-light) .sp-table tr.selected { background: #2b74ae52 !important; }
+body.supplies-open:not(.theme-light) .sp-table tr[data-supply-id]:hover { background: #1942684d !important; }
+
+body.theme-light.supplies-open .sp-header,
+body.theme-light.supplies-open .sp-detail {
+  background: linear-gradient(145deg, rgba(247, 250, 255, .42), rgba(218, 231, 245, .32)) !important;
+}
+body.theme-light.supplies-open .sp-metric {
+  background: linear-gradient(145deg, rgba(247, 250, 255, .37), rgba(218, 231, 245, .28)) !important;
+}
+body.theme-light.supplies-open .sp-toolbar,
+body.theme-light.supplies-open .sp-table-wrap {
+  background: linear-gradient(145deg, rgba(247, 250, 255, .47), rgba(218, 231, 245, .36)) !important;
+}
+body.theme-light.supplies-open .sp-table th { background: #e5f1f873 !important; }
+body.theme-light.supplies-open .sp-table tr.selected { background: #cce8fa70 !important; }
+body.theme-light.supplies-open .sp-table tr[data-supply-id]:hover { background: #d7ebf86b !important; }
+
+body.settings-page .settings-workspace {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.settings-page:not(.theme-light) :is(.settings-main, .settings-sidebar) {
+  background: linear-gradient(145deg, rgba(12, 37, 61, .34), rgba(4, 17, 33, .27)) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+}
+body.settings-page.theme-light :is(.settings-main, .settings-sidebar) {
+  background: linear-gradient(145deg, rgba(240, 248, 254, .44), rgba(207, 225, 237, .34)) !important;
+  backdrop-filter: blur(16px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(125%) !important;
+}
+
+/* Cabeçalhos de módulos: vidro discreto, com o wallpaper visível como no Inventário. */
+body:not(.theme-light):is(.inventory-open, .management-open, .nfe-open, .supplies-open, .settings-page) :is(
+  .inventory-header, .management-header, .nfe-header, .sp-header, .settings-topbar
+),
+body:not(.home-page):not(:has(.theme-switch:checked)) .app > main > .header {
+  background: linear-gradient(110deg, rgba(10, 29, 49, .14), rgba(7, 22, 41, .08)) !important;
+  border-color: rgba(119, 156, 190, .45) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .16) !important;
+  backdrop-filter: blur(3px) saturate(108%) !important;
+  -webkit-backdrop-filter: blur(3px) saturate(108%) !important;
+}
+
+body.theme-light:is(.inventory-open, .management-open, .nfe-open, .supplies-open, .settings-page) :is(
+  .inventory-header, .management-header, .nfe-header, .sp-header, .settings-topbar
+),
+body:not(.home-page):has(.theme-switch:checked) .app > main > .header {
+  background: linear-gradient(110deg, rgba(245, 250, 255, .08), rgba(220, 235, 248, .04)) !important;
+  border-color: rgba(120, 150, 181, .42) !important;
+  box-shadow: 0 12px 26px rgba(47, 82, 111, .09) !important;
+  backdrop-filter: blur(3px) saturate(105%) !important;
+  -webkit-backdrop-filter: blur(3px) saturate(105%) !important;
+}

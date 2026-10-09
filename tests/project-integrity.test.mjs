@@ -256,8 +256,8 @@ test('Fiscal NF-e registra os valores total e pendente com validação financeir
   assert.match(migration, /add column if not exists total_value numeric\(14, 2\)/);
   assert.match(migration, /pending_value <= total_value/);
   assert.match(migration, /create or replace function app\.audit_nfe_occurrence\(\)/);
-  assert.match(page, /nfe\.js\?v=2\.0\.71/);
-  assert.match(page, /nfe-metric-icons\.css\?v=20260926-metric-icon2/);
+  assert.match(page, /nfe\.js\?v=2\.0\.82/);
+  assert.match(page, /nfe-metric-icons\.css\?v=\d+\.\d+\.\d+/);
   assert.match(page, /nfe-header-layout\.css\?v=20260926-nfe-layout4/);
   assert.match(metricStyles, /\.nfe-metric-main\s*\{\s*align-items: center;/);
   assert.match(metricStyles, /\.nfe-metric-icon\s*\{[\s\S]*?place-items: center;[\s\S]*?align-self: center;[\s\S]*?justify-self: center;/);
