@@ -1,3 +1,50 @@
+/* Busca vinculada do Flux: mantém a seleção legível em ambos os temas. */
+.flux-acquisition-dialog{width:min(610px,calc(100vw - 28px))}
+.flux-acquisition-content{display:grid;gap:12px;padding:16px 20px}
+.flux-acquisition-content>p{margin:0;line-height:1.5}
+.flux-acquisition-content>small{overflow-wrap:anywhere;color:#a5c2d8}
+.flux-acquisition-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.flux-acquisition-fields label{min-width:0}
+.flux-acquisition-fields select{width:100%}
+.flux-acquisition-fields[hidden],.flux-acquisition-fields [hidden]{display:none}
+.flux-supply-fields input{width:100%}
+.flux-supply-balance,.flux-supply-add-variant,.flux-supply-fields>small{grid-column:1/-1;margin:0;font-size:12px;line-height:1.4}
+.flux-supply-balance{padding:8px 10px;border:1px solid #46afac70;border-radius:8px;background:#123b4670;color:#c7f2ed}
+.flux-supply-add-variant{color:#87ceff;text-decoration:underline;text-underline-offset:2px}
+.flux-supply-fields>small{color:#a5c2d8}
+.theme-light .flux-supply-balance{background:#e2f6f3c4;color:#22585a}
+.theme-light .flux-supply-add-variant{color:#165f9a}
+.flux-acquisition-state,.flux-acquisition-note{padding:9px 11px;border:1px solid #5884a766;border-radius:8px;background:#12334a96;color:#c0d8e7;font-size:12px}
+.flux-acquisition-note{margin:12px 0 0;line-height:1.45}
+.theme-light .flux-acquisition-state,.theme-light .flux-acquisition-note{background:#e9f7ffc4;border-color:#77a6c4;color:#274f6b}
+@media(max-width:650px){.flux-acquisition-fields{grid-template-columns:1fr}}
+.flux-equipment-search{display:grid;gap:7px;min-width:0;margin-bottom:4px;padding:12px;border:1px solid #5481a467;border-radius:12px;background:#0b2747a8}
+.flux-equipment-search>label{font-size:12px;font-weight:700}
+.flux-equipment-search>input{width:100%;min-height:38px;padding:8px 11px;border:1px solid #6489af80;border-radius:8px;background:#061b33b8;color:inherit;font:inherit}
+.flux-equipment-search-status,.flux-equipment-selection{margin:0;font-size:11px;line-height:1.45;color:#b3cce2}
+.flux-equipment-selection{padding:7px 9px;border:1px solid #44c2a266;border-radius:7px;color:#bcf2df}
+.flux-equipment-clear{justify-self:start;padding:4px 0;border:0;background:transparent;color:#8dd9ff;font:inherit;font-size:11px;text-decoration:underline;cursor:pointer}
+.flux-equipment-clear[hidden]{display:none}
+.inv-log span{white-space:pre-line}
+.flux-equipment-search-results{display:grid;gap:5px;max-height:244px;overflow:auto}
+.flux-equipment-search-results[hidden],.flux-equipment-selection[hidden]{display:none}
+.flux-equipment-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;width:100%;padding:9px 10px;border:1px solid #477da066;border-radius:8px;background:#113252d9;color:#eef8ff;text-align:left;cursor:pointer}
+.flux-equipment-result:hover,.flux-equipment-result:focus-visible{border-color:#5cc6ff;background:#18446a}
+.flux-equipment-result:disabled{opacity:.6;cursor:not-allowed}
+.flux-equipment-result span,.flux-equipment-result small{grid-column:1;color:#cadbe9}
+.flux-equipment-result em{grid-column:2;grid-row:1 / span 2;color:#89c9ef;font-size:11px;font-style:normal;text-align:right}
+.flux-equipment-result strong{grid-column:1 / -1;color:#ffce83;font-size:11px}
+.theme-light .flux-equipment-search{background:#e8f6ffb8;border-color:#5286ac7d}
+.theme-light .flux-equipment-search>input{background:#ffffffc9;border-color:#5b8ab390;color:#15334c}
+.theme-light .flux-equipment-search-status{color:#42627d}
+.theme-light .flux-equipment-selection{color:#126c58}
+.theme-light .flux-equipment-clear{color:#176b9b}
+.theme-light .flux-equipment-result{background:#f4faffdf;border-color:#8bb3d0;color:#15334c}
+.theme-light .flux-equipment-result span,.theme-light .flux-equipment-result small{color:#365a73}
+.theme-light .flux-equipment-result em{color:#24729e}
+.theme-light .flux-equipment-result strong{color:#8a560e}
+@media(max-width:650px){.flux-equipment-result{grid-template-columns:1fr}.flux-equipment-result em{grid-column:1;grid-row:auto;text-align:left}}
+
 /* Flux: cores destacáveis para as movimentações, motivos e status. */
 .flux-data{min-width:1740px}
 .inventory-status.pendente{background:#b4871e70;color:#ffec98}.inventory-status.entregue{background:#24976470;color:#baffd3}.inventory-status.em-trânsito{background:#2778bd70;color:#c8e8ff}
@@ -13,3 +60,11 @@
 
 /* Acabamento da rota: piso iluminado, centros de distribuição, nós e volumes. */
 .flux-empty-road-surface{fill:#071b35a6;stroke:#5aaeff35;stroke-width:1}.flux-empty-state .flux-empty-road path{stroke:url(#flux-empty-road-detail);filter:drop-shadow(0 0 3px #48c8ff7d)}.flux-empty-state .flux-empty-truck{filter:url(#flux-empty-glow-detail)}.flux-empty-depot{color:#63caff;filter:drop-shadow(0 0 5px #3fcaff8a);animation:flux-empty-depot-pulse 3.8s ease-in-out infinite}.flux-empty-depot-destination{color:#f4ad43;animation-delay:-1.9s}.flux-empty-route-node circle:first-child{fill:#102e55;stroke-width:1.4}.flux-empty-route-node circle:last-child{fill:#53d8ff;stroke:none}.flux-empty-route-node-top{color:#4bd5f6;filter:drop-shadow(0 0 5px #3fd5ff);animation:flux-empty-node-pulse 2.4s ease-in-out infinite}.flux-empty-route-node-bottom{color:#ad7dff;filter:drop-shadow(0 0 5px #a77cff);animation:flux-empty-node-pulse 2.4s ease-in-out -1.2s infinite}.flux-empty-route-node-second{animation-delay:-.65s}.flux-empty-package{color:#59cfff;filter:drop-shadow(0 0 5px #3fcaff7a);transform-box:fill-box;transform-origin:center;animation:flux-empty-package-float 4.4s ease-in-out infinite}.flux-empty-package-two{color:#e7a241;animation-delay:-2.1s}.theme-light .flux-empty-road-surface{fill:#dcecf5a6;stroke:#4185b65c}.theme-light .flux-empty-depot{color:#168fbd}.theme-light .flux-empty-depot-destination,.theme-light .flux-empty-package-two{color:#bb7118}@keyframes flux-empty-depot-pulse{0%,100%{opacity:.58;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}}@keyframes flux-empty-node-pulse{0%,100%{opacity:.55;transform:scale(.88)}50%{opacity:1;transform:scale(1.12)}}@keyframes flux-empty-package-float{0%,100%{opacity:.56;transform:translateY(0) rotate(0)}50%{opacity:1;transform:translateY(-5px) rotate(4deg)}}@media(prefers-reduced-motion:reduce){.flux-empty-depot,.flux-empty-route-node,.flux-empty-package{animation:none}}
+/* Ícones da coluna Movimentação: direção e cor, sem alterar o valor salvo. */
+.flux-data .inventory-movement-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:29px;vertical-align:middle}
+.flux-data .inventory-movement-icon svg{display:block;width:16px;height:22px;fill:currentColor}
+.flux-data .inventory-movement-icon.envio{color:#ff484f;filter:drop-shadow(0 0 5px #ff484f70)}
+.flux-data .inventory-movement-icon.recebimento{color:#27e562;filter:drop-shadow(0 0 5px #27e56270)}
+.flux-data .inventory-movement-icon.recebimento svg{transform:rotate(180deg)}
+.theme-light .flux-data .inventory-movement-icon.envio{color:#c72b38;filter:drop-shadow(0 0 3px #c72b3840)}
+.theme-light .flux-data .inventory-movement-icon.recebimento{color:#168c43;filter:drop-shadow(0 0 3px #168c4340)}

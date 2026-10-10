@@ -15,6 +15,8 @@ test('todos os módulos principais carregam o mesmo acabamento de vidro', () => 
 });
 
 test('vidro mantém desfoque nos dois temas sem encobrir o wallpaper', () => {
+  assert.match(css, /body\.home-page \.app:not\(:has\(\.theme-switch:checked\)\)::after\s*\{[^}]*background:\s*rgba\(5, 11, 22, \.16\) !important/s);
+  assert.match(css, /body\.home-page main::before\s*\{[^}]*background:\s*transparent !important/s);
   assert.match(css, /body:not\(\.theme-light\):is\([\s\S]*?\.inventory-header/);
   assert.match(css, /body\.theme-light:is\([\s\S]*?\.nfe-header/);
   assert.match(css, /body\.supplies-open \.sp-detail\s*\{[^}]*blur\(16px\)/s);
@@ -37,6 +39,10 @@ test('vidro mantém desfoque nos dois temas sem encobrir o wallpaper', () => {
 test('cabeçalhos dos módulos usam vidro translúcido sem alterar os cards da Home', () => {
   const shared = css.slice(css.indexOf('/* Cabeçalhos de módulos:'));
   assert.ok(shared.length > 0);
+  const surfaces = css.slice(css.indexOf('/* Superfícies funcionais'), css.indexOf('body.supplies-open:not(.theme-light) .sp-header'));
+  for (const selector of ['.inventory-header', '.management-header', '.nfe-header']) {
+    assert.ok(!surfaces.includes(selector), `${selector} não pode herdar o vidro opaco dos painéis`);
+  }
   const [dark, light] = shared.split('body.theme-light:is(');
   for (const selector of ['.inventory-header', '.management-header', '.nfe-header', '.sp-header', '.settings-topbar']) {
     assert.ok(dark.includes(selector), `${selector} ausente no tema escuro`);
@@ -48,6 +54,6 @@ test('cabeçalhos dos módulos usam vidro translúcido sem alterar os cards da H
   assert.match(shared, /body:not\(\.home-page\):has\(\.theme-switch:checked\)/);
   assert.doesNotMatch(shared, /\.module-nav-card/);
   for (const page of ['index', 'inventory', 'control', 'flux', 'management', 'nfe', 'supplies', 'settings']) {
-    assert.match(read(`${page}.html`), /glass-transparency\.css\?v=2\.0\.92/);
+    assert.match(read(`${page}.html`), /glass-transparency\.css\?v=2\.0\.94/);
   }
 });

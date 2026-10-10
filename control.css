@@ -8,3 +8,8 @@
 
 /* Estado vazio do Controle TI: ferramentas menores, com o mesmo movimento sutil da interface. */
 .control-empty-illustration{width:min(58vw,260px)!important}.control-empty-wrench{color:#35d8f5}.control-empty-lightning{color:#ffd348}.control-empty-gear{color:#b57cff}.control-empty-hammer{color:#ff9a42}.theme-light .control-empty-wrench{color:#168fbd}.theme-light .control-empty-lightning{color:#b9820d}.theme-light .control-empty-gear{color:#7b52bf}.theme-light .control-empty-hammer{color:#c86716}@media(max-width:700px){.control-empty-illustration{width:min(72vw,245px)!important}}
+.inv-log span{white-space:pre-line}
+.inv-maintenance-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 10px 0 18px; }
+.inv-maintenance-choices label { display: flex; align-items: center; gap: 10px; padding: 15px; border: 1px solid var(--line, #31516f); border-radius: 10px; cursor: pointer; background: color-mix(in srgb, var(--panel, #102338) 82%, transparent); }
+.inv-maintenance-choices label:has(input:checked) { border-color: #45aaff; box-shadow: 0 0 0 2px #45aaff33; }
+.inv-maintenance-choices input { accent-color: #42a7f5; }

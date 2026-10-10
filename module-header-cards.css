@@ -66,15 +66,15 @@
   background-repeat: no-repeat;
   background-size: contain;
   filter: drop-shadow(0 8px 12px #00000045);
-  mix-blend-mode: screen;
+  mix-blend-mode: normal;
   pointer-events: none;
   transform: translateX(-78px);
 }
 
 .module-header-summary-art.inventory { background-image: url('assets/module-inventory-illustration.png'); }
-.module-header-summary-art.management { background-image: url('assets/module-control-illustration.png'); }
-.module-header-summary-art.control { background-image: url('assets/module-management-illustration.png'); }
-.module-header-summary-art.flux { background-image: url('assets/module-flux-illustration.png'); }
+.module-header-summary-art.management { background-image: url('assets/module-management-illustration-transparent.png'); }
+.module-header-summary-art.control { background-image: url('assets/module-control-illustration-transparent.png'); }
+.module-header-summary-art.flux { background-image: url('assets/module-flux-illustration-transparent.png'); }
 .module-header-summary-art.nfe { background-image: url('assets/module-nfe-illustration.png'); }
 
 /* Inventário, Controle TI e Flux usam a mesma estrutura de cabeçalho. */
@@ -117,8 +117,37 @@ body.inventory-open .inventory-header .module-header-animation .inventory-empty-
   transform: translateX(-28px);
 }
 
-body.inventory-open .inventory-header .module-header-summary-flux + .module-header-animation .inventory-empty-illustration {
-  transform: translateX(-75px);
+body.inventory-open[data-module="flux"] .inventory-header .module-header-summary {
+  flex: 0 1 340px;
+  max-width: 340px;
+  min-width: 310px;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 8px;
+}
+
+body.inventory-open[data-module="flux"] .inventory-header .module-header-summary-art.flux {
+  height: 96px;
+  mix-blend-mode: normal;
+  transform: translateX(-18px);
+}
+
+body.inventory-open[data-module="flux"] .inventory-header .module-header-animation {
+  flex: 1 1 320px;
+  min-width: 220px;
+}
+
+body.inventory-open[data-module="flux"] .inventory-header .module-header-animation .flux-empty-illustration {
+  width: min(100%, 370px) !important;
+  height: 104px;
+  transform: none;
+  /* A cena continua em movimento, mas se dissolve antes do recorte do SVG. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+
+body.inventory-open[data-module="flux"] .inventory-header .module-header-animation .flux-empty-road-surface {
+  fill: none;
+  stroke: none;
 }
 
 body.inventory-open .inventory-header .module-header-animation::before {
@@ -209,8 +238,8 @@ body.nfe-open .nfe-header-actions {
 .theme-light .module-header-summary-title { color: #1c3d59; }
 .theme-light .module-header-summary-description { color: #4b708e; }
 .theme-light .module-header-summary-tags span { border-color: #80a6bf91; background: #f6fbffb5; color: #29516e; }
-/* No tema claro são usadas versões com alpha real para manter a ilustração
-   íntegra, sem retângulo preto, corte ou distorção. */
+/* No tema claro, manter o recorte transparente usado também no tema escuro,
+   apenas com sombra mais suave sobre o wallpaper claro. */
 .theme-light .module-header-summary-art {
   /* A área vazia transparente da arte avança sobre o resumo; assim a parte
      visível fica junto do título sem tocar textos, tags ou o mascote. */
@@ -219,10 +248,6 @@ body.nfe-open .nfe-header-actions {
   opacity: 1;
   filter: drop-shadow(0 6px 9px #38546d28) saturate(1.12) contrast(1.04);
 }
-
-.theme-light .module-header-summary-art.management { background-image: url('assets/module-management-illustration-transparent.png'); }
-.theme-light .module-header-summary-art.control { background-image: url('assets/module-control-illustration-transparent.png'); }
-.theme-light .module-header-summary-art.flux { background-image: url('assets/module-flux-illustration-transparent.png'); }
 
 .theme-light .inventory-header .module-header-animation {
   --inventory-empty-main: #149bcb;
@@ -250,6 +275,15 @@ body.nfe-open .nfe-header-actions {
   body.inventory-open .inventory-header .module-header-animation .inventory-empty-illustration {
     height: 96px;
     transform: none;
+  }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-animation {
+    flex-basis: 100%;
+    min-width: 0;
+    height: 82px;
+  }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-animation .flux-empty-illustration {
+    width: min(100%, 320px) !important;
+    height: 82px;
   }
 }
 
@@ -282,6 +316,15 @@ body.nfe-open .nfe-header-actions {
 
   body.inventory-open .inventory-header .module-header-summary,
   body.management-open .management-heading.module-header-summary { flex-basis: min(100%, 360px); }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-summary {
+    flex-basis: min(100%, 340px);
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-summary-art.flux {
+    height: 74px;
+    transform: none;
+  }
 
   body.inventory-open .inventory-header .module-header-animation {
     order: 3;
@@ -303,6 +346,10 @@ body.nfe-open .nfe-header-actions {
   .module-header-summary { grid-template-columns: minmax(0, 1fr) 72px; }
   .module-header-summary-art { height: 54px; }
   .module-header-summary-description { font-size: 9px; }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-summary {
+    grid-template-columns: minmax(0, 1fr) 78px;
+  }
+  body.inventory-open[data-module="flux"] .inventory-header .module-header-summary-art.flux { height: 58px; }
 
   body.inventory-open .inventory-header .module-mascot-dock,
   body.management-open .management-header .module-mascot-dock { margin-left: 0; margin-right: 0; }

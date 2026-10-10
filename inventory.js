@@ -452,6 +452,10 @@
       animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : ''}`;
       animationDock.setAttribute('aria-hidden', 'true');
       animationDock.innerHTML = emptyPresentation.illustration;
+      if (fluxMode) {
+        // Enquadra apenas a cópia no cabeçalho; a ilustração do estado vazio permanece completa.
+        animationDock.querySelector('.flux-empty-illustration')?.setAttribute('viewBox', '0 42 520 160');
+      }
       inventoryHeader?.querySelector('.module-header-summary')?.insertAdjacentElement('afterend', animationDock);
     }
     applyHeaderPresentation();
@@ -523,8 +527,16 @@
     return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Limpeza ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data control-data"><thead><tr><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>Nº SÉRIE</th><th>TAG</th><th>SETOR</th><th>ENTRADA</th><th>SAÍDA</th><th>LIMPEZA</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.sector)}</td><td>${dateValue(item.entryDate)}</td><td>${dateValue(item.exitDate)}</td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento nesta tabela.</td></tr>'}</tbody></table></section>`;
   }
 
+  function fluxMovementIndicator(movement) {
+    const label = String(movement || '');
+    if (label !== 'Envio' && label !== 'Recebimento') {
+      return `<span class="inventory-movement ${className(label)}">${escape(label)}</span>`;
+    }
+    return `<span class="inventory-movement-icon ${className(label)}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 18 24" aria-hidden="true" focusable="false"><path d="M9 0 18 10h-5v14H5V10H0Z"/></svg></span>`;
+  }
+
   function fluxTableMarkup(table, visible) {
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, número de série, empresa..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Motivo ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data flux-data"><thead><tr><th>MOVIMENTAÇÃO</th><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>TAG</th><th>REMETENTE</th><th>DESTINO</th><th>ENVIO</th><th>RECEBIMENTO</th><th>TIPO DE ENVIO</th><th>MOTIVO</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td><span class="inventory-movement ${className(item.movement)}">${escape(item.movement)}</span></td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td><span class="inventory-shipping ${className(item.shippingType)}">${escape(item.shippingType)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="12" class="inventory-empty-row">Nenhuma movimentação nesta tabela.</td></tr>'}</tbody></table></section>`;
+    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, número de série, empresa..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Motivo ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data flux-data"><thead><tr><th>MOVIMENTAÇÃO</th><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>TAG</th><th>REMETENTE</th><th>DESTINO</th><th>ENVIO</th><th>RECEBIMENTO</th><th>TIPO DE ENVIO</th><th>MOTIVO</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td>${fluxMovementIndicator(item.movement)}</td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td><span class="inventory-shipping ${className(item.shippingType)}">${escape(item.shippingType)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="12" class="inventory-empty-row">Nenhuma movimentação nesta tabela.</td></tr>'}</tbody></table></section>`;
   }
 
   function tableMarkup(table, visible) {
@@ -601,6 +613,115 @@
     node.dataset.itemId = item.id;
   }
 
+  function setupFluxEquipmentSearch(node, entry) {
+    const fields = node.querySelector('.flux-fields');
+    if (!fields || !window.AldeckotFluxSearch) return;
+    const wrapper = document.createElement('section');
+    wrapper.className = 'flux-equipment-search inv-full';
+    wrapper.innerHTML = `<label for="fluxEquipmentSearch">Buscar equipamento por TAG ou número de série</label><input id="fluxEquipmentSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Digite a TAG ou o nº de série" aria-controls="fluxEquipmentResults"><p class="flux-equipment-search-status" role="status" aria-live="polite">A busca preenche apenas os dados técnicos; os demais campos permanecem como estão.</p><div id="fluxEquipmentResults" class="flux-equipment-search-results" role="listbox" hidden></div><p class="flux-equipment-selection" data-flux-selection hidden></p><button class="flux-equipment-clear" type="button" data-flux-clear hidden>Remover vínculo</button>`;
+    fields.prepend(wrapper);
+    const input = wrapper.querySelector('input');
+    const status = wrapper.querySelector('[role="status"]');
+    const list = wrapper.querySelector('[role="listbox"]');
+    const selection = wrapper.querySelector('[data-flux-selection]');
+    const clearButton = wrapper.querySelector('[data-flux-clear]');
+    let sequence = 0;
+    let timer;
+    let results = [];
+    let truncated = false;
+    let selected = null;
+    const setStatus = message => { status.textContent = message; };
+    const clearSelection = () => {
+      selected = null;
+      delete node.dataset.sourceModule;
+      delete node.dataset.sourceRecordId;
+      delete node.dataset.inventoryItemId;
+      selection.hidden = true;
+      selection.textContent = '';
+      clearButton.hidden = true;
+    };
+    const choose = row => {
+      selected = row;
+      node.dataset.sourceModule = row.module;
+      node.dataset.sourceRecordId = row.id;
+      if (row.inventoryItemId) node.dataset.inventoryItemId = row.inventoryItemId;
+      else delete node.dataset.inventoryItemId;
+      for (const name of ['equipment', 'brand', 'model', 'tag', 'serial']) {
+        const field = fields.querySelector(`[name="${name}"]`);
+        if (field) field.value = row[name] || '';
+      }
+      selection.textContent = `Selecionado: ${row.sourceLabel} · TAG ${row.tag || 'não informada'} · Série ${row.serial || 'não informada'}${row.inventoryItemId ? ' · vínculo patrimonial confirmado' : row.module === 'flux' ? ' · referência histórica, sem vínculo patrimonial presumido' : ''}`;
+      selection.hidden = false;
+      clearButton.hidden = false;
+      list.hidden = true;
+      setStatus(row.duplicateTag ? 'Há outra unidade com a mesma TAG. Confirme fisicamente o número de série antes de salvar.' : 'Dados técnicos preenchidos. Revise e complete os campos da movimentação.');
+    };
+    if (entry?.sourceModule && entry?.sourceRecordId) {
+      node.dataset.sourceModule = entry.sourceModule;
+      node.dataset.sourceRecordId = entry.sourceRecordId;
+      if (entry.inventoryItemId) node.dataset.inventoryItemId = entry.inventoryItemId;
+      selected = { module: entry.sourceModule, id: entry.sourceRecordId, tag: entry.tag, serial: entry.serial };
+      selection.textContent = `Vínculo salvo: ${entry.sourceModule} · TAG ${entry.tag || 'não informada'} · Série ${entry.serial || 'não informada'}`;
+      selection.hidden = false;
+      clearButton.hidden = false;
+    }
+    async function search(term, request) {
+      setStatus('Consultando equipamentos…');
+      list.hidden = true;
+      try {
+        const rows = await backend().central.search(term);
+        if (request !== sequence || !node.isConnected) return;
+        results = window.AldeckotFluxSearch.prepare(rows, term);
+        truncated = rows.length >= 12;
+        list.innerHTML = results.map((row, index) => `<button type="button" class="flux-equipment-result" role="option" data-flux-result="${index}" ${truncated ? 'disabled' : ''}><b>${escape(row.equipment || 'Equipamento')}</b><span>${escape([row.brand, row.model].filter(Boolean).join(' '))}</span><small>TAG: ${escape(row.tag || 'não informada')} · Série: ${escape(row.serial || 'não informada')}</small><em>${escape(row.sourceLabel)}${row.location ? ` · ${escape(row.location)}` : ''}</em>${row.duplicateTag ? '<strong>TAG repetida — confira a série</strong>' : ''}</button>`).join('');
+        list.hidden = !results.length;
+        setStatus(truncated ? 'A busca atingiu o limite de resultados. Refine pelo número de série para escolher com segurança.' : results.length ? `${results.length} resultado(s). Selecione explicitamente o equipamento correto.` : 'Nenhum resultado encontrado. Você pode preencher a movimentação manualmente.');
+      } catch (error) {
+        if (request !== sequence || !node.isConnected) return;
+        results = [];
+        setStatus(`Busca indisponível: ${backendMessage(error)}. O preenchimento manual continua disponível.`);
+      }
+    }
+    input.addEventListener('input', () => {
+      const request = ++sequence;
+      clearTimeout(timer);
+      results = [];
+      list.hidden = true;
+      if (selected) {
+        clearSelection();
+        setStatus('Busca alterada: escolha novamente o equipamento para manter o vínculo correto.');
+      }
+      const term = input.value.trim();
+      if (term.length < 2) { setStatus('Digite ao menos dois caracteres da TAG ou série.'); return; }
+      timer = setTimeout(() => search(term, request), 240);
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      if (results.length === 1 && !truncated) choose(results[0]);
+      else if (results.length > 1) setStatus('Há mais de um equipamento. Escolha pelo número de série.');
+      else { clearTimeout(timer); search(input.value.trim(), ++sequence); }
+    });
+    list.addEventListener('click', event => {
+      const button = event.target.closest('[data-flux-result]');
+      if (!button || button.disabled) return;
+      const row = results[Number(button.dataset.fluxResult)];
+      if (row) choose(row);
+    });
+    clearButton.addEventListener('click', () => {
+      clearSelection();
+      setStatus('Vínculo removido. Os dados preenchidos permanecem no formulário para revisão manual.');
+    });
+    fields.addEventListener('input', event => {
+      if (!selected || !['tag', 'serial'].includes(event.target.name)) return;
+      const previous = selected[event.target.name];
+      if (window.AldeckotFluxSearch.normalize(previous) !== window.AldeckotFluxSearch.normalize(event.target.value)) {
+        clearSelection();
+        setStatus('TAG ou série alterada: vínculo anterior removido. Pesquise novamente ou salve sem associação.');
+      }
+    });
+  }
+
   function fluxItemForm(entry) {
     if (!activeTable()) { tableForm(); return; }
     const value = entry || {};
@@ -612,6 +733,7 @@
     const choice = (name, label, values, selected, kind) => `<label class="inv-choice-field" data-inv-choice-field data-kind="${kind}" data-tone="${choiceTone(kind, selected)}"><span>${label} *</span><div class="inv-choice-select"><i></i><select name="${name}" data-inv-${kind}-choice required>${values.map(option => `<option ${selected === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label>`;
     const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Movimentação' : 'Adicionar Movimentação'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields flux-fields">${choice('movement', 'Movimentação', moduleConfig.movements, movement, 'movement')}<label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca *</span><input name="brand" required value="${escape(value.brand)}"></label><label><span>TAG *</span><input name="tag" required value="${escape(value.tag)}"></label><label><span>Nº Série *</span><input name="serial" required value="${escape(value.serial)}"></label><label><span>Empresa Remetente *</span><input name="senderCompany" required value="${escape(value.senderCompany)}"></label><label><span>Empresa Destino *</span><input name="destinationCompany" required value="${escape(value.destinationCompany)}"></label><label><span>Responsável Envio *</span><input name="senderResponsible" required value="${escape(value.senderResponsible)}"></label><label><span>Responsável Recebimento *</span><input name="receiverResponsible" required value="${escape(value.receiverResponsible)}"></label><label><span>Data de Envio *</span><input name="sendDate" type="date" required value="${escape(value.sendDate)}"></label><label><span>Data de Recebimento *</span><input name="receivedDate" type="date" required value="${escape(value.receivedDate)}"></label>${choice('shippingType', 'Tipo de Envio', moduleConfig.shippingTypes, shippingType, 'shipping')}${choice('situation', 'Motivo', situations, situation, 'situation')}${choice('status', 'Status', statuses, status, 'status')}${choice('priority', 'Prioridade', priorities, priority, 'priority')}<label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog flux-dialog');
     node.dataset.itemId = entry?.id || '';
+    setupFluxEquipmentSearch(node, entry);
   }
 
   function controlItemForm(entry) {
@@ -653,7 +775,141 @@
     const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid flux-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
+    if (item.situation === 'Aquisição' && canManage()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inv-primary';
+      button.dataset.invFluxAcquisition = item.id;
+      button.textContent = 'Destino da aquisição';
+      node.querySelector('.inv-actions')?.prepend(button);
+    }
     applyStatusModalGlow(node, item.status);
+  }
+
+  async function fluxAcquisitionWizard(item) {
+    if (!fluxMode || !canManage() || item.situation !== 'Aquisição') return;
+    let intent;
+    let categories;
+    let supplyOptions = { items: [], variants: [] };
+    try {
+      [intent, categories] = await Promise.all([
+        moduleApi().acquisitionIntent(item.id), moduleApi().inventoryCategories()
+      ]);
+    } catch (error) {
+      details(item);
+      window.AldeckotMessage.show(`Movimentação preservada. Assistente indisponível: ${backendMessage(error)}. Confirme se a migração 069 foi aplicada.`);
+      return;
+    }
+    if (intent?.status === 'completed') {
+      const moduleName = intent.destination === 'management' ? 'Gestão TI' : intent.destination === 'supplies' ? 'Suprimentos' : 'Inventário';
+      const recordId = intent.supply_movement_id || intent.management_record_id || intent.inventory_item_id;
+      modal(`<div class="inv-dialog-head"><h2>Aquisição integrada</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p><b>${escape(item.equipment)}</b> · TAG ${escape(item.tag)} · série ${escape(item.serial)}</p><p>Este recebimento já foi integrado a ${escape(moduleName)}. Reabrir ou salvar a movimentação não criará outra entrada.</p><small>Identificador do registro: ${escape(recordId)}</small></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Fechar</button></div>`, 'equipment-dialog flux-acquisition-dialog');
+      return;
+    }
+    if (intent?.supplyAvailable) {
+      try { supplyOptions = await moduleApi().supplyAcquisitionOptions(); }
+      catch (error) {
+        intent.supplyAvailable = false;
+        window.AldeckotMessage.show(`Consulta de Suprimentos indisponível: ${backendMessage(error)}`);
+      }
+    }
+    const destination = intent?.destination || '';
+    const category = intent?.inventory_table_id || '';
+    const received = item.status === 'Recebido';
+    const node = modal(`<div class="inv-dialog-head"><h2>Destino da aquisição</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p>Deseja cadastrar <b>${escape(item.equipment)}</b> (TAG ${escape(item.tag)} · série ${escape(item.serial)}) em algum módulo?</p><p class="flux-acquisition-state">${received ? 'Recebimento confirmado no Flux. A entrada será efetivada somente após sua confirmação.' : 'Aguardando status Recebido: a escolha ficará salva, sem entrada no estoque.'}</p><form data-flux-acquisition-form><div class="inv-fields flux-acquisition-fields"><label><span>Destino *</span><select name="destination" required><option value="" ${destination ? '' : 'selected'} disabled>Selecione</option><option value="inventory" ${destination === 'inventory' ? 'selected' : ''} ${categories.length ? '' : 'disabled'}>Inventário</option><option value="none" ${destination === 'none' ? 'selected' : ''}>Não cadastrar agora</option><option disabled>Gestão TI — próxima etapa</option><option disabled>Suprimentos — próxima etapa</option></select></label><label data-flux-inventory-category ${destination === 'inventory' ? '' : 'hidden'}><span>Tabela do Inventário *</span><select name="inventoryTableId" ${destination === 'inventory' ? 'required' : 'disabled'}><option value="" ${category ? '' : 'selected'} disabled>Escolha a categoria real</option>${categories.map(row => `<option value="${escape(row.id)}" ${category === row.id ? 'selected' : ''}>${escape(row.name)}</option>`).join('')}</select></label></div><p class="flux-acquisition-note">${intent?.status === 'pending' ? 'Escolha salva. Assim que a movimentação estiver Recebida, volte aqui para confirmar a entrada.' : 'O cadastro adicional é opcional; a movimentação do Flux já está salva.'}</p><div class="inv-footer"><button class="inv-primary" type="submit">${received ? 'Continuar' : 'Salvar escolha'}</button><button type="button" class="inv-ghost" data-inv-close>Agora não</button></div></form></div>`, 'equipment-dialog flux-acquisition-dialog');
+    node.dataset.itemId = item.id;
+    const destinationSelect = node.querySelector('[name="destination"]');
+    const categoryLabel = node.querySelector('[data-flux-inventory-category]');
+    const categorySelect = node.querySelector('[name="inventoryTableId"]');
+    if (intent?.managementAvailable) {
+      const managementOption = [...destinationSelect.options].find(option => option.textContent.startsWith('Gestão TI'));
+      managementOption.value = 'management';
+      managementOption.textContent = 'Gestão TI';
+      managementOption.disabled = false;
+      const managementFields = document.createElement('div');
+      managementFields.className = 'inv-fields flux-acquisition-fields';
+      managementFields.dataset.fluxManagementFields = '';
+      managementFields.innerHTML = `<label><span>Área da Gestão TI *</span><select name="managementArea"><option value="" disabled>Selecione a área</option>${['Frente de Loja', 'Escritório', 'Estoque'].map(area => `<option value="${escape(area)}" ${intent.management_area === area ? 'selected' : ''}>${escape(area)}</option>`).join('')}</select></label><label><span>Tipo *</span><select name="managementKind"><option value="computer">Computador</option><option disabled>Periférico — próxima etapa</option></select></label>`;
+      categoryLabel.closest('.flux-acquisition-fields').after(managementFields);
+      destinationSelect.value = destination;
+    }
+    const managementFields = node.querySelector('[data-flux-management-fields]');
+    if (intent?.supplyAvailable) {
+      const supplyOption = [...destinationSelect.options].find(option => option.textContent.startsWith('Suprimentos'));
+      supplyOption.value = 'supplies';
+      supplyOption.textContent = 'Suprimentos próprios';
+      supplyOption.disabled = !supplyOptions.items.length || item.sourceModule === 'inventory' || Boolean(item.inventoryItemId);
+      const supplyFields = document.createElement('div');
+      supplyFields.className = 'inv-fields flux-acquisition-fields flux-supply-fields';
+      supplyFields.dataset.fluxSupplyFields = '';
+      supplyFields.innerHTML = `<label class="inv-full"><span>Buscar item próprio</span><input type="search" data-flux-supply-search placeholder="Nome ou categoria" autocomplete="off"></label><label><span>Item *</span><select name="supplyId" required></select></label><label><span>Variação</span><select name="supplyVariantId"></select></label><label><span>Quantidade recebida *</span><input name="supplyQuantity" type="number" min="1" max="1000000" step="1" value="${intent.supply_quantity || ''}" required></label><p class="flux-supply-balance" data-flux-supply-balance>Selecione um item e informe a quantidade.</p><a class="flux-supply-add-variant" data-flux-supply-add-variant href="supplies.html" target="_blank" rel="noopener noreferrer">Adicionar nova variação em Suprimentos</a><small class="inv-full">Depois de criar uma variação, reabra este assistente para selecioná-la. Sem variação, a entrada vai somente ao saldo base.</small>`;
+      (managementFields || categoryLabel.closest('.flux-acquisition-fields')).after(supplyFields);
+      const itemSelect = supplyFields.querySelector('[name="supplyId"]');
+      const variantSelect = supplyFields.querySelector('[name="supplyVariantId"]');
+      const quantityInput = supplyFields.querySelector('[name="supplyQuantity"]');
+      const searchInput = supplyFields.querySelector('[data-flux-supply-search]');
+      const balance = supplyFields.querySelector('[data-flux-supply-balance]');
+      const addVariant = supplyFields.querySelector('[data-flux-supply-add-variant]');
+      const updateBalance = () => {
+        const selected = supplyOptions.items.find(row => row.id === itemSelect.value);
+        const variant = supplyOptions.variants.find(row => row.id === variantSelect.value && row.supply_id === selected?.id);
+        const previous = Number(variant ? variant.quantity_stock : selected?.quantity_stock || 0);
+        const quantity = Number(quantityInput.value);
+        balance.textContent = selected && Number.isSafeInteger(quantity) && quantity > 0
+          ? `Saldo da ${variant ? `variação ${variant.name}` : 'base'}: ${previous} → ${previous + quantity} unidade(s). A prévia será conferida novamente no banco.`
+          : 'Selecione um item e informe uma quantidade positiva.';
+      };
+      const updateVariants = preferred => {
+        variantSelect.replaceChildren(new Option('Sem variação (saldo base)', ''));
+        for (const variant of supplyOptions.variants.filter(row => row.supply_id === itemSelect.value)) {
+          variantSelect.add(new Option(`${variant.name}${variant.brand ? ` · ${variant.brand}` : ''}${variant.model && variant.model !== variant.name ? ` · ${variant.model}` : ''}`, variant.id));
+        }
+        variantSelect.value = preferred || '';
+        addVariant.href = itemSelect.value ? `supplies.html?item=${encodeURIComponent(itemSelect.value)}` : 'supplies.html';
+        updateBalance();
+      };
+      const updateItems = preferred => {
+        const query = searchInput.value.trim().toLocaleLowerCase('pt-BR');
+        itemSelect.replaceChildren(new Option('Selecione um item próprio', '', true, true));
+        for (const row of supplyOptions.items.filter(entry =>
+          `${entry.name} ${entry.category}`.toLocaleLowerCase('pt-BR').includes(query))) {
+          itemSelect.add(new Option(`${row.name} · ${row.category}`, row.id));
+        }
+        itemSelect.value = preferred || '';
+        updateVariants(itemSelect.value === intent.supply_id ? intent.supply_variant_id : '');
+      };
+      searchInput.addEventListener('input', () => updateItems(itemSelect.value));
+      itemSelect.addEventListener('change', () => updateVariants(''));
+      variantSelect.addEventListener('change', updateBalance);
+      quantityInput.addEventListener('input', updateBalance);
+      updateItems(intent.supply_id);
+      destinationSelect.value = destination;
+    }
+    const supplyFields = node.querySelector('[data-flux-supply-fields]');
+    const updateDestinationFields = () => {
+      const inventory = destinationSelect.value === 'inventory';
+      const management = destinationSelect.value === 'management';
+      const supplies = destinationSelect.value === 'supplies';
+      categoryLabel.hidden = !inventory;
+      categorySelect.disabled = !inventory;
+      categorySelect.required = inventory;
+      if (managementFields) {
+        managementFields.hidden = !management;
+        managementFields.querySelectorAll('select').forEach(select => {
+          select.disabled = !management;
+          select.required = management;
+        });
+      }
+      if (supplyFields) {
+        supplyFields.hidden = !supplies;
+        supplyFields.querySelectorAll('select, input[name="supplyQuantity"]').forEach(field => {
+          field.disabled = !supplies;
+          field.required = supplies && field.name !== 'supplyVariantId';
+        });
+      }
+    };
+    destinationSelect.addEventListener('change', updateDestinationFields);
+    updateDestinationFields();
   }
 
   function logForm(item, entry = null) {
@@ -679,9 +935,28 @@
     return changes.length ? `Alterações realizadas — ${changes.join('; ')}.` : 'Equipamento revisado sem alterações de campos.';
   }
 
+  function chooseMaintenanceResult(item) {
+    return new Promise(resolve => {
+      const node = modal(`<div class="inv-dialog-head"><h2>Concluir manutenção</h2><button type="button" class="inv-close" data-inv-maintenance-cancel aria-label="Cancelar">×</button></div><p class="inv-log-intro">Defina o status de ${escape(item.equipment)} no módulo de origem. A localização e os vínculos existentes serão preservados.</p><form data-inv-maintenance-choice><div class="inv-maintenance-choices" role="radiogroup" aria-label="Status do equipamento"><label><input type="radio" name="equipmentStatus" value="Ativo" required><span>Ativo</span></label><label><input type="radio" name="equipmentStatus" value="Reserva" required><span>Reserva</span></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-maintenance-cancel>Cancelar</button><button type="submit" class="inv-primary">Confirmar conclusão</button></div></form>`, 'equipment-dialog inv-maintenance-dialog');
+      node.querySelectorAll('[data-inv-maintenance-cancel]').forEach(button => button.addEventListener('click', () => { closeModal(); resolve(null); }));
+      node.querySelector('[data-inv-maintenance-choice]').addEventListener('submit', event => {
+        event.preventDefault();
+        const selection = new FormData(event.currentTarget).get('equipmentStatus');
+        if (!['Ativo', 'Reserva'].includes(selection)) return;
+        closeModal();
+        resolve(selection);
+      });
+    });
+  }
+
   async function saveItem(form) {
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
     const valuesToSave = { ...item };
+    if (fluxMode) {
+      valuesToSave.sourceModule = modalNode.dataset.sourceModule || null;
+      valuesToSave.sourceRecordId = modalNode.dataset.sourceRecordId || null;
+      valuesToSave.inventoryItemId = modalNode.dataset.inventoryItemId || null;
+    }
     if (old) {
       ['tag', 'serial'].forEach(field => {
         const before = String(old[field] || '').trim().toLocaleLowerCase('pt-BR');
@@ -689,10 +964,21 @@
         if (before === after) delete valuesToSave[field];
       });
     }
+    let maintenanceStatus = null;
+    if (controlMode && old && old.status !== 'Manutenção concluída' && item.status === 'Manutenção concluída') {
+      if (old.supplyUnitId) {
+        window.AldeckotMessage.show('Conclua esta ordem pelo fluxo próprio de manutenção de Suprimentos.');
+        return;
+      }
+      maintenanceStatus = await chooseMaintenanceResult(old);
+      if (!maintenanceStatus) return;
+    }
     const submit = form.querySelector('[type="submit"]'); const originalLabel = submit?.textContent; const finishSave = window.AldeckotLoading?.beginSave?.(old ? 'Salvando alterações…' : 'Adicionando item…');
     if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
     try {
-      const saved = await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item));
+      const saved = maintenanceStatus
+        ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
+        : await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item));
       let peripheralSync;
       try { peripheralSync = await moduleApi().syncManagementPeripheral?.(saved, old); }
       catch (syncError) {
@@ -703,7 +989,8 @@
       await reloadInventory();
       renderInventory();
       const updatedItem = activeTable()?.items.find(entry => entry.id === saved.id);
-      if (updatedItem) details(updatedItem);
+      if (updatedItem && fluxMode && updatedItem.situation === 'Aquisição' && canManage()) await fluxAcquisitionWizard(updatedItem);
+      else if (updatedItem) details(updatedItem);
       if (peripheralSync?.state === 'updated' || peripheralSync?.state === 'already-synced') window.AldeckotMessage.show(`${peripheralSync.type} sincronizado no computador ${peripheralSync.location}.`);
       if (peripheralSync?.state === 'target-not-found') window.AldeckotMessage.show(`Equipamento salvo, mas não há computador na Gestão TI com o nome “${peripheralSync.location}”.`);
       if (peripheralSync?.state === 'cleared') window.AldeckotMessage.show('Vínculo do periférico removido da Gestão TI.');
@@ -1079,6 +1366,12 @@
     }
     const row = event.target.closest('[data-inv-item]'); if (row) { state.itemActionMenu = false; details(activeTable().items.find(item => item.id === row.dataset.invItem)); return; }
     if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
+    const acquisition = event.target.closest('[data-inv-flux-acquisition]');
+    if (acquisition && fluxMode && canManage()) {
+      const item = activeTable()?.items.find(entry => entry.id === acquisition.dataset.invFluxAcquisition);
+      if (item) await fluxAcquisitionWizard(item);
+      return;
+    }
     const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
     const replaceItem = event.target.closest('[data-inv-replace-item]');
     if (replaceItem) {
@@ -1117,6 +1410,95 @@
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('submit', event => {
+    if (event.target.matches('[data-flux-acquisition-form]')) {
+      event.preventDefault();
+      if (!fluxMode || !canManage()) return;
+      const form = event.target;
+      if (form.dataset.busy === 'true') return;
+      const itemId = form.closest('.inv-modal')?.dataset.itemId;
+      const item = activeTable()?.items.find(entry => entry.id === itemId);
+      if (!item || item.situation !== 'Aquisição') return;
+      const values = new FormData(form);
+      const destination = String(values.get('destination') || '');
+      const tableId = destination === 'inventory' ? String(values.get('inventoryTableId') || '') : null;
+      const managementArea = destination === 'management' ? String(values.get('managementArea') || '') : null;
+      const managementKind = destination === 'management' ? String(values.get('managementKind') || '') : null;
+      const supplyId = destination === 'supplies' ? String(values.get('supplyId') || '') : null;
+      const supplyVariantId = destination === 'supplies' ? String(values.get('supplyVariantId') || '') || null : null;
+      const supplyQuantity = destination === 'supplies' ? Number(values.get('supplyQuantity')) : null;
+      if (!['inventory', 'management', 'supplies', 'none'].includes(destination) ||
+          (destination === 'inventory' && !tableId) ||
+          (destination === 'management' && (!['Frente de Loja', 'Escritório', 'Estoque'].includes(managementArea) || managementKind !== 'computer')) ||
+          (destination === 'supplies' && (!supplyId || !Number.isSafeInteger(supplyQuantity) || supplyQuantity < 1 || supplyQuantity > 1000000 || item.sourceModule === 'inventory' || item.inventoryItemId))) {
+        window.AldeckotMessage.show('Selecione um destino e os campos obrigatórios.');
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      form.dataset.busy = 'true';
+      submit.disabled = true;
+      const finishSave = window.AldeckotLoading?.beginSave?.('Registrando destino da aquisição…');
+      (async () => {
+        if (destination === 'supplies') {
+          await moduleApi().setSupplyAcquisitionIntent(itemId, supplyId, supplyVariantId, supplyQuantity);
+        } else {
+          await moduleApi().setAcquisitionIntent(itemId, destination, tableId, managementArea, managementKind);
+        }
+        if (destination === 'none') {
+          closeModal(); details(item);
+          window.AldeckotMessage.show('Movimentação preservada no Flux sem cadastro adicional.');
+          return;
+        }
+        if (item.status !== 'Recebido') {
+          await fluxAcquisitionWizard(item);
+          window.AldeckotMessage.show('Destino salvo. Nenhuma entrada foi criada antes do recebimento.');
+          return;
+        }
+        const management = destination === 'management';
+        const supplies = destination === 'supplies';
+        const preview = supplies
+          ? await moduleApi().previewSupplyAcquisition(itemId)
+          : management ? await moduleApi().previewManagementAcquisition(itemId)
+            : await moduleApi().previewInventoryAcquisition(itemId);
+        const moduleName = supplies ? 'Suprimentos' : management ? 'Gestão TI' : 'Inventário';
+        if (supplies && preview?.state !== 'ready') throw new Error('A prévia de estoque não está disponível; nenhuma entrada foi feita.');
+        if (preview?.state === 'invalid-identity') throw new Error(`Informe TAG e número de série válidos antes de cadastrar na ${moduleName}.`);
+        if (preview?.state === 'conflict') throw new Error(`Há conflito de TAG ou série na ${moduleName}. Revise a identidade antes de integrar.`);
+        if (preview?.state === 'area-conflict') throw new Error(`Este computador já existe na área “${preview.existingArea || 'não informada'}” da Gestão TI. Revise a área escolhida; nenhuma mudança de local será feita automaticamente.`);
+        if (!supplies && !['new', 'existing'].includes(preview?.state)) throw new Error('Não foi possível confirmar a identidade do equipamento. Nenhum cadastro foi feito.');
+        const action = supplies
+          ? `Confirmar entrada em Suprimentos: ${preview.itemName} · ${preview.variantName} · ${preview.quantity} unidade(s)? Saldo ${preview.previousStock} → ${preview.predictedStock}. O banco conferirá o saldo novamente antes de creditar.`
+          : preview.state === 'existing'
+          ? `O equipamento já existe em “${management ? managementArea : preview.tableName || 'Inventário'}”. Vincular esta aquisição ao registro existente, sem criar cópia nem alterar status/local?`
+          : management
+            ? `Cadastrar este computador em Reserva na Gestão TI (${managementArea}), ainda sem instalação em terminal ou PDV?`
+            : 'Confirmar o recebimento e cadastrar este equipamento em Reserva na tabela escolhida do Inventário?';
+        const confirmed = await window.AldeckotMessage.confirm(action, {
+          title: 'Confirmar aquisição recebida', confirmText: supplies ? 'Creditar estoque' : preview.state === 'existing' ? 'Vincular existente' : 'Cadastrar em Reserva', danger: false
+        });
+        if (!confirmed) {
+          form.querySelector('.flux-acquisition-note').textContent = 'Escolha salva; nenhuma entrada foi efetivada. Você pode confirmar depois.';
+          return;
+        }
+        const result = supplies
+          ? await moduleApi().completeSupplyAcquisition(itemId)
+          : management ? await moduleApi().completeManagementAcquisition(itemId)
+            : await moduleApi().completeInventoryAcquisition(itemId);
+        await reloadInventory();
+        renderInventory();
+        const updatedItem = activeTable()?.items.find(entry => entry.id === itemId);
+        if (updatedItem) details(updatedItem);
+        window.AldeckotMessage.show(result?.alreadyApplied ? 'Aquisição já integrada; nenhuma entrada foi repetida.' :
+          supplies ? `Entrada registrada em Suprimentos: saldo ${result.previousStock} → ${result.newStock}.` :
+          result?.linkedExisting ? `Aquisição vinculada ao equipamento existente na ${moduleName}.` :
+            `Equipamento cadastrado em Reserva na ${moduleName}.`);
+      })().catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(async () => {
+          delete form.dataset.busy;
+          if (submit.isConnected) submit.disabled = false;
+          await finishSave?.();
+        });
+      return;
+    }
     if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form]')) { event.preventDefault(); return; }
     if (event.target.matches('[data-inv-table-form]')) {
       event.preventDefault();

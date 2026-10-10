@@ -14,9 +14,14 @@ body.management-open:not(.theme-light)::after {
   background: radial-gradient(ellipse 58% 50% at 54% 29%, #0c4e6c16, transparent 70%), #03091640 !important;
 }
 
-/* Home: a navegação e os painéis laterais não podem esconder o mesmo wallpaper. */
+/* Home: apenas um véu leve sobre o wallpaper, sem duas camadas escuras sobrepostas. */
+body.home-page .app:not(:has(.theme-switch:checked))::after {
+  background: rgba(5, 11, 22, .16) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 body.home-page main::before {
-  background: linear-gradient(90deg, #05091247, #07101a3d 43%, #05091240) !important;
+  background: transparent !important;
 }
 /* Os cards da Home preservam a cor própria de cada módulo. */
 body.home-page .nav .module-nav-card {
@@ -42,14 +47,11 @@ body.home-page:has(.theme-switch:checked) :is(.home-recent-item, .operations-met
 
 /* Superfícies funcionais continuam legíveis, sem virar blocos sólidos. */
 body:not(.theme-light):is(.inventory-open, .management-open, .nfe-open) :is(
-  .inventory-header,
   .inventory-panel:not(.inventory-table-sidebar),
-  .management-header,
   .management-toolbar,
   .management-area,
   .management-chart,
   .management-summary-card,
-  .nfe-header,
   .nfe-toolbar,
   .nfe-metric,
   .nfe-table-panel,
@@ -61,14 +63,11 @@ body:not(.theme-light):is(.inventory-open, .management-open, .nfe-open) :is(
 }
 
 body.theme-light:is(.inventory-open, .management-open, .nfe-open) :is(
-  .inventory-header,
   .inventory-panel:not(.inventory-table-sidebar),
-  .management-header,
   .management-toolbar,
   .management-area,
   .management-chart,
   .management-summary-card,
-  .nfe-header,
   .nfe-toolbar,
   .nfe-metric,
   .nfe-table-panel,

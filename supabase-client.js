@@ -432,6 +432,9 @@
 
   const controlItemFromRow = row => ({
     id: row.id,
+    inventoryItemId: row.inventory_item_id || null,
+    managementRecordId: row.management_record_id || null,
+    supplyUnitId: row.supply_unit_id || null,
     equipment: row.equipment,
     model: row.model,
     brand: row.brand,
@@ -456,7 +459,7 @@
       await init();
       const rows = check(await client
         .from('module_tables')
-        .select('id, name, icon, position, created_at, control_items(id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at, control_item_logs(id, message, created_at))')
+        .select('id, name, icon, position, created_at, control_items(id, inventory_item_id, management_record_id, supply_unit_id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at, control_item_logs(id, message, created_at))')
         .eq('module', 'control')
         .order('position', { ascending: true })
         .order('created_at', { ascending: false }));
@@ -503,6 +506,24 @@
       if (!selected) return;
       const ordered = [selected, ...tables.filter(table => table.id !== id)];
       await Promise.all(ordered.map((table, position) => client.from('module_tables').update({ position }).eq('id', table.id).then(check)));
+    },
+
+    async completeMaintenance(itemId, values, equipmentStatus, requestId) {
+      await init();
+      const result = check(await client.rpc('complete_control_maintenance', {
+        p_control_item_id: itemId,
+        p_equipment_status: equipmentStatus,
+        p_request_id: requestId,
+        p_control_fields: {
+          equipment: values.equipment.trim(), model: values.model.trim(),
+          brand: values.brand || '', sector: values.sector || '',
+          entryDate: values.entryDate || null, exitDate: values.exitDate || null,
+          cleaningType: values.situation, notes: storeItemPriority(values.notes, values.priority),
+          ...(hasOwn(values, 'tag') ? { tag: values.tag || '' } : {}),
+          ...(hasOwn(values, 'serial') ? { serial: values.serial || '' } : {})
+        }
+      }));
+      return { id: itemId, eventId: result?.eventId, equipmentStatus };
     },
 
     async saveItem(tableId, values, existingId, logMessage) {
@@ -629,6 +650,9 @@
 
   const fluxItemFromRow = row => ({
     id: row.id,
+    sourceModule: row.source_module || null,
+    sourceRecordId: row.source_record_id || null,
+    inventoryItemId: row.inventory_item_id || null,
     movement: row.movement,
     equipment: row.equipment,
     model: row.model,
@@ -802,15 +826,22 @@
     }
   };
 
+  let fluxSourceAvailable = null;
+  const missingFluxSourceColumns = error => /(?:source_module|source_record_id|inventory_item_id)/i.test(error?.message || '') &&
+    /(?:column|schema cache|could not find)/i.test(error?.message || '');
   const flux = {
     async load() {
       await init();
-      const rows = check(await client
-        .from('module_tables')
-        .select('id, name, icon, position, created_at, flux_items(id, movement, equipment, model, brand, serial, tag, sender_company, destination_company, sender_responsible, receiver_responsible, send_date, received_date, shipping_type, reason, status, notes, position, created_at, updated_at, flux_item_logs(id, message, created_at))')
-        .eq('module', 'flux')
-        .order('position', { ascending: true })
-        .order('created_at', { ascending: false }));
+      const fields = 'id, name, icon, position, created_at, flux_items(id, movement, equipment, model, brand, serial, tag, sender_company, destination_company, sender_responsible, receiver_responsible, send_date, received_date, shipping_type, reason, status, notes, position, created_at, updated_at, flux_item_logs(id, message, created_at))';
+      const withSource = fields.replace('flux_item_logs(', 'source_module, source_record_id, inventory_item_id, flux_item_logs(');
+      const loadRows = select => client.from('module_tables').select(select).eq('module', 'flux')
+        .order('position', { ascending: true }).order('created_at', { ascending: false });
+      let response = await loadRows(withSource);
+      if (response.error && missingFluxSourceColumns(response.error)) {
+        fluxSourceAvailable = false;
+        response = await loadRows(fields);
+      } else if (!response.error) fluxSourceAvailable = true;
+      const rows = check(response);
       return {
         tables: rows.map(table => ({
           id: table.id,
@@ -858,6 +889,13 @@
 
     async saveItem(tableId, values, existingId, logMessage) {
       await init();
+      if (fluxSourceAvailable === null && hasOwn(values, 'sourceModule')) {
+        const probe = await client.from('flux_items').select('id, source_module').limit(1);
+        if (probe.error && missingFluxSourceColumns(probe.error)) fluxSourceAvailable = false;
+        else { check(probe); fluxSourceAvailable = true; }
+      }
+      if (values.sourceModule && !values.sourceRecordId) fail('Selecione novamente o equipamento de origem.');
+      if (values.sourceModule && !fluxSourceAvailable) fail('O vínculo ainda não está disponível no banco. Aplique a migração 068 ou remova a seleção e salve manualmente.');
       const payload = {
         table_id: tableId,
         movement: values.movement,
@@ -876,12 +914,22 @@
         notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
+      if (fluxSourceAvailable && hasOwn(values, 'sourceModule')) {
+        payload.source_module = values.sourceModule || null;
+        payload.source_record_id = values.sourceRecordId || null;
+        payload.inventory_item_id = values.inventoryItemId || null;
+      }
       if (!existingId || hasOwn(values, 'serial')) payload.serial = String(values.serial || '').trim();
       if (!existingId || hasOwn(values, 'tag')) payload.tag = String(values.tag || '').trim();
       const result = existingId
         ? await client.from('flux_items').update(payload).eq('id', existingId).select().single()
         : await client.from('flux_items').insert(payload).select().single();
       const saved = check(result);
+      // O gatilho da manutenção Gestão TI grava Flux, status, chamado e logs
+      // na mesma transação. Não faça novas gravações depois do commit: uma
+      // falha nelas pareceria rejeitar uma movimentação já concluída.
+      if (values.sourceModule === 'management' && values.situation === 'Manutenção' &&
+          values.movement === 'Envio') return saved;
       check(await client.from('flux_item_logs').insert({
         flux_item_id: saved.id,
         action: existingId ? 'update' : 'create',
@@ -895,6 +943,117 @@
         description: logMessage || (existingId ? 'Movimentação atualizada.' : 'Movimentação adicionada ao Flux.')
       });
       return saved;
+    },
+
+    async inventoryCategories() {
+      await init();
+      return check(await client.from('module_tables').select('id, name')
+        .eq('module', 'inventory').order('name', { ascending: true }));
+    },
+
+    async acquisitionIntent(itemId) {
+      await init();
+      const extended = await client.from('flux_acquisition_intents')
+        .select('flux_item_id, destination, inventory_table_id, management_area, management_kind, status, inventory_item_id, management_record_id')
+        .eq('flux_item_id', itemId).maybeSingle();
+      if (!extended.error) {
+        const supplyProbe = await client.from('flux_acquisition_intents')
+          .select('supply_id').limit(0);
+        if (supplyProbe.error && !/(?:supply_id).*?(?:column|schema cache)|(?:column|schema cache).*?(?:supply_id)/i.test(supplyProbe.error.message)) {
+          fail(supplyProbe.error.message);
+        }
+        const supplyFields = supplyProbe.error ? null : check(await client.from('flux_acquisition_intents')
+          .select('supply_id,supply_variant_id,supply_quantity,supply_movement_id')
+          .eq('flux_item_id', itemId).maybeSingle());
+        return { ...extended.data, ...supplyFields, managementAvailable: true,
+          supplyAvailable: !supplyProbe.error };
+      }
+      if (!/(?:management_area|management_kind|management_record_id).*?(?:column|schema cache)|(?:column|schema cache).*?(?:management_area|management_kind|management_record_id)/i.test(extended.error.message)) {
+        fail(extended.error.message);
+      }
+      const legacy = check(await client.from('flux_acquisition_intents')
+        .select('flux_item_id, destination, inventory_table_id, status, inventory_item_id')
+        .eq('flux_item_id', itemId).maybeSingle());
+      return { ...legacy, managementAvailable: false, supplyAvailable: false };
+    },
+
+    async setAcquisitionIntent(itemId, destination, inventoryTableId = null, managementArea = null, managementKind = null) {
+      await init();
+      const values = {
+        p_flux_item_id: itemId, p_destination: destination,
+        p_inventory_table_id: inventoryTableId,
+        p_management_area: managementArea, p_management_kind: managementKind
+      };
+      const extended = await client.rpc('flux_set_acquisition_intent_v2', values);
+      if (!extended.error) return extended.data;
+      if (destination === 'management' || extended.error.code !== 'PGRST202') fail(extended.error.message);
+      return check(await client.rpc('flux_set_acquisition_intent', {
+        p_flux_item_id: itemId, p_destination: destination,
+        p_inventory_table_id: inventoryTableId
+      }));
+    },
+
+    async previewInventoryAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_preview_inventory_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async completeInventoryAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_complete_inventory_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async previewManagementAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_preview_management_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async completeManagementAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_complete_management_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async supplyAcquisitionOptions() {
+      await init();
+      const collect = async query => {
+        const result = [];
+        for (let offset = 0; ; offset += 500) {
+          const rows = check(await query(offset, offset + 499));
+          result.push(...rows);
+          if (rows.length < 500) return result;
+        }
+      };
+      const [items, variants] = await Promise.all([
+        collect((from, to) => client.from('supplies')
+          .select('id,name,category,quantity_stock,inventory_group_key')
+          .is('inventory_group_key', null).is('deleted_at', null)
+          .eq('tracking_type', 'quantity').eq('inactive', false)
+          .order('name').range(from, to)),
+        collect((from, to) => client.from('supply_variants')
+          .select('id,supply_id,name,brand,model,description,quantity_stock')
+          .is('inventory_variant_key', null).eq('inactive', false)
+          .order('name').range(from, to))
+      ]);
+      const validIds = new Set(items.map(item => item.id));
+      return { items, variants: variants.filter(variant => validIds.has(variant.supply_id)) };
+    },
+
+    async setSupplyAcquisitionIntent(itemId, supplyId, variantId, quantity) {
+      await init();
+      return check(await client.rpc('flux_set_supply_acquisition_intent', {
+        p_flux_item_id: itemId, p_supply_id: supplyId,
+        p_variant_id: variantId, p_quantity: quantity
+      }));
+    },
+
+    async previewSupplyAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_preview_supply_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async completeSupplyAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_complete_supply_acquisition', { p_flux_item_id: itemId }));
     },
 
     async addLog(itemId, message) {
