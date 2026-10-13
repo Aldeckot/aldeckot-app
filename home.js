@@ -122,16 +122,36 @@
       finishHomeData(sharedHomeData);
       window.dispatchEvent(new CustomEvent('aldeckot:home-data', { detail: sharedHomeData }));
       const storedEvents = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
-      const activityEvents = (storedEvents || []).map(eventEntry).filter(Boolean);
+      const orderedEvents = [...(storedEvents || [])]
+        .sort((first, second) => String(second.created_at || '').localeCompare(String(first.created_at || '')));
+      const latestOperationByItem = new Map();
+      orderedEvents.forEach(event => {
+        if (!event.details?.itemId) return;
+        const key = itemKey({ module: event.module, id: event.details.itemId });
+        if (!latestOperationByItem.has(key)) latestOperationByItem.set(key, event.operation);
+      });
+      const deletedKeys = new Set([...latestOperationByItem]
+        .filter(([, operation]) => operation === 'delete')
+        .map(([key]) => key));
+      const activityEvents = orderedEvents.map(eventEntry)
+        .filter(entry => entry && !deletedKeys.has(itemKey(entry)));
       const updatedKeys = new Set(activityEvents.map(itemKey));
       const currentItems = [
         ...(inventory.tables || []).flatMap(table => (table.items || []).map(item => itemEntry('inventory', table, item))),
         ...(management.items || []).map(item => itemEntry('management', { id: item.tableId || management.table?.id || '', name: management.table?.name || 'Infraestrutura ALDECKOT' }, item)),
         ...(control.tables || []).flatMap(table => (table.items || []).map(item => itemEntry('control', table, item))),
         ...(flux.tables || []).flatMap(table => (table.items || []).map(item => itemEntry('flux', table, item)))
-      ].filter(entry => !updatedKeys.has(itemKey(entry)));
+      ].filter(entry => !updatedKeys.has(itemKey(entry)) && !deletedKeys.has(itemKey(entry)));
+      const seenItems = new Set();
       const recentItems = [...activityEvents, ...currentItems]
         .sort((first, second) => String(activityTime(second)).localeCompare(String(activityTime(first))))
+        .filter(entry => {
+          if (!entry.id) return true;
+          const key = itemKey(entry);
+          if (seenItems.has(key)) return false;
+          seenItems.add(key);
+          return true;
+        })
         .slice(0, 3);
       renderRecentItems(recentItems);
     } catch (error) {
