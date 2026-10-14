@@ -33,10 +33,10 @@ test('as telas permanecem disponíveis durante consultas e atualizações autom�
   assert.match(loading, /x-aldeckot-background/);
   assert.match(loading, /return \['GET', 'HEAD'\]\.includes\(requestMethod\(input, options\)\) \|\| isReadOnlyRpc\(input\) \|\| isMarkedBackgroundRequest\(input, options\);/);
   assert.match(loading, /return isBackgroundRequest\(input, options\) \? request : track\(request\);/);
-  assert.match(home, /loading-indicator\.js\?v=2\.0\.112/);
+  assert.match(home, /loading-indicator\.js\?v=2\.0\.113/);
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /loading-indicator\.js\?v=2\.0\.112/);
+    assert.match(source, /loading-indicator\.js\?v=2\.0\.113/);
   }
 });
 

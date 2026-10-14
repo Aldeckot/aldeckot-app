@@ -6,6 +6,7 @@
   let homeData = window.AldeckotHomeData || null;
   let refreshTimer;
   let animationTimer;
+  let loadSequence = 0;
   const currentHomeData = () => window.AldeckotHomeData || homeData;
 
   const isMaintenanceOpen = item => {
@@ -164,32 +165,57 @@
     window.dispatchEvent(new CustomEvent('aldeckot:operational-alerts', { detail: { alerts } }));
   }
 
+  const ensureShell = host => {
+    if (host.querySelector('.operations-metrics')) return;
+    host.innerHTML = `<header class="operations-heading"><div><span>${operationsIcon}</span><div><h2>Central de Operações</h2><p class="aldeckot-inline-loading" role="status">Carregando indicadores…</p></div></div><button class="operations-refresh" type="button" data-operations-refresh title="Atualizar indicadores">↻ Atualizar</button></header><div class="operations-metrics">${metric('inventory-active', 'Equipamentos ativos', 0, 'active', 'de 0 no inventário')}${metric('maintenance-open', 'Manutenções abertas', 0, 'warn', 'Controle TI e Gestão TI')}${metric('transfers-open', 'Transferências em curso', 0, 'info', 'Flux pendente ou em trânsito')}${metric('nfe-month', 'Ocorrências fiscais', 0, 'violet', 'registradas neste mês')}</div>`;
+    host.querySelectorAll('[data-operations-metric]').forEach(button => button.addEventListener('click', () => openMetric(button.dataset.operationsMetric)));
+    host.querySelector('[data-operations-refresh]')?.addEventListener('click', () => load({ animate: true, immediateFeedback: true }));
+  };
+
   const render = (metrics, isFallback = false, animate = false) => {
     const host = document.querySelector('[data-operational-dashboard]');
     if (!host) return;
-    host.innerHTML = `<header class="operations-heading"><div><span>${operationsIcon}</span><div><h2>Central de Operações</h2><p>${isFallback ? 'Indicadores carregados da visão atual.' : 'Indicadores consolidados em tempo real.'}</p></div></div><button class="operations-refresh" type="button" data-operations-refresh title="Atualizar indicadores">↻ Atualizar</button></header><div class="operations-metrics">${metric('inventory-active', 'Equipamentos ativos', metrics.inventoryActive, 'active', `de ${metrics.inventoryTotal || 0} no inventário`)}${metric('maintenance-open', 'Manutenções abertas', metrics.maintenanceOpen, 'warn', 'Controle TI e Gestão TI')}${metric('transfers-open', 'Transferências em curso', metrics.transfersOpen, 'info', 'Flux pendente ou em trânsito')}${metric('nfe-month', 'Ocorrências fiscais', metrics.nfeMonth, 'violet', 'registradas neste mês')}</div>`;
-    host.querySelectorAll('[data-operations-metric]').forEach(button => button.addEventListener('click', () => openMetric(button.dataset.operationsMetric)));
-    host.querySelector('[data-operations-refresh]')?.addEventListener('click', () => load({ animate: true }));
+    ensureShell(host);
+    const headingStatus = host.querySelector('.operations-heading p');
+    headingStatus.classList.remove('aldeckot-inline-loading');
+    headingStatus.textContent = isFallback ? 'Indicadores carregados da visão atual.' : 'Indicadores consolidados em tempo real.';
+    for (const [key, value, detail] of [
+      ['inventory-active', metrics.inventoryActive, `de ${metrics.inventoryTotal || 0} no inventário`],
+      ['maintenance-open', metrics.maintenanceOpen, 'Controle TI e Gestão TI'],
+      ['transfers-open', metrics.transfersOpen, 'Flux pendente ou em trânsito'],
+      ['nfe-month', metrics.nfeMonth, 'registradas neste mês']
+    ]) {
+      const button = host.querySelector(`[data-operations-metric="${key}"]`);
+      if (!button) continue;
+      button.disabled = !Number(value || 0);
+      button.querySelector('strong').textContent = String(Number(value || 0));
+      button.querySelector('span').textContent = detail;
+    }
     publishAlerts(metrics);
     if (animate) {
       window.clearTimeout(animationTimer);
-      host.classList.remove('is-updating');
-      void host.offsetWidth;
       host.classList.add('is-updating');
       animationTimer = window.setTimeout(() => host.classList.remove('is-updating'), 950);
     }
   };
 
-  async function load({ animate = false } = {}) {
-    if (!currentHomeData() && window.AldeckotHomeDataReady) await window.AldeckotHomeDataReady;
-    const api = window.AldeckotSupabase;
-    if (!api?.operations) return render(fallbackMetrics(currentHomeData()), true, animate);
+  async function load({ animate = false, immediateFeedback = false } = {}) {
+    const requestId = ++loadSequence;
+    const loadingToken = animate ? window.AldeckotLoading?.show?.('Sincronizando dados…', immediateFeedback ? 0 : 160) : null;
     try {
+      if (!currentHomeData() && window.AldeckotHomeDataReady) await window.AldeckotHomeDataReady;
+      if (requestId !== loadSequence) return;
+      const api = window.AldeckotSupabase;
+      if (!api?.operations) return render(fallbackMetrics(currentHomeData()), true, animate);
       const metrics = await api.operations.dashboard();
+      if (requestId !== loadSequence) return;
       render(metrics ? reconcileVisibleMetrics(metrics) : fallbackMetrics(currentHomeData()), !metrics, animate);
     } catch (error) {
+      if (requestId !== loadSequence) return;
       console.warn('Indicadores operacionais indisponíveis:', error);
       render(fallbackMetrics(currentHomeData()), true, animate);
+    } finally {
+      if (loadingToken) window.AldeckotLoading?.hide?.(loadingToken);
     }
   }
 
@@ -200,7 +226,7 @@
     panel.className = 'operations-panel';
     panel.dataset.operationalDashboard = 'true';
     panel.setAttribute('aria-live', 'polite');
-    panel.innerHTML = '<p class="operations-loading aldeckot-inline-loading" role="status">Carregando indicadores operacionais…</p>';
+    ensureShell(panel);
     slot.appendChild(panel);
     return true;
   };

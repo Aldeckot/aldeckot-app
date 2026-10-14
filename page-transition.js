@@ -3,7 +3,7 @@
   const TRANSITION_KEY = 'aldeckot-home-transition';
   const DURATION = 430;
   const HOME_RENDER_MAX_WAIT = 600;
-  const APP_ROUTE_FILES = new Set(['index.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'settings.html']);
+  const APP_ROUTE_FILES = new Set(['index.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'supplies.html', 'settings.html']);
   const homeTasks = new Set();
   let isNavigating = false;
   let homeDomReady = document.readyState !== 'loading';
@@ -12,6 +12,8 @@
   let homeDataReady = null;
   let moduleRevealQueued = false;
   let moduleRevealed = false;
+  let moduleLoadingToken = null;
+  const moduleWaitStartedAt = Date.now();
   let homeWaitTimer = 0;
   let homeWaitExpired = false;
   let navigationTimer = 0;
@@ -29,7 +31,7 @@
 
   const nextFrame = () => new Promise(resolve => window.requestAnimationFrame(resolve));
   const isHome = () => document.body?.classList.contains('home-page');
-  const isModule = () => Boolean(document.body?.matches('[data-inventory-page], [data-management-page], .settings-page'));
+  const isModule = () => Boolean(document.body?.matches('[data-inventory-page], [data-management-page], .supplies-open, .settings-page'));
 
   function storeHomeEntrance() {
     try { sessionStorage.setItem(TRANSITION_KEY, '1'); }
@@ -112,6 +114,8 @@
       const root = document.documentElement;
       root.classList.remove('aldeckot-module-booting');
       root.classList.add('aldeckot-module-revealing');
+      if (moduleLoadingToken) window.AldeckotLoading?.hide?.(moduleLoadingToken);
+      moduleLoadingToken = null;
       window.setTimeout(() => root.classList.remove('aldeckot-module-revealing'), 600);
     } finally {
       moduleRevealQueued = false;
@@ -151,6 +155,7 @@
     window.clearTimeout(homeWaitTimer);
     homeWaitTimer = 0;
     isNavigating = false;
+    moduleLoadingToken = null;
     document.body?.classList.remove('aldeckot-page-leaving', 'aldeckot-home-entering');
     document.querySelectorAll('.aldeckot-route-curtain').forEach(curtain => curtain.remove());
     const root = document.documentElement;
@@ -209,9 +214,20 @@
     if (event.persisted) restoreCachedPage();
   });
 
+  function revealModuleFallback() {
+    if (!isModule() || moduleRevealed) return;
+    const pending = document.querySelector('.inventory-empty-state .aldeckot-inline-loading, .management-loading, .nfe-loading, .supplies-loading');
+    if (pending && Date.now() - moduleWaitStartedAt < 8000) {
+      if (!moduleLoadingToken) moduleLoadingToken = window.AldeckotLoading?.show?.('Preparando módulo…');
+      window.setTimeout(revealModuleFallback, 400);
+      return;
+    }
+    revealModuleWhenStable();
+  }
+
   if (isModule()) {
-    // Evita que uma conexão lenta deixe a interface vazia indefinidamente.
-    window.setTimeout(revealModuleWhenStable, 1400);
+    // Aguarda a estrutura final. Se a conexão demorar, mantém o indicador na tela.
+    window.setTimeout(revealModuleFallback, 400);
   }
 
   if (document.readyState === 'loading') {

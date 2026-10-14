@@ -1,6 +1,9 @@
 /* A Central de Operações é uma continuação visual dos itens atualizados. */
 .home-operations-slot{margin-top:12px}
-.operations-panel{position:relative;display:grid;gap:10px;padding:13px 0 0;border-top:1px solid #4e789064;background:transparent;min-width:0}
+.home-recent-list[data-home-recent-list]{min-height:168px;align-content:start}
+.home-recent-placeholder{display:block;min-height:48px;border:1px solid #5a759044;border-radius:10px;background:linear-gradient(110deg,#14284282 20%,#34547783 50%,#14284282 80%);background-size:220% 100%;animation:home-recent-shimmer 1.6s ease-in-out infinite}
+@keyframes home-recent-shimmer{to{background-position-x:-220%}}
+.operations-panel{position:relative;display:grid;gap:10px;min-height:132px;padding:13px 0 0;border-top:1px solid #4e789064;background:transparent;min-width:0}
 .operations-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .operations-heading>div{display:flex;align-items:center;gap:9px;min-width:0}
 .operations-heading>div>span{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border:1px solid #27cce9;border-radius:9px;background:#0a4160;color:#71efff;font-size:16px;box-shadow:inset 0 1px #ffffff18}
@@ -34,7 +37,7 @@
 .operations-target-list b{font-size:12px}.operations-target-list span{color:#9cc5e0;font-size:10px}
 
 @keyframes operations-table-update{0%{filter:brightness(1)}40%{filter:brightness(1.14);box-shadow:0 0 25px #20cfe842}100%{filter:brightness(1)}}
-@keyframes operations-item-update{0%{opacity:.35;transform:translateY(7px) scale(.98)}60%{opacity:1;transform:translateY(-2px) scale(1.015)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes operations-item-update{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 1px #45d7ee66}}
 .operations-panel.is-updating{animation:operations-table-update .9s ease-out both}
 .operations-panel.is-updating .operations-metric{animation:operations-item-update .52s cubic-bezier(.2,.8,.2,1) both}
 .operations-panel.is-updating .operations-metric:nth-child(2){animation-delay:.07s}.operations-panel.is-updating .operations-metric:nth-child(3){animation-delay:.14s}.operations-panel.is-updating .operations-metric:nth-child(4){animation-delay:.21s}
@@ -47,6 +50,8 @@
 .theme-switch:checked~main .operations-metric:hover,.theme-switch:checked~main .operations-metric:focus-visible{background:#fff;border-color:#55b6d3}
 .theme-switch:checked~main .operations-metric:disabled:hover{background:#f8fcffcf;border-color:#9ec9e3}
 
-@media(max-width:650px){.operations-panel{padding-top:11px}.operations-heading p{display:none}.operations-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.operations-metric{min-height:71px}.operations-metric strong{font-size:20px}}
+@media(max-width:650px){.operations-panel{min-height:210px;padding-top:11px}.operations-heading p{display:none}.operations-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.operations-metric{min-height:71px}.operations-metric strong{font-size:20px}}
 @media(max-width:430px){.operations-heading{align-items:flex-start}.operations-refresh{padding:6px 7px}.operations-metric{padding:8px}.operations-metric small,.operations-metric span{font-size:8px}}
+@media(max-width:430px){.home-recent-list[data-home-recent-list]{min-height:228px}}
 @media(prefers-reduced-motion:reduce){.operations-panel.is-updating,.operations-panel.is-updating .operations-metric{animation:none}}
+@media(prefers-reduced-motion:reduce){.home-recent-placeholder{animation:none}}

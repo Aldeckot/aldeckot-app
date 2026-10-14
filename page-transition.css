@@ -43,6 +43,7 @@ body.aldeckot-page-leaving { pointer-events: none; }
 body.aldeckot-page-leaving .app,
 body.aldeckot-page-leaving .management-app,
 body.aldeckot-page-leaving .nfe-app,
+body.aldeckot-page-leaving .supplies-app,
 body.aldeckot-page-leaving .settings-workspace {
   pointer-events: none;
   animation: aldeckot-module-leave .42s cubic-bezier(.22, 1, .36, 1) forwards !important;
@@ -55,8 +56,10 @@ body.aldeckot-page-leaving .inv-modal {
 }
 
 /* O primeiro conteúdo do módulo é preparado fora da vista e apresentado de uma vez. */
-html.aldeckot-module-booting body[data-inventory-page] #app,
+html.aldeckot-module-booting body[data-inventory-page] .app,
+html.aldeckot-module-booting body[data-inventory-page] .nfe-app,
 html.aldeckot-module-booting body[data-management-page] #managementApp,
+html.aldeckot-module-booting body.supplies-open .supplies-app,
 html.aldeckot-module-booting body.settings-page .settings-workspace,
 html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
 html.aldeckot-module-booting body[data-management-page] .management-modal {
@@ -64,8 +67,10 @@ html.aldeckot-module-booting body[data-management-page] .management-modal {
   pointer-events: none;
 }
 
-html.aldeckot-module-revealing body[data-inventory-page] #app,
+html.aldeckot-module-revealing body[data-inventory-page] .app,
+html.aldeckot-module-revealing body[data-inventory-page] .nfe-app,
 html.aldeckot-module-revealing body[data-management-page] #managementApp,
+html.aldeckot-module-revealing body.supplies-open .supplies-app,
 html.aldeckot-module-revealing body.settings-page .settings-workspace {
   animation: aldeckot-module-arrive .56s cubic-bezier(.22, 1, .36, 1) both !important;
   will-change: opacity;
@@ -149,9 +154,12 @@ html.aldeckot-home-revealing body.home-page main {
   body.aldeckot-page-leaving .app,
   body.aldeckot-page-leaving .management-app,
   body.aldeckot-page-leaving .nfe-app,
+  body.aldeckot-page-leaving .supplies-app,
   body.aldeckot-page-leaving .settings-workspace,
-  html.aldeckot-module-revealing body[data-inventory-page] #app,
+  html.aldeckot-module-revealing body[data-inventory-page] .app,
+  html.aldeckot-module-revealing body[data-inventory-page] .nfe-app,
   html.aldeckot-module-revealing body[data-management-page] #managementApp,
+  html.aldeckot-module-revealing body.supplies-open .supplies-app,
   html.aldeckot-module-revealing body.settings-page .settings-workspace,
   html.aldeckot-home-revealing body.home-page .side,
   html.aldeckot-home-revealing body.home-page main { animation: none !important; }
@@ -163,8 +171,10 @@ html.aldeckot-home-revealing body.home-page main {
     pointer-events: auto;
   }
 
-  html.aldeckot-module-booting body[data-inventory-page] #app,
+  html.aldeckot-module-booting body[data-inventory-page] .app,
+  html.aldeckot-module-booting body[data-inventory-page] .nfe-app,
   html.aldeckot-module-booting body[data-management-page] #managementApp,
+  html.aldeckot-module-booting body.supplies-open .supplies-app,
   html.aldeckot-module-booting body.settings-page .settings-workspace,
   html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
   html.aldeckot-module-booting body[data-management-page] .management-modal {

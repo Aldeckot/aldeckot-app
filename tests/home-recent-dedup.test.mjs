@@ -6,7 +6,8 @@ import { runInNewContext } from 'node:vm';
 const homeSource = readFileSync(new URL('../home.js', import.meta.url), 'utf8');
 
 test('a Home exibe a atividade mais recente de cada equipamento ativo e ignora exclusões', async () => {
-  const panel = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [], appendChild: () => {} };
+  const list = { innerHTML: '', setAttribute: () => {}, querySelectorAll: () => [] };
+  const panel = { querySelector: selector => selector === '[data-home-recent-list]' ? list : { textContent: '', classList: { remove: () => {} } } };
   const document = {
     getElementById: () => null,
     querySelector: selector => selector === '[data-home-recent-items]'
@@ -58,9 +59,9 @@ test('a Home exibe a atividade mais recente de cada equipamento ativo e ignora e
   await window.AldeckotHomeDataReady;
   await new Promise(resolve => setImmediate(resolve));
 
-  assert.match(panel.innerHTML, /Registro mais recente/);
-  assert.match(panel.innerHTML, /Outro equipamento/);
-  assert.doesNotMatch(panel.innerHTML, /Registro anterior/);
-  assert.doesNotMatch(panel.innerHTML, /Registro antigo de item excluído|Equipamento excluído/);
-  assert.equal((panel.innerHTML.match(/data-home-recent-target="management\.html\?item=same"/g) || []).length, 1);
+  assert.match(list.innerHTML, /Registro mais recente/);
+  assert.match(list.innerHTML, /Outro equipamento/);
+  assert.doesNotMatch(list.innerHTML, /Registro anterior/);
+  assert.doesNotMatch(list.innerHTML, /Registro antigo de item excluído|Equipamento excluído/);
+  assert.equal((list.innerHTML.match(/data-home-recent-target="management\.html\?item=same"/g) || []).length, 1);
 });

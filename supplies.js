@@ -1018,19 +1018,25 @@
     try {
       await window.AldeckotAuthReady;
       await load();
+      window.AldeckotModuleStage?.reveal?.();
       try { state.equipment = await api.equipment(); }
       catch (error) { notify(`Equipamentos temporariamente indisponíveis: ${error.message}`, true); }
       let realtimeTimer;
       api.subscribe(() => {
         clearTimeout(realtimeTimer);
-        realtimeTimer = setTimeout(() => {
-          load();
-          window.dispatchEvent(new CustomEvent('aldeckot:realtime-change', { detail: { table: 'supply_units' } }));
+        realtimeTimer = setTimeout(async () => {
+          const loadingToken = window.AldeckotLoading?.show?.('Sincronizando Suprimentos…', 160);
+          try { await load(); }
+          finally {
+            if (loadingToken) window.AldeckotLoading?.hide?.(loadingToken);
+            window.dispatchEvent(new CustomEvent('aldeckot:realtime-change', { detail: { table: 'supply_units' } }));
+          }
         }, 250);
       }).catch(() => {});
     } catch (error) {
       state.error = error.message || 'Não foi possível conectar ao Supabase.';
       state.items = []; render();
+      window.AldeckotModuleStage?.reveal?.();
     }
   };
   window.AldeckotSuppliesOpenDetails = async (id, unitId) => {

@@ -25,16 +25,34 @@ test('navegação e restauração do cache limpam cortina e carregador anteriore
   assert.match(loading, /window\.addEventListener\('pagehide', reset\)/);
   assert.match(loading, /if \(event\.persisted\) reset\(\)/);
   assert.doesNotMatch(loading, /beforeunload/);
-  assert.doesNotMatch(route, /AldeckotLoading\?\.show/);
+  const navigation = route.slice(route.indexOf('function navigate('), route.indexOf('function goHome()'));
+  assert.doesNotMatch(navigation, /AldeckotLoading\?\.show/);
 });
 
 test('atualização de recentes preserva o painel operacional e ignora respostas antigas', () => {
   const home = source('home.js');
   assert.match(home, /lastRecentSignature/);
   assert.match(home, /recentLoadSequence/);
-  assert.match(home, /operationsSlot = panel\.querySelector\('\[data-home-operations-slot\]'\)/);
-  assert.match(home, /panel\.appendChild\(operationsSlot\)/);
+  assert.match(home, /data-home-recent-list/);
+  assert.match(home, /list\.innerHTML = items\.map/);
+  assert.doesNotMatch(home.slice(home.indexOf('function renderRecentItems('), home.indexOf('async function loadRecentItems(')), /panel\.innerHTML/);
   assert.match(home, /if \(requestId !== recentLoadSequence\) return/);
+});
+
+test('quadros de dados mantêm suas dimensões e a sincronização exibe feedback visual', () => {
+  const css = source('operational-dashboard.css');
+  const dashboard = source('operational-dashboard.js');
+  const routeCss = source('page-transition.css');
+  assert.match(css, /\.home-recent-list\[data-home-recent-list\]\{min-height:168px/);
+  assert.match(css, /\.operations-panel\{[^}]*min-height:132px/);
+  assert.doesNotMatch(css, /@keyframes operations-item-update\{[^}]*transform:/);
+  assert.match(dashboard, /const ensureShell = host =>/);
+  assert.match(dashboard, /AldeckotLoading\?\.show\?\.\('Sincronizando dados…'/);
+  assert.doesNotMatch(dashboard, /host\.offsetWidth/);
+  assert.match(routeCss, /aldeckot-module-booting body\[data-inventory-page\] \.app/);
+  assert.match(routeCss, /aldeckot-module-booting body\.supplies-open \.supplies-app/);
+  assert.match(source('supplies.html'), /page-transition\.js\?v=2\.0\.113/);
+  assert.match(source('supplies.js'), /AldeckotModuleStage\?\.reveal\?\.\(\)/);
 });
 
 test('a agenda reserva seus quadros antes de buscar dados e mantém o quadro de hoje', () => {
