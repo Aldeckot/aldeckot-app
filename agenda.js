@@ -115,9 +115,8 @@
       panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
     });
     document.querySelectorAll('.agenda-today-panel').forEach(panel => {
-      panel.hidden = !todays.length;
       if (!todays.length) {
-        panel.innerHTML = '';
+        panel.innerHTML = '<div class="agenda-panel-heading"><div><h3>Tarefas e eventos de hoje</h3><small>Nenhum compromisso</small></div></div><p>Nenhuma tarefa ou evento para hoje.</p>';
         return;
       }
       const completedEntries = todays.filter(isCompleted).length;
@@ -356,6 +355,8 @@
   });
 
   async function bootstrapAgenda() {
+    // Monta os três quadros antes da consulta para não reagrupar o grid ao carregar.
+    renderAll();
     try {
       await (window.AldeckotAuthReady || Promise.resolve());
       if (!window.AldeckotAuth?.session) return;

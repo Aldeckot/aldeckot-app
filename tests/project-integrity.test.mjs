@@ -33,10 +33,10 @@ test('as telas permanecem disponíveis durante consultas e atualizações autom�
   assert.match(loading, /x-aldeckot-background/);
   assert.match(loading, /return \['GET', 'HEAD'\]\.includes\(requestMethod\(input, options\)\) \|\| isReadOnlyRpc\(input\) \|\| isMarkedBackgroundRequest\(input, options\);/);
   assert.match(loading, /return isBackgroundRequest\(input, options\) \? request : track\(request\);/);
-  assert.match(home, /loading-indicator\.js\?v=20260912-silent-postit1/);
+  assert.match(home, /loading-indicator\.js\?v=2\.0\.112/);
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /loading-indicator\.js\?v=20260912-silent-postit1/);
+    assert.match(source, /loading-indicator\.js\?v=2\.0\.112/);
   }
 });
 
@@ -230,7 +230,8 @@ test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', 
   assert.match(computers, /management-service-sweep/);
   assert.match(computers, /mini-computer\.is-fixed-terminal/);
   assert.match(page, /management-computers\.css\?v=20260925-info-layer1/);
-  assert.match(page, /management\.js\?v=20261002-shared-office-stock-transfer/);
+  const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+  assert.ok(page.includes(`management.js?v=${version}`));
   assert.match(computers, /font-size: 11px !important/);
   assert.match(computers, /width: 34px !important/);
   assert.match(computers, /management-area:has\(\.mini-computer:hover\)/);
@@ -258,7 +259,7 @@ test('Fiscal NF-e registra os valores total e pendente com validação financeir
   assert.match(migration, /create or replace function app\.audit_nfe_occurrence\(\)/);
   assert.match(page, /nfe\.js\?v=2\.0\.82/);
   assert.match(page, /nfe-metric-icons\.css\?v=\d+\.\d+\.\d+/);
-  assert.match(page, /nfe-header-layout\.css\?v=20260926-nfe-layout4/);
+  assert.match(page, /nfe-header-layout\.css\?v=\d+\.\d+\.\d+/);
   assert.match(metricStyles, /\.nfe-metric-main\s*\{\s*align-items: center;/);
   assert.match(metricStyles, /\.nfe-metric-icon\s*\{[\s\S]*?place-items: center;[\s\S]*?align-self: center;[\s\S]*?justify-self: center;/);
   assert.match(metricStyles, /\[data-nfe-backup\]\.nfe-icon-button/);

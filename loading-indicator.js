@@ -8,7 +8,7 @@
   let shownAt = 0;
   let overlay;
   let label;
-  const minimumVisibleDuration = 340;
+  const minimumVisibleDuration = 260;
 
   function ensureOverlay() {
     if (overlay) return overlay;
@@ -41,6 +41,7 @@
 
     window.clearTimeout(hideTimer);
     const current = ensureOverlay();
+    current.hidden = false;
     label.textContent = active.at(-1)?.message || 'Carregando…';
     if (current.classList.contains('is-visible') || revealFrame) return;
     revealFrame = window.requestAnimationFrame(() => {
@@ -76,7 +77,7 @@
   }
 
   function track(promise, message = 'Sincronizando dados…') {
-    const token = begin(message, 180);
+    const token = begin(message, 220);
     return Promise.resolve(promise).finally(() => end(token));
   }
 
@@ -90,11 +91,35 @@
     };
   }
 
-  window.AldeckotLoading = { show: begin, hide: end, track, beginSave };
+  function reset() {
+    visibleTasks.forEach(task => window.clearTimeout(task.timer));
+    visibleTasks.clear();
+    window.clearTimeout(hideTimer);
+    window.cancelAnimationFrame(revealFrame);
+    hideTimer = 0;
+    revealFrame = 0;
+    shownAt = 0;
+    if (overlay) {
+      overlay.classList.remove('is-visible');
+      overlay.hidden = true;
+    }
+  }
 
-  const startup = begin('Preparando sistema…');
-  window.addEventListener('load', () => window.setTimeout(() => end(startup), 260), { once: true });
-  window.addEventListener('beforeunload', () => begin('Abrindo módulo…'));
+  window.AldeckotLoading = { show: begin, hide: end, track, beginSave, reset };
+
+  const returningHome = (() => {
+    if (!document.body?.classList.contains('home-page')) return false;
+    try {
+      return new URLSearchParams(window.location.search).get('aldeckotTransition') === 'home'
+        || sessionStorage.getItem('aldeckot-home-transition') === '1';
+    } catch { return false; }
+  })();
+  const startup = returningHome ? null : begin('Preparando sistema…', 240);
+  const finishStartup = () => { if (startup) end(startup); };
+  if (document.readyState === 'complete') finishStartup();
+  else window.addEventListener('load', finishStartup, { once: true });
+  window.addEventListener('pagehide', reset);
+  window.addEventListener('pageshow', event => { if (event.persisted) reset(); });
 
   const nativeFetch = window.fetch?.bind(window);
   const requestMethod = (input, options) => String(

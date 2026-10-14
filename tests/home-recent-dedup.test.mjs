@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 const homeSource = readFileSync(new URL('../home.js', import.meta.url), 'utf8');
 
 test('a Home exibe a atividade mais recente de cada equipamento ativo e ignora exclusões', async () => {
-  const panel = { innerHTML: '', querySelectorAll: () => [] };
+  const panel = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [], appendChild: () => {} };
   const document = {
     getElementById: () => null,
     querySelector: selector => selector === '[data-home-recent-items]'

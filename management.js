@@ -41,8 +41,10 @@
   const priorityColors = { Alta: '#ff6674', 'Média': '#ffce59', 'Estável': '#3de5d3' };
   const areaIcons = { 'Escritório': 'building', Estoque: 'warehouse', 'Frente de Loja': 'store' };
   let payload = { table: null, items: [] };
-  let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'operational', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
+  let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'general', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
   let toastTimer;
+  let detailReturnFocus = null;
+  let inventoryPeripheralRows = [];
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -78,7 +80,32 @@
       server: '<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01M11 7h6m-6 10h6"/>',
       ping: '<path d="M5 16h2m3-5h2m3-4h2"/><path d="M4 20c9-1 12-7 16-16"/>',
       transfer: '<path d="M5 7h11m0 0-3-3m3 3-3 3M19 17H8m0 0 3 3m-3-3 3-3"/>',
-      cube: '<path d="m12 3 7 4v9l-7 4-7-4V7l7-4Z"/><path d="m5 7 7 4 7-4M12 11v9"/>'
+      cube: '<path d="m12 3 7 4v9l-7 4-7-4V7l7-4Z"/><path d="m5 7 7 4 7-4M12 11v9"/>',
+      info: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 8h6m-6 4h10m-10 4h7"/><circle cx="17" cy="7.5" r="1.5"/>',
+      cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 9h6v6H9zM9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/>',
+      network: '<rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 9v4M6 16v-3h12v3"/>',
+      pin: '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/>',
+      pulse: '<path d="M2 12h4l3-7 5 14 3-7h5"/>',
+      tag: '<path d="M3 4h10l8 8-9 9-9-9V4Z"/><circle cx="8" cy="9" r="1"/>',
+      memory: '<rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 11h2m3 0h2m3 0h1M6 17v3m4-3v3m4-3v3m4-3v3"/>',
+      storage: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 13h18M7 17h.01m4 0h.01"/>',
+      notes: '<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/>',
+      copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+      display: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M6 8h12"/>',
+      workstation: '<rect x="2" y="4" width="14" height="12" rx="2"/><path d="M5 8h8M6 20h7m-3-4v4"/><rect x="18" y="5" width="4" height="15" rx="1"/><path d="M19.5 9h1m-1 7h1"/>',
+      windows: '<path d="M3 5.5 10.5 4v7H3V5.5Zm9.5-1.9L21 2v9h-8.5V3.6ZM3 13h7.5v7L3 18.5V13Zm9.5 0H21v9l-8.5-1.8V13Z"/>',
+      printer: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 15h12v6H6zM18 12h.01"/>',
+      keypad: '<rect x="4" y="2" width="16" height="20" rx="3"/><path d="M7 6h10v4H7zM8 14h.01m4 0h.01m4 0h.01M8 18h.01m4 0h4"/>',
+      drawer: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 11h18M9 15h6M6 4h12v3"/>',
+      scale: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M7 7a5 5 0 0 1 10 0M12 7l2-3M8 15h8m-6 3h4"/>',
+      scanner: '<path d="M4 6V4h4m8 0h4v2M4 18v2h4m8 0h4v-2M5 12h14M7 9v6m3-6v6m4-6v6m3-6v6"/>',
+      keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M5 10h.01m4 0h.01m4 0h.01m4 0h.01M5 13h.01m4 0h.01m4 0h.01m4 0h.01M7 16h10"/>',
+      mouse: '<rect x="7" y="2" width="10" height="20" rx="5"/><path d="M12 2v8m-5 1h10"/>',
+      power: '<path d="M12 2v9M6.5 5.5a8 8 0 1 0 11 0"/>',
+      phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 5h4m-3 14h2"/>',
+      globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+      shield: '<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/>',
+      route: '<circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h6a5 5 0 0 0 0-10h-2M17 6H9a4 4 0 0 0-4 4v2"/>'
     };
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${paths[name] || ''}</svg>`;
   };
@@ -220,37 +247,109 @@
   const detail = (label, value, full = false) => `<div class="management-detail${full ? ' full' : ''}"><span>${escape(label)}</span><b>${escape(display(value))}</b></div>`;
   const statusBadge = item => `<span class="management-badge" style="--badge-color:${statusColors[item.status] || statusColors.Ativo}"><i></i>${escape(item.status)}</span>`;
 
+  const detailTabs = [['general', 'Geral', 'display'], ['hardware', 'Hardware', 'cpu'], ['network', 'Rede', 'network'], ['location', 'Localização', 'pin'], ['operational', 'Status Operacional', 'pulse'], ['history', 'Histórico', 'history'], ['peripherals', 'Periféricos', 'cube']];
+  const hasDetailValue = value => value !== null && value !== undefined && String(value).trim() !== '';
+  const sectionTitle = (icon, title, action = '') => `<div class="management-asset-section-head"><h3><span class="management-asset-heading-icon icon-${icon}">${svg(icon, 20)}</span>${escape(title)}</h3>${action}</div>`;
+  const workstationArt = () => `<svg class="management-asset-workstation-art" viewBox="0 0 72 72" width="68" height="68" aria-hidden="true"><defs><linearGradient id="managementArtFrame" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#c4e9ff"/><stop offset="1" stop-color="#296cac"/></linearGradient><linearGradient id="managementArtScreen" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#46c7ff"/><stop offset=".55" stop-color="#1477cf"/><stop offset="1" stop-color="#072e73"/></linearGradient><linearGradient id="managementArtTower" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#4f9bcf"/><stop offset="1" stop-color="#0d345e"/></linearGradient></defs><ellipse class="art-shadow" cx="36" cy="62" rx="31" ry="5"/><path class="art-tower" d="M52 16h11a3 3 0 0 1 3 3v35a3 3 0 0 1-3 3H52a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3Z"/><path class="art-tower-line" d="M54 22h7m-7 4h7"/><circle class="art-led" cx="58" cy="49" r="2"/><rect class="art-monitor-frame" x="4" y="12" width="47" height="38" rx="4"/><rect class="art-screen" x="8" y="16" width="39" height="30" rx="2"/><path class="art-screen-glint" d="M9 33 31 16h15L9 44Z"/><path class="art-window" d="m20 24 8-1v8h-8v-7Zm10-1 8-1v9h-8v-8Zm-10 10h8v8l-8-1v-7Zm10 0h8v9l-8-1v-8Z"/><path class="art-neck" d="M24 50h8v7h-8z"/><path class="art-base" d="M17 58h22l3 4H14l3-4Z"/></svg>`;
+  const sectionLink = (tab, label) => `<button class="management-asset-link" type="button" data-management-tab="${tab}">${escape(label)}</button>`;
+  const assetCard = (icon, label, value, secondary = '') => `<article class="management-asset-data-card"><span class="management-asset-data-icon">${svg(icon, 22)}</span><div><small>${escape(label)}</small><strong>${escape(value)}</strong>${secondary ? `<span>${escape(secondary)}</span>` : ''}</div></article>`;
+  const hardwareCards = item => [
+    ['windows', 'Sistema operacional', item.operatingSystem, item.osVersion],
+    ['cpu', 'Processador', item.processor],
+    ['memory', 'Memória RAM', item.memory],
+    ['storage', 'Armazenamento', item.storage]
+  ].filter(([, , value]) => hasDetailValue(value)).map(([icon, label, value, secondary]) => assetCard(icon, label, value, secondary)).join('');
+  const peripheralList = item => (item.peripherals || []).filter(entry => hasDetailValue(entry.type || entry.tipo));
+  const peripheralInventoryTag = entry => String(entry.tag || entry.status || '').trim().toUpperCase();
+  const linkedInventoryPeripheral = (entry, type) => {
+    const sourceId = String(entry.sourceItemId || '');
+    if (entry.sourceModule === 'inventory' && sourceId) return inventoryPeripheralRows.find(row => row.id === sourceId) || null;
+    const tag = peripheralInventoryTag(entry);
+    const rule = peripheralTagRules[type];
+    if (!rule?.pattern.test(tag)) return null;
+    const matches = inventoryPeripheralRows.filter(row => String(row.tag || '').trim().toUpperCase() === tag);
+    return matches.length === 1 ? matches[0] : null;
+  };
+  async function refreshPeripheralStatuses() {
+    const entries = payload.items.flatMap(peripheralList);
+    const ids = entries.filter(entry => entry.sourceModule === 'inventory' && entry.sourceItemId).map(entry => entry.sourceItemId);
+    const tags = entries.filter(entry => !entry.sourceItemId && peripheralTagRules[entry.type || entry.tipo]?.pattern.test(peripheralInventoryTag(entry))).map(peripheralInventoryTag);
+    try {
+      const rows = await window.AldeckotSupabase.management.peripheralInventoryStatuses({ ids, tags });
+      const next = rows.sort((first, second) => String(first.id).localeCompare(String(second.id)));
+      const changed = JSON.stringify(next) !== JSON.stringify(inventoryPeripheralRows);
+      inventoryPeripheralRows = next;
+      return changed;
+    } catch (error) {
+      console.warn('Status dos periféricos no Inventário indisponível:', error);
+      inventoryPeripheralRows = [];
+      return false;
+    }
+  }
+  const peripheralIcon = type => {
+    const value = normalize(type);
+    if (value.includes('impressora')) return 'printer';
+    if (value.includes('pin pad') || value.includes('pinpad')) return 'keypad';
+    if (value.includes('gaveta')) return 'drawer';
+    if (value.includes('balanca')) return 'scale';
+    if (value.includes('leitor')) return 'scanner';
+    if (value.includes('teclado')) return 'keyboard';
+    if (value.includes('mouse')) return 'mouse';
+    if (value.includes('nobreak')) return 'power';
+    if (value.includes('telefone')) return 'phone';
+    if (value.includes('monitor')) return 'display';
+    return 'cube';
+  };
+  function peripheralCards(item) {
+    const entries = peripheralList(item);
+    if (!entries.length) return '<p class="management-asset-empty">Nenhum periférico vinculado a este equipamento.</p>';
+    const healthStates = ['ativo', 'funcionando', 'operacional', 'reserva', 'defeito', 'manutencao', 'inativo', 'desativado', 'offline'];
+    return `<div class="management-asset-peripheral-grid">${entries.map(entry => {
+      const type = entry.type || entry.tipo || 'Periférico';
+      const rawStatus = String(entry.status || '').trim();
+      const inventoryItem = linkedInventoryPeripheral(entry, type);
+      const inventoryLinked = entry.sourceModule === 'inventory' || Boolean(peripheralTagRules[type]?.pattern.test(peripheralInventoryTag(entry)));
+      const condition = inventoryItem?.status || (!inventoryLinked ? entry.condition || entry.operationalStatus || (healthStates.includes(normalize(rawStatus)) ? rawStatus : '') : '');
+      const identifier = inventoryItem?.tag || entry.tag || (!condition ? rawStatus : '');
+      const model = [entry.brand, entry.model].filter(hasDetailValue).join(' ');
+      const normalizedCondition = normalize(condition);
+      const tone = ['ativo', 'funcionando', 'operacional'].includes(normalizedCondition) ? 'ok' : ['defeito', 'manutencao', 'inativo', 'desativado', 'offline'].includes(normalizedCondition) ? 'fault' : normalizedCondition === 'reserva' ? 'warn' : 'unverified';
+      return `<article class="management-asset-peripheral"><span class="management-asset-data-icon icon-${peripheralIcon(type)}">${svg(peripheralIcon(type), 24)}</span><div><strong>${escape(type)}</strong>${model ? `<span>${escape(model)}</span>` : ''}${identifier && normalize(identifier) !== 'nao informado' ? `<small>TAG ${escape(identifier)}</small>` : ''}<em class="${tone}">${escape(condition || (inventoryLinked ? 'Status indisponível no Inventário' : 'Estado não informado'))}</em></div></article>`;
+    }).join('')}</div>`;
+  }
+  function networkRows(item) {
+    const rows = [['ip', 'IP', item.ip, 'globe'], ['subnetMask', 'Máscara', item.subnetMask, 'shield'], ['gateway', 'Gateway', item.gateway, 'route'], ['dns', 'DNS', item.dns, 'globe']];
+    const available = rows.filter(([, , value]) => hasDetailValue(value));
+    if (!available.length) return '<p class="management-asset-empty">Nenhuma configuração de rede cadastrada.</p>';
+    return `<div class="management-asset-network">${available.map(([field, label, value, icon]) => `<div class="management-asset-network-row"><span>${svg(icon, 17)} ${escape(label)}</span><strong>${escape(value)}</strong><button type="button" data-management-action="copy-network" data-management-network-field="${field}" aria-label="Copiar ${escape(label)}" title="Copiar ${escape(label)}">${svg('copy', 16)}</button></div>`).join('')}</div>`;
+  }
+  function recentLogs(item) {
+    const logs = (item.logs || []).slice(0, 4);
+    return logs.length ? `<div class="management-asset-recent-list">${logs.map(log => `<article><time>${escape(dateTime(log.at))}</time><span>${escape(log.text)}</span></article>`).join('')}</div>` : '<p class="management-asset-empty">Nenhuma atividade registrada.</p>';
+  }
+  function generalDashboard(item) {
+    const specs = hardwareCards(item);
+    return `<div class="management-asset-dashboard"><div class="management-asset-primary"><section class="management-asset-section">${sectionTitle('info', 'Informações Gerais', sectionLink('hardware', 'Ver hardware'))}${specs ? `<div class="management-asset-data-grid">${specs}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}</section><section class="management-asset-section">${sectionTitle('cube', 'Periféricos', sectionLink('peripherals', 'Ver todos'))}${peripheralCards(item)}</section></div><aside class="management-asset-secondary"><section class="management-asset-section">${sectionTitle('notes', 'Descrição')}${hasDetailValue(item.description) ? `<p class="management-asset-copy">${escape(item.description)}</p>` : '<p class="management-asset-empty">Sem descrição cadastrada.</p>'}${hasDetailValue(item.notes) ? `<div class="management-asset-note"><strong>Observações</strong><p>${escape(item.notes)}</p></div>` : ''}</section><section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede', sectionLink('network', 'Ver rede'))}${networkRows(item)}</section><section class="management-asset-section">${sectionTitle('history', 'Histórico recente', sectionLink('history', 'Ver todos'))}${recentLogs(item)}</section></aside></div>`;
+  }
   function detailContent(item) {
     const tab = state.tab;
-    if (tab === 'hardware') return `<div class="management-detail-grid">${detail('Sistema operacional', item.operatingSystem)}${detail('Versão', item.osVersion)}${detail('Processador', item.processor)}${detail('Memória', item.memory)}${detail('Armazenamento', item.storage)}</div>`;
-    if (tab === 'peripherals') {
-      const known = peripheralTypes.map(type => {
-        const peripheral = (item.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type));
-        return peripheral?.status && isValidPeripheralTag(type, peripheral.status) ? [type, peripheralTag(peripheral.status)] : null;
-      }).filter(Boolean);
-      const extras = (item.peripherals || [])
-        .filter(entry => !peripheralTypes.some(type => normalize(entry.type || entry.tipo) === normalize(type)))
-        .filter(entry => String(entry.status || '').trim())
-        .map(entry => [entry.type || entry.tipo || 'Periférico', entry.status]);
-      const peripherals = [...known, ...extras];
-      return peripherals.length ? `<div class="management-detail-grid">${peripherals.map(([type, value]) => detail(type, value)).join('')}</div>` : '<p class="management-last-sync">Nenhum periférico informado para este equipamento.</p>';
-    }
-    if (tab === 'network') return `<div class="management-detail-grid">${detail('Endereço IP', item.ip)}${detail('Gateway', item.gateway)}${detail('Máscara', item.subnetMask)}${detail('CPU registrada', item.monitoring?.cpu ? `${item.monitoring.cpu}%` : '')}</div>`;
-    if (tab === 'location') return `<div class="management-detail-grid">${detail('Área', item.area)}${detail('Setor', item.sector)}${detail('Local', item.location)}</div>`;
-    if (tab === 'operational') return `<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article><article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority || 'Estável')}</b></article><article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article><article class="management-operational-card" style="--operational-color:${cleaningColors[item.cleaning] || cleaningColors.Preventiva}"><i>Limpeza</i><b>${escape(item.cleaning)}</b></article></div>`;
-    if (tab === 'history') return `<div class="management-log-head"><div><h3>Histórico</h3><p>Registros automáticos e manuais do equipamento.</p></div><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p><span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span></article>`).join('') : '<p class="management-last-sync">Nenhum log registrado para este equipamento.</p>'}</div>`;
-    const fixedTerminal = hasFixedTerminal(item);
-    return `<div class="management-detail-grid">${fixedTerminal ? detail('Terminal fixo', terminalName(item)) : ''}${fixedTerminal ? detail('Computador instalado', computerName(item)) : ''}${detail('TAG', item.tag)}${detail('Nº de série', item.serial)}${detail('Marca', item.brand)}${detail('Modelo', item.model)}${detail('Data de cadastro', item.registeredAt)}${detail('Última atualização', item.updatedAt ? dateTime(item.updatedAt) : '')}${detail('Observações', item.notes, true)}</div>`;
+    if (tab === 'general') return generalDashboard(item);
+    if (tab === 'hardware') return `<section class="management-asset-section">${sectionTitle('cpu', 'Hardware')}${hardwareCards(item) ? `<div class="management-asset-data-grid">${hardwareCards(item)}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}${[item.brand, item.model, item.serial].some(hasDetailValue) ? `<div class="management-detail-grid">${hasDetailValue(item.brand) ? detail('Marca', item.brand) : ''}${hasDetailValue(item.model) ? detail('Modelo', item.model) : ''}${hasDetailValue(item.serial) ? detail('Nº de série', item.serial) : ''}</div>` : ''}</section>`;
+    if (tab === 'peripherals') return `<section class="management-asset-section">${sectionTitle('cube', 'Periféricos vinculados')}${peripheralCards(item)}</section>`;
+    if (tab === 'network') return `<section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede')}${networkRows(item)}<p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
+    if (tab === 'location') return `<section class="management-asset-section">${sectionTitle('pin', 'Localização')}${[item.area, item.sector, item.location].some(hasDetailValue) ? `<div class="management-detail-grid">${hasDetailValue(item.area) ? detail('Área', item.area) : ''}${hasDetailValue(item.sector) ? detail('Setor', item.sector) : ''}${hasDetailValue(item.location) ? detail('Local', item.location) : ''}</div>` : '<p class="management-asset-empty">Localização não cadastrada.</p>'}</section>`;
+    if (tab === 'operational') return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article>${hasDetailValue(item.priority) ? `<article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority)}</b></article>` : ''}${hasDetailValue(item.situation) ? `<article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article>` : ''}${hasDetailValue(item.cleaning) ? `<article class="management-operational-card" style="--operational-color:${cleaningColors[item.cleaning] || cleaningColors.Preventiva}"><i>Limpeza</i><b>${escape(item.cleaning)}</b></article>` : ''}</div><p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
+    return `<section class="management-asset-section">${sectionTitle('history', 'Histórico')}<div class="management-log-head"><p>Registros automáticos e manuais do equipamento.</p><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p><span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span></article>`).join('') : '<p class="management-asset-empty">Nenhum log registrado para este equipamento.</p>'}</div></section>`;
   }
 
   function detailsModal(item) {
-    const tabs = [['general', 'Informações Gerais'], ['hardware', 'Hardware'], ['network', 'Rede'], ['location', 'Localização'], ['operational', 'Status Operacional'], ['history', 'Histórico'], ['peripherals', 'Periféricos']];
     const actionMenu = state.actionMenu ? `<div class="management-action-menu" role="menu"><button type="button" data-management-action="edit" role="menuitem">${svg('edit', 14)} Editar</button>${isProtectedTerminal(item) ? '' : `<button class="danger" type="button" data-management-action="delete" role="menuitem">${svg('trash', 14)} Excluir</button>`}</div>` : '';
     const fixedTerminal = hasFixedTerminal(item);
-    const transferButton = fixedTerminal ? `<button class="management-modal-action management-transfer-action" type="button" data-management-action="transfer" ${canManage() ? '' : 'disabled'} title="${canManage() ? 'Transferir computador para outro terminal' : 'Somente administradores podem transferir computadores'}">${svg('transfer', 14)} Transferir</button>` : '';
+    const transferButton = fixedTerminal ? `<button class="management-modal-action management-transfer-action" type="button" data-management-action="transfer" ${canManage() ? '' : 'disabled'} title="${canManage() ? 'Transferir computador para outro terminal' : 'Somente administradores podem transferir computadores'}">${svg('transfer', 17)} Transferir</button>` : '';
     const title = fixedTerminal ? terminalName(item) : item.equipment;
-    const subtitle = fixedTerminal ? `Computador: ${computerName(item)}` : `TAG ${display(item.tag)}`;
-    return `<section class="management-modal-dialog" data-supply-host-source="management" data-supply-host-id="${escape(item.id)}" role="dialog" aria-modal="true" aria-labelledby="managementDetailTitle"><header class="management-modal-head"><div class="management-modal-identity">${computerMarkup(item, true)}<div><h2 id="managementDetailTitle">${escape(title)}</h2><p>${statusBadge(item)} <span>${escape(subtitle)}</span></p></div></div><div class="management-modal-actions">${transferButton}<span class="management-action-menu-wrap"><button class="management-modal-action action" type="button" data-management-action="toggle-actions" ${canManage() ? '' : 'disabled'}>Ação ${svg('chevron', 14)}</button>${actionMenu}</span><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></div></header><nav class="management-tabs" aria-label="Seções do equipamento">${tabs.map(([key, label]) => `<button class="management-tab ${state.tab === key ? 'active' : ''}" type="button" data-management-tab="${key}">${label}</button>`).join('')}</nav>${detailContent(item)}</section>`;
+    const subtitle = fixedTerminal ? computerName(item) : [item.brand, item.model].filter(hasDetailValue).join(' ') || 'Computador';
+    const facts = [['tag', 'Tag/ID', item.tag], ['network', 'IP', item.ip], ['pin', 'Localização', item.location || item.area], ['building', 'Setor', item.sector]].filter(([, , value]) => hasDetailValue(value));
+    return `<section class="management-modal-dialog management-asset-detail" data-supply-host-source="management" data-supply-host-id="${escape(item.id)}" role="dialog" aria-modal="true" aria-labelledby="managementDetailTitle"><header class="management-modal-head management-asset-head"><div class="management-modal-identity"><span class="management-asset-hero-icon">${workstationArt()}</span><div><div class="management-asset-status">${statusBadge(item)}</div><h2 id="managementDetailTitle">${escape(title)}</h2><p>${escape(subtitle)}</p></div></div><div class="management-modal-actions">${transferButton}<span class="management-action-menu-wrap"><button class="management-modal-action action" type="button" data-management-action="toggle-actions" aria-expanded="${state.actionMenu}" ${canManage() ? '' : 'disabled'}>Ações ${svg('chevron', 14)}</button>${actionMenu}</span><button class="management-modal-action management-asset-close" type="button" data-management-action="close" aria-label="Fechar detalhes">${svg('close', 18)}</button></div></header><div class="management-asset-overview"><div class="management-asset-facts">${facts.length ? facts.map(([icon, label, value]) => `<div class="management-asset-fact"><span class="management-asset-fact-icon">${svg(icon, 20)}</span><span><small>${escape(label)}</small><strong>${escape(value)}</strong></span></div>`).join('') : '<p class="management-asset-empty">Identificação complementar não cadastrada.</p>'}</div><div class="management-asset-connectivity"><span class="management-asset-connectivity-icon">${svg('wifi', 24)}</span><span><strong>Conectividade não monitorada</strong><small>Sem leitura em tempo real</small></span></div></div><div class="management-asset-body"><nav class="management-tabs management-asset-nav" aria-label="Seções do equipamento">${detailTabs.map(([key, label, icon]) => `<button class="management-tab ${state.tab === key ? 'active' : ''}" type="button" data-management-tab="${key}" aria-current="${state.tab === key ? 'page' : 'false'}">${svg(icon, 20)}<span>${label}</span></button>`).join('')}</nav><div class="management-asset-panel" id="managementDetailPanel">${detailContent(item)}</div></div><footer class="management-asset-footer"><div>${hasDetailValue(item.registeredAt) ? `<span>${svg('calendar', 16)} Criado em: ${escape(dateTime(item.registeredAt))}</span>` : ''}${hasDetailValue(item.updatedAt) ? `<span>${svg('sync', 16)} Última atualização: ${escape(dateTime(item.updatedAt))}</span>` : ''}</div><button class="management-modal-action" type="button" data-management-action="edit" ${canManage() ? '' : 'disabled'}>${svg('edit', 16)} Editar</button></footer></section>`;
   }
 
   function transferModal(item) {
@@ -505,16 +604,24 @@
     const dialog = modalNode.querySelector('.management-modal-dialog');
     if (!item || !dialog) return;
     const presentation = statusPresentation[item.status] || statusPresentation.Ativo;
-    dialog.classList.add('management-status-glow');
+    if (!dialog.classList.contains('management-asset-detail')) dialog.classList.add('management-status-glow');
     dialog.style.setProperty('--management-modal-status-color', presentation.color);
   }
 
   function openDetails(id) {
     if (!payload.items.some(item => item.id === id)) return;
+    detailReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     state.modal = { type: 'details', id };
-    state.tab = 'operational';
+    state.tab = 'general';
     state.actionMenu = false;
     renderModal();
+    modalNode.querySelector('.management-asset-close')?.focus({ preventScroll: true });
+    refreshPeripheralStatuses().then(changed => {
+      if (changed && state.modal?.type === 'details' && state.modal.id === id) {
+        renderModal();
+        modalNode.querySelector('.management-asset-close')?.focus({ preventScroll: true });
+      }
+    });
   }
 
   function makeItem(form) {
@@ -523,7 +630,9 @@
     const knownPeripherals = peripheralTypes.map((type, index) => {
       const status = peripheralTag(values[peripheralFieldName(type)]) || 'Não informado';
       const previous = (current?.peripherals || []).find(entry => normalize(entry.type || entry.tipo) === normalize(type));
-      return { id: previous?.id || `peripheral-${Date.now()}-${index}`, type, status };
+      const sameInventoryLink = previous?.sourceModule === 'inventory' && peripheralTag(previous.status) === status;
+      return { id: previous?.id || `peripheral-${Date.now()}-${index}`, type, status,
+        ...(sameInventoryLink ? { sourceModule: 'inventory', sourceItemId: previous.sourceItemId } : {}) };
     }).filter(peripheral => peripheral.status !== 'Não informado');
     const legacyPeripherals = (current?.peripherals || []).filter(entry => !peripheralTypes.some(type => normalize(entry.type || entry.tipo) === normalize(type)));
     const peripherals = [...knownPeripherals, ...legacyPeripherals];
@@ -576,9 +685,10 @@
       const index = payload.items.findIndex(item => item.id === saved.id);
       if (index >= 0) payload.items.splice(index, 1);
       payload.items.unshift(saved);
+      await refreshPeripheralStatuses();
       state.syncAt = new Date().toISOString();
       state.modal = { type: 'details', id: saved.id };
-      state.tab = 'operational';
+      state.tab = 'general';
       state.actionMenu = false;
       render(); renderModal();
       notify(previous ? 'Equipamento atualizado com sucesso.' : 'Equipamento adicionado à Gestão TI.');
@@ -807,6 +917,7 @@
       if (!window.AldeckotAuth?.session) return;
       await window.AldeckotSupabase.init();
       payload = await window.AldeckotSupabase.management.load();
+      await refreshPeripheralStatuses();
       state.syncAt = new Date().toISOString();
       try { await refreshBackupState(Boolean(window.AldeckotAuth?.isAdmin)); }
       catch (backupError) { console.warn('Backup automático da Gestão TI indisponível:', backupError); }
@@ -825,15 +936,27 @@
     const open = event.target.closest('[data-management-open]');
     if (open) { openDetails(open.dataset.managementOpen); return; }
     const tab = event.target.closest('[data-management-tab]');
-    if (tab) { state.tab = tab.dataset.managementTab; renderModal(); return; }
+    if (tab) { state.tab = tab.dataset.managementTab; renderModal(); modalNode.querySelector(`[data-management-tab="${state.tab}"]`)?.focus({ preventScroll: true }); return; }
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
     if (!action) return;
     const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
-    if (action === 'close') { state.modal = null; state.actionMenu = false; renderModal(); }
-    if (action === 'details' && activeItem()) { state.modal = { type: 'details', id: activeItem().id }; state.tab = actionNode.dataset.managementReturnTab || 'operational'; state.actionMenu = false; renderModal(); }
+    if (action === 'close') {
+      const closingDetails = state.modal?.type === 'details';
+      state.modal = null; state.actionMenu = false; renderModal();
+      if (closingDetails && detailReturnFocus?.isConnected) detailReturnFocus.focus({ preventScroll: true });
+      if (closingDetails) detailReturnFocus = null;
+    }
+    if (action === 'details' && activeItem()) { state.modal = { type: 'details', id: activeItem().id }; state.tab = actionNode.dataset.managementReturnTab || 'general'; state.actionMenu = false; renderModal(); }
+    if (action === 'copy-network' && activeItem()) {
+      const field = actionNode.dataset.managementNetworkField;
+      if (!['ip', 'subnetMask', 'gateway', 'dns'].includes(field) || !hasDetailValue(activeItem()[field])) return;
+      if (!navigator.clipboard?.writeText) { notify('A cópia não está disponível neste navegador.'); return; }
+      navigator.clipboard.writeText(String(activeItem()[field])).then(() => notify('Dado de rede copiado.'), () => notify('Não foi possível copiar o dado de rede.'));
+      return;
+    }
     if (action === 'toggle-actions' && activeItem()) { state.actionMenu = !state.actionMenu; renderModal(); }
     if (action === 'transfer' && activeItem() && hasFixedTerminal(activeItem())) { state.modal = { type: 'transfer', id: activeItem().id }; state.transferDestinationId = ''; state.transferQuery = ''; state.actionMenu = false; renderModal(); }
     if (action === 'select-transfer-destination' && activeItem() && state.modal?.type === 'transfer') { state.transferDestinationId = actionNode.dataset.managementDestinationId || ''; renderModal(); }
@@ -866,6 +989,25 @@
       catch (error) { notify(error.message || 'Este backup não é compatível.'); }
     }
     if (action === 'confirm-backup-restore') restorePendingBackup();
+  });
+  document.addEventListener('keydown', event => {
+    if (state.modal?.type !== 'details') return;
+    const dialog = modalNode.querySelector('.management-asset-detail');
+    if (!dialog) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      state.modal = null; state.actionMenu = false; renderModal();
+      if (detailReturnFocus?.isConnected) detailReturnFocus.focus({ preventScroll: true });
+      detailReturnFocus = null;
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')]
+      .filter(element => element.getClientRects().length);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
   document.addEventListener('input', event => {
     if (event.target.matches('[data-management-query]')) { state.query = event.target.value; applyManagementFilters(); }
@@ -905,7 +1047,20 @@
     }
   });
   let managementRealtimeTimer;
+  let peripheralRealtimeTimer;
   window.addEventListener('aldeckot:realtime-change', event => {
+    if (event.detail?.table === 'inventory_items') {
+      window.clearTimeout(peripheralRealtimeTimer);
+      peripheralRealtimeTimer = window.setTimeout(async () => {
+        const changed = await refreshPeripheralStatuses();
+        if (changed && state.modal?.type === 'details') {
+          const activeTab = document.activeElement?.dataset?.managementTab;
+          renderModal();
+          modalNode.querySelector(activeTab ? `[data-management-tab="${activeTab}"]` : '.management-asset-close')?.focus({ preventScroll: true });
+        }
+      }, 180);
+      return;
+    }
     if (!['module_tables', 'module_records', 'management_backups', 'management_backup_settings'].includes(event.detail?.table)) return;
     window.clearTimeout(managementRealtimeTimer);
     managementRealtimeTimer = window.setTimeout(load, 180);

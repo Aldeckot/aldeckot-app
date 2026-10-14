@@ -7,7 +7,7 @@
   pointer-events: none;
   opacity: 0;
   background: linear-gradient(90deg, #02091400, #04122614 45%, #02091400);
-  animation: aldeckot-route-curtain .66s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-curtain .44s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: opacity;
 }
 
@@ -24,7 +24,7 @@
   width: 30vw;
   min-width: 260px;
   background: linear-gradient(90deg, transparent, #67ebff0d 30%, #76f1ff56 50%, #67ebff0d 70%, transparent);
-  animation: aldeckot-route-sweep .66s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-sweep .44s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
@@ -32,20 +32,21 @@
   width: 2px;
   background: linear-gradient(180deg, transparent 3%, #9bf7ff 24%, #2acdef 50%, #9bf7ff 76%, transparent 97%);
   box-shadow: 0 0 12px #5eeaff, 0 0 28px #23c8ed85;
-  animation: aldeckot-route-line .66s cubic-bezier(.22, 1, .36, 1) forwards;
+  animation: aldeckot-route-line .44s cubic-bezier(.22, 1, .36, 1) forwards;
   will-change: transform;
 }
 
-body.aldeckot-page-leaving { overflow: hidden; }
+/* Não altera a largura útil ao sair: esconder o scroll causava o grid "pular". */
+html { scrollbar-gutter: stable; }
+body.aldeckot-page-leaving { pointer-events: none; }
 
 body.aldeckot-page-leaving .app,
 body.aldeckot-page-leaving .management-app,
 body.aldeckot-page-leaving .nfe-app,
 body.aldeckot-page-leaving .settings-workspace {
   pointer-events: none;
-  transform-origin: 50% 50%;
-  animation: aldeckot-module-leave .58s cubic-bezier(.22, 1, .36, 1) forwards !important;
-  will-change: opacity, transform;
+  animation: aldeckot-module-leave .42s cubic-bezier(.22, 1, .36, 1) forwards !important;
+  will-change: opacity;
 }
 
 body.aldeckot-page-leaving .management-modal,
@@ -61,14 +62,13 @@ html.aldeckot-module-booting body[data-inventory-page] .inv-modal,
 html.aldeckot-module-booting body[data-management-page] .management-modal {
   opacity: 0;
   pointer-events: none;
-  transform: translate3d(0, 12px, 0) scale(.994);
 }
 
 html.aldeckot-module-revealing body[data-inventory-page] #app,
 html.aldeckot-module-revealing body[data-management-page] #managementApp,
 html.aldeckot-module-revealing body.settings-page .settings-workspace {
-  animation: aldeckot-module-arrive .78s cubic-bezier(.22, 1, .36, 1) both !important;
-  will-change: opacity, transform;
+  animation: aldeckot-module-arrive .56s cubic-bezier(.22, 1, .36, 1) both !important;
+  will-change: opacity;
 }
 
 /* As entradas estruturais antigas não podem recomeçar em filtros, menus ou sincronizações. */
@@ -92,11 +92,13 @@ body.home-page .home-side {
   animation: none !important;
 }
 
+/* A entrada é da página inteira; atualizações dos painéis não reiniciam animações. */
+body.home-page .panel { animation: none !important; }
+
 /* A Home só fica visível após agenda e dados recentes concluírem a primeira renderização. */
 html.aldeckot-home-booting body.home-page .side,
 html.aldeckot-home-booting body.home-page main {
   opacity: 0;
-  transform: translate3d(0, 16px, 0) scale(.992);
   pointer-events: none;
 }
 
@@ -109,18 +111,18 @@ html.aldeckot-home-booting body.home-page .home-side {
 
 html.aldeckot-home-revealing body.home-page .side,
 html.aldeckot-home-revealing body.home-page main {
-  animation: aldeckot-home-arrive .8s cubic-bezier(.22, 1, .36, 1) both !important;
-  will-change: opacity, transform;
+  animation: aldeckot-home-arrive .56s cubic-bezier(.22, 1, .36, 1) both !important;
+  will-change: opacity;
 }
 
 @keyframes aldeckot-module-leave {
-  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-  to { opacity: .72; transform: translate3d(-9px, 0, 0) scale(.996); }
+  from { opacity: 1; }
+  to { opacity: .72; }
 }
 
 @keyframes aldeckot-module-arrive {
-  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.99); }
-  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes aldeckot-overlay-leave { to { opacity: 0; } }
@@ -136,8 +138,8 @@ html.aldeckot-home-revealing body.home-page main {
 @keyframes aldeckot-route-line { to { transform: translateX(150vw); } }
 
 @keyframes aldeckot-home-arrive {
-  from { opacity: 0; transform: translate3d(0, 20px, 0) scale(.99); }
-  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

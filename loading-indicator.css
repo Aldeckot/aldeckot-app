@@ -10,19 +10,19 @@
   visibility: hidden;
   pointer-events: none;
   background: rgba(2, 12, 24, .34);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  transition: opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .32s, backdrop-filter .32s ease;
-  will-change: opacity;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  transition: opacity .25s ease, visibility 0s linear .25s;
 }
+
+.aldeckot-loading-indicator[hidden] { display: none !important; }
 
 .aldeckot-loading-indicator.is-visible {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
   transition-delay: 0s;
+  will-change: opacity;
 }
 
 .aldeckot-loading-card {
@@ -37,10 +37,9 @@
   box-shadow: 0 18px 48px rgba(0, 0, 0, .38), inset 0 1px rgba(220, 251, 255, .1);
   color: #e9f8ff;
   opacity: 0;
-  transform: translate3d(0, 14px, 0) scale(.96);
+  transform: translate3d(0, 6px, 0) scale(.99);
   filter: saturate(.88);
-  transition: opacity .36s cubic-bezier(.22, 1, .36, 1), transform .42s cubic-bezier(.16, 1, .3, 1), filter .36s ease;
-  will-change: opacity, transform;
+  transition: opacity .25s ease, transform .3s cubic-bezier(.22, 1, .36, 1), filter .25s ease;
 }
 
 .aldeckot-loading-indicator.is-visible .aldeckot-loading-card {

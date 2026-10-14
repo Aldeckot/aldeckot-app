@@ -11,6 +11,8 @@
   const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const recentItemsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5a8.5 8.5 0 1 1 2.6 6.1"/><path d="M3.5 5.5v6h6"/><path d="M12 7.5v4.8l3.2 1.9"/></svg>';
   const statusClass = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '-');
+  let lastRecentSignature = null;
+  let recentLoadSequence = 0;
   const navigateTo = target => {
     if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(target);
     else window.location.href = target;
@@ -75,12 +77,21 @@
   function renderRecentItems(items) {
     const panel = document.querySelector('[data-home-recent-items]');
     if (!panel) return;
+    const signature = JSON.stringify(items.map(entry => [entry.id, entry.module, entry.equipment,
+      entry.brand, entry.tag, entry.status, entry.tableName, entry.targetUrl, latestLogText(entry)]));
+    if (signature === lastRecentSignature) return;
+    lastRecentSignature = signature;
+    const operationsSlot = panel.querySelector('[data-home-operations-slot]') || document.createElement('div');
+    operationsSlot.className = 'home-operations-slot';
+    operationsSlot.dataset.homeOperationsSlot = 'true';
     if (!items.length) {
-      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p><div class="home-operations-slot" data-home-operations-slot></div>`;
+      panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos</p></div></div><p class="home-recent-empty">Nenhum equipamento adicionado ou editado ainda.</p>`;
+      panel.appendChild(operationsSlot);
       window.dispatchEvent(new CustomEvent('aldeckot:home-recent-rendered'));
       return;
     }
-    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div><div class="home-operations-slot" data-home-operations-slot></div>`;
+    panel.innerHTML = `<div class="home-recent-heading"><span class="home-recent-icon">${recentItemsIcon}</span><div><h2>Últimos itens atualizados</h2><p>Todos os módulos · clique para abrir</p></div></div><div class="home-recent-list">${items.map(entry => `<button class="home-recent-item" type="button" data-home-recent-target="${escape(entry.targetUrl)}"><span class="home-recent-main"><b>${escape(entry.equipment || 'Equipamento sem nome')}</b><small>${escape(entry.brand || 'Marca não informada')} · TAG ${escape(entry.tag || '—')}</small></span><span class="home-recent-log" title="${escape(latestLogText(entry))}"><i>Último log</i><b>${escape(latestLogText(entry))}</b></span><span class="home-recent-meta"><em>${escape(entry.tableName)}</em><i class="home-recent-status ${statusClass(entry.status)}">${escape(entry.status || 'Ativo')}</i></span></button>`).join('')}</div>`;
+    panel.appendChild(operationsSlot);
     panel.querySelectorAll('[data-home-recent-target]').forEach(button => {
       button.addEventListener('click', () => openRecentItem(button.dataset.homeRecentTarget));
     });
@@ -88,10 +99,12 @@
   }
 
   async function loadRecentItems() {
+    const requestId = ++recentLoadSequence;
     const panel = document.querySelector('[data-home-recent-items]');
     const api = window.AldeckotSupabase;
     try {
       await (window.AldeckotAuthReady || Promise.resolve());
+      if (requestId !== recentLoadSequence) return;
       if (!window.AldeckotAuth?.session) {
         window.AldeckotHomeData = { error: true };
         finishHomeData(window.AldeckotHomeData);
@@ -104,6 +117,7 @@
         return;
       }
       await (window.AldeckotHomeStage?.ready?.() || api.init?.() || Promise.resolve());
+      if (requestId !== recentLoadSequence) return;
       const [inventoryResult, managementResult, controlResult, fluxResult, nfeAlertResult, eventsResult] = await Promise.allSettled([
         api.inventory.load(),
         api.management?.load?.() || Promise.resolve({ table: null, items: [] }),
@@ -112,6 +126,7 @@
         api.nfe?.recurringPdvAlerts?.() || Promise.resolve([]),
         api.events?.recentActivity?.(12) || Promise.resolve([])
       ]);
+      if (requestId !== recentLoadSequence) return;
       const inventory = inventoryResult.status === 'fulfilled' ? inventoryResult.value : { tables: [] };
       const management = managementResult.status === 'fulfilled' ? managementResult.value : { table: null, items: [] };
       const control = controlResult.status === 'fulfilled' ? controlResult.value : { tables: [] };
@@ -155,6 +170,7 @@
         .slice(0, 3);
       renderRecentItems(recentItems);
     } catch (error) {
+      if (requestId !== recentLoadSequence) return;
       console.warn('Atualizações recentes indisponíveis:', error.message || error);
       window.AldeckotHomeData = { error: true };
       finishHomeData(window.AldeckotHomeData);

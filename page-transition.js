@@ -1,7 +1,8 @@
 (() => {
   const HOME_URL = 'index.html';
   const TRANSITION_KEY = 'aldeckot-home-transition';
-  const DURATION = 560;
+  const DURATION = 430;
+  const HOME_RENDER_MAX_WAIT = 600;
   const APP_ROUTE_FILES = new Set(['index.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'settings.html']);
   const homeTasks = new Set();
   let isNavigating = false;
@@ -11,6 +12,9 @@
   let homeDataReady = null;
   let moduleRevealQueued = false;
   let moduleRevealed = false;
+  let homeWaitTimer = 0;
+  let homeWaitExpired = false;
+  let navigationTimer = 0;
 
   // No retorno de um módulo, a estrutura da Home já existe no HTML. Ela não
   // precisa aguardar uma nova consulta ao banco para começar a transição.
@@ -48,13 +52,26 @@
   }
 
   async function revealHomeWhenStable() {
-    if (!isHome() || homeRevealed || homeRevealQueued || !homeDomReady || homeTasks.size) return;
+    if (!isHome() || homeRevealed || homeRevealQueued || !homeDomReady) return;
+    if (homeTasks.size && !homeWaitExpired) {
+      if (!homeWaitTimer) homeWaitTimer = window.setTimeout(() => {
+        homeWaitTimer = 0;
+        homeWaitExpired = true;
+        revealHomeWhenStable();
+      }, HOME_RENDER_MAX_WAIT);
+      return;
+    }
+    window.clearTimeout(homeWaitTimer);
+    homeWaitTimer = 0;
     homeRevealQueued = true;
     try {
-      await (document.fonts?.ready || Promise.resolve()).catch(() => {});
+      await Promise.race([
+        (document.fonts?.ready || Promise.resolve()).catch(() => {}),
+        new Promise(resolve => window.setTimeout(resolve, 300))
+      ]);
       await nextFrame();
       await nextFrame();
-      if (!isHome() || homeRevealed || homeTasks.size) return;
+      if (!isHome() || homeRevealed || (homeTasks.size && !homeWaitExpired)) return;
       homeRevealed = true;
       const root = document.documentElement;
       root.classList.remove('aldeckot-home-booting', 'aldeckot-home-transition-pending');
@@ -63,9 +80,10 @@
       window.setTimeout(() => {
         root.classList.remove('aldeckot-home-revealing');
         document.body.classList.remove('aldeckot-home-entering');
-      }, 820);
+      }, 620);
     } finally {
       homeRevealQueued = false;
+      if (!homeRevealed && homeTasks.size) revealHomeWhenStable();
     }
   }
 
@@ -83,7 +101,10 @@
     if (!isModule() || moduleRevealed || moduleRevealQueued) return;
     moduleRevealQueued = true;
     try {
-      await (document.fonts?.ready || Promise.resolve()).catch(() => {});
+      await Promise.race([
+        (document.fonts?.ready || Promise.resolve()).catch(() => {}),
+        new Promise(resolve => window.setTimeout(resolve, 300))
+      ]);
       await nextFrame();
       await nextFrame();
       if (!isModule() || moduleRevealed) return;
@@ -91,7 +112,7 @@
       const root = document.documentElement;
       root.classList.remove('aldeckot-module-booting');
       root.classList.add('aldeckot-module-revealing');
-      window.setTimeout(() => root.classList.remove('aldeckot-module-revealing'), 780);
+      window.setTimeout(() => root.classList.remove('aldeckot-module-revealing'), 600);
     } finally {
       moduleRevealQueued = false;
     }
@@ -125,21 +146,39 @@
     document.body.appendChild(curtain);
   }
 
+  function restoreCachedPage() {
+    window.clearTimeout(navigationTimer);
+    window.clearTimeout(homeWaitTimer);
+    homeWaitTimer = 0;
+    isNavigating = false;
+    document.body?.classList.remove('aldeckot-page-leaving', 'aldeckot-home-entering');
+    document.querySelectorAll('.aldeckot-route-curtain').forEach(curtain => curtain.remove());
+    const root = document.documentElement;
+    root.classList.remove('aldeckot-home-revealing', 'aldeckot-module-revealing');
+    if (isHome()) {
+      homeRevealed = true;
+      root.classList.remove('aldeckot-home-booting', 'aldeckot-home-transition-pending');
+    }
+    if (isModule()) {
+      moduleRevealed = true;
+      root.classList.remove('aldeckot-module-booting');
+    }
+    window.AldeckotLoading?.reset?.();
+  }
+
   function navigate(destination) {
     if (isNavigating) return;
     const target = destination instanceof URL ? destination : new URL(destination, window.location.href);
     if (target.href === window.location.href) return;
     isNavigating = true;
-    window.AldeckotLoading?.show('Abrindo módulo…');
     if (/\/index\.html$/i.test(target.pathname)) {
       storeHomeEntrance();
       target.searchParams.set('aldeckotTransition', 'home');
     }
-    window.requestAnimationFrame(() => {
-      document.body.classList.add('aldeckot-page-leaving');
-      addRouteCurtain();
-      window.setTimeout(() => { window.location.href = target.href; }, DURATION);
-    });
+    document.body.classList.add('aldeckot-page-leaving');
+    addRouteCurtain();
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : DURATION;
+    navigationTimer = window.setTimeout(() => { window.location.href = target.href; }, delay);
   }
 
   function goHome() { navigate(HOME_URL); }
@@ -165,6 +204,10 @@
   window.AldeckotRoute = { goHome, navigate };
   window.AldeckotHomeStage = { hold: holdHomeRender, ready: ensureHomeDataReady };
   window.AldeckotModuleStage = { reveal: revealModuleWhenStable };
+
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) restoreCachedPage();
+  });
 
   if (isModule()) {
     // Evita que uma conexão lenta deixe a interface vazia indefinidamente.

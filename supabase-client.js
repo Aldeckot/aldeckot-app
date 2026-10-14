@@ -743,6 +743,19 @@
       };
     },
 
+    async peripheralInventoryStatuses({ ids = [], tags = [] } = {}) {
+      await init();
+      const sourceIds = [...new Set(ids.map(String).filter(id => /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)))];
+      const sourceTags = [...new Set(tags.map(tag => String(tag || '').trim().toUpperCase()).filter(Boolean))];
+      const batches = (values, size = 80) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
+      const queries = [
+        ...batches(sourceIds).map(batch => client.from('inventory_items').select('id, tag, equipment, status').in('id', batch).then(check)),
+        ...batches(sourceTags).map(batch => client.from('inventory_items').select('id, tag, equipment, status').in('tag', batch).then(check))
+      ];
+      const rows = (await Promise.all(queries)).flat();
+      return [...new Map(rows.map(row => [row.id, row])).values()];
+    },
+
     async save(item, existingId, activityDescription) {
       const table = await this.ensureTable();
       const payload = managementRecordPayload(item, activityDescription);
