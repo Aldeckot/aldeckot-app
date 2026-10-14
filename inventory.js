@@ -5,7 +5,7 @@
   const moduleConfig = controlMode ? {
     key: 'control', backupKey: 'controlBackups', title: 'CONTROLE TI', name: 'Controle TI',
     subtitle: 'Aldeckot — Controle de Manutenção', page: 'control.html', backupName: 'Controle TI', backupFile: 'controle-ti', backupModule: 'controle-ti',
-    statuses: ['Em manutenção', 'Manutenção concluída', 'Aguardando avaliação', 'Em uso', 'Em sala', 'Descartado'],
+    statuses: ['Em manutenção', 'Manutenção concluída', 'Aguardando avaliação', 'Em uso', 'Em sala', 'Descartado', 'Cancelado'],
     situations: ['Completa', 'Preventiva', 'Regular', 'Não realizada'],
     statusDefault: 'Em manutenção', situationDefault: 'Não realizada', situationLabel: 'Tipo de Limpeza', situationChart: 'Distribuição por Limpeza',
     tablePlaceholder: 'Ex.: Equipamentos da sala de TI', emptyText: 'Selecione uma tabela na lateral', emptyCreateText: 'Crie uma tabela para começar a organizar as manutenções.'
@@ -298,7 +298,7 @@
     if (kind === 'priority') return ({ Alta: 'red', 'Média': 'yellow', 'Estável': 'turquoise' })[value] || 'turquoise';
     if (kind === 'cleaning') return ({ Completa: 'green', Preventiva: 'blue', Regular: 'yellow', 'Não realizada': 'red' })[value] || 'blue';
     if (controlMode) return ({
-      status: { 'Em manutenção': 'red', 'Manutenção concluída': 'green', 'Aguardando avaliação': 'yellow', 'Em uso': 'blue', 'Em sala': 'turquoise', Descartado: 'gray' },
+      status: { 'Em manutenção': 'red', 'Manutenção concluída': 'green', 'Aguardando avaliação': 'yellow', 'Em uso': 'blue', 'Em sala': 'turquoise', Descartado: 'gray', Cancelado: 'gray' },
       situation: { Completa: 'green', Preventiva: 'blue', Regular: 'yellow', 'Não realizada': 'red' }
     }[kind]?.[value] || 'blue');
     if (fluxMode) return ({
@@ -740,9 +740,10 @@
     if (!activeTable()) { tableForm(); return; }
     const value = entry || {};
     const status = statuses.includes(value.status) ? value.status : moduleConfig.statusDefault;
+    const controlStatuses = statuses.filter(option => option !== 'Cancelado' || status === 'Cancelado');
     const situation = situations.includes(value.situation) ? value.situation : moduleConfig.situationDefault;
     const priority = priorities.includes(value.priority) ? value.priority : 'Estável';
-    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Data de Entrada</span><input name="entryDate" type="date" value="${escape(value.entryDate)}"></label><label><span>Data de Saída</span><input name="exitDate" type="date" value="${escape(value.exitDate)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${statuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="situation" data-tone="${choiceTone('situation', situation)}"><span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-situation-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
+    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Data de Entrada</span><input name="entryDate" type="date" value="${escape(value.entryDate)}"></label><label><span>Data de Saída</span><input name="exitDate" type="date" value="${escape(value.exitDate)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${controlStatuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="situation" data-tone="${choiceTone('situation', situation)}"><span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-situation-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
     node.dataset.itemId = entry?.id || '';
   }
 
@@ -783,7 +784,43 @@
       button.textContent = 'Destino da aquisição';
       node.querySelector('.inv-actions')?.prepend(button);
     }
+    if (canManage()) {
+      moduleApi().previewReversal(item.id).then(preview => {
+        if (!preview?.eligible || !node.isConnected || node.dataset.itemId !== item.id) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'inv-ghost inv-danger';
+        button.dataset.invFluxReversal = item.id;
+        button.textContent = 'Estornar movimentação';
+        node.querySelector('.inv-actions')?.prepend(button);
+      }).catch(error => console.warn('Elegibilidade do estorno indisponível:', error));
+    }
     applyStatusModalGlow(node, item.status);
+  }
+
+  async function fluxReversalWizard(item) {
+    const preview = await moduleApi().previewReversal(item.id);
+    if (!preview?.eligible) {
+      window.AldeckotMessage.show(preview?.reason || 'Esta movimentação não permite estorno automático.');
+      return;
+    }
+    const source = preview.sourceModule === 'management' ? 'Gestão TI' : 'Inventário';
+    const date = preview.createdAt ? new Date(preview.createdAt).toLocaleString('pt-BR') : '—';
+    const node = modal(`<div class="inv-dialog-head"><h2>Estornar movimentação</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div>
+      <p class="inv-log-intro">O registro original e os históricos serão preservados. Confira as alterações antes de confirmar.</p>
+      <div class="inv-detail-grid flux-detail-grid">
+        <div class="inv-detail">Equipamento<b>${escape(preview.equipment)}</b></div>
+        <div class="inv-detail">TAG / Série<b>${escape(preview.tag)} · ${escape(preview.serial)}</b></div>
+        <div class="inv-detail">Movimentação<b>${escape(preview.movement)}</b></div>
+        <div class="inv-detail">Data / Responsável<b>${escape(date)} · ${escape(preview.actorName)}</b></div>
+        <div class="inv-detail">${source}<b>Manutenção → ${escape(preview.restoredStatus)}</b></div>
+        <div class="inv-detail">Controle TI<b>Chamado → Cancelado</b></div>
+      </div>
+      <p class="inv-log-intro">${escape(preview.consequence)} Evento original: ${escape(preview.originalEventId)}</p>
+      <form data-flux-reversal-form><div class="inv-fields"><label class="inv-full"><span>Motivo do estorno *</span><textarea name="reason" required minlength="5" maxlength="500" placeholder="Explique por que esta movimentação deve ser estornada."></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Confirmar estorno</button></div></form>`, 'equipment-dialog flux-reversal-dialog');
+    node.dataset.itemId = item.id;
+    node.dataset.reviewToken = preview.token;
+    node.querySelector('[name=reason]')?.focus();
   }
 
   async function fluxAcquisitionWizard(item) {
@@ -950,6 +987,7 @@
   }
 
   async function saveItem(form) {
+    if (fluxMode && form.dataset.fluxBusy === 'true') return;
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
     const valuesToSave = { ...item };
     if (fluxMode) {
@@ -973,12 +1011,39 @@
       maintenanceStatus = await chooseMaintenanceResult(old);
       if (!maintenanceStatus) return;
     }
+    let fluxReview = null;
+    if (fluxMode) {
+      form.dataset.fluxBusy = 'true';
+      valuesToSave.tag = item.tag;
+      valuesToSave.serial = item.serial;
+      try {
+        const preview = await moduleApi().previewMovement(table.id, valuesToSave, id || null);
+        if (!window.AldeckotFluxReview) throw new Error('Prévia de movimentação indisponível. Recarregue a página.');
+        if (!await window.AldeckotFluxReview.confirm(preview, item)) {
+          delete form.dataset.fluxBusy;
+          return;
+        }
+        const requestKey = JSON.stringify({ tableId: table.id, existingId: id || null, values,
+          sourceModule: valuesToSave.sourceModule, sourceRecordId: valuesToSave.sourceRecordId });
+        if (form.dataset.fluxRequestKey !== requestKey) {
+          form.dataset.fluxRequestKey = requestKey;
+          form.dataset.fluxRequestId = crypto.randomUUID();
+        }
+        fluxReview = { token: preview.token, requestId: form.dataset.fluxRequestId };
+      } catch (error) {
+        delete form.dataset.fluxBusy;
+        window.AldeckotMessage.show(backendMessage(error));
+        return;
+      }
+    }
     const submit = form.querySelector('[type="submit"]'); const originalLabel = submit?.textContent; const finishSave = window.AldeckotLoading?.beginSave?.(old ? 'Salvando alterações…' : 'Adicionando item…');
     if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
+    let savedCommitted = false;
     try {
       const saved = maintenanceStatus
         ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
-        : await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item));
+        : await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item), fluxReview);
+      savedCommitted = true;
       let peripheralSync;
       try { peripheralSync = await moduleApi().syncManagementPeripheral?.(saved, old); }
       catch (syncError) {
@@ -997,8 +1062,10 @@
       if (peripheralSync?.state === 'sync-failed') window.AldeckotMessage.show('Equipamento salvo. A sincronização com a Gestão TI será retomada quando o módulo atualizar.');
     } catch (error) {
       if (submit) { submit.disabled = false; submit.textContent = originalLabel; }
-      window.AldeckotMessage.show(backendMessage(error));
-    } finally { await finishSave?.(); }
+      window.AldeckotMessage.show(savedCommitted
+        ? `${fluxMode ? 'Movimentação gravada' : 'Item salvo'}, mas a tela não atualizou: ${backendMessage(error)}. Recarregue antes de tentar novamente.`
+        : backendMessage(error));
+    } finally { if (fluxMode) delete form.dataset.fluxBusy; await finishSave?.(); }
   }
   function download(content, name, type) { const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type })); link.download = name; link.click(); URL.revokeObjectURL(link.href); }
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
@@ -1372,6 +1439,15 @@
       if (item) await fluxAcquisitionWizard(item);
       return;
     }
+    const reversal = event.target.closest('[data-inv-flux-reversal]');
+    if (reversal && fluxMode && canManage()) {
+      const item = activeTable()?.items.find(entry => entry.id === reversal.dataset.invFluxReversal);
+      if (item) {
+        try { await fluxReversalWizard(item); }
+        catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      }
+      return;
+    }
     const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
     const replaceItem = event.target.closest('[data-inv-replace-item]');
     if (replaceItem) {
@@ -1410,6 +1486,39 @@
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('submit', event => {
+    if (event.target.matches('[data-flux-reversal-form]')) {
+      event.preventDefault();
+      if (!fluxMode || !canManage()) return;
+      const form = event.target;
+      if (form.dataset.busy === 'true') return;
+      const itemId = form.closest('.inv-modal')?.dataset.itemId;
+      const token = form.closest('.inv-modal')?.dataset.reviewToken;
+      const reason = String(new FormData(form).get('reason') || '').trim();
+      if (!itemId || !token || reason.length < 5) return;
+      form.dataset.busy = 'true';
+      form.dataset.requestId ||= crypto.randomUUID();
+      const submit = form.querySelector('[type=submit]');
+      submit.disabled = true;
+      let committed = false;
+      (async () => {
+        const preview = await moduleApi().previewReversal(itemId);
+        if (!preview?.eligible || preview.token !== token) throw new Error(preview?.reason || 'O estado mudou. Reabra o estorno para revisar novamente.');
+        await moduleApi().reverseMovement(itemId, token, form.dataset.requestId, reason);
+        committed = true;
+        await reloadInventory();
+        closeModal();
+        renderInventory();
+        const original = activeTable()?.items.find(row => row.id === itemId);
+        if (original) details(original);
+        window.AldeckotMessage.show('Estorno registrado com histórico preservado. O chamado foi cancelado.');
+      })().catch(error => window.AldeckotMessage.show(committed
+        ? `Estorno registrado, mas a tela não atualizou: ${backendMessage(error)}. Recarregue antes de tentar novamente.`
+        : backendMessage(error))).finally(() => {
+        delete form.dataset.busy;
+        if (submit.isConnected) submit.disabled = false;
+      });
+      return;
+    }
     if (event.target.matches('[data-flux-acquisition-form]')) {
       event.preventDefault();
       if (!fluxMode || !canManage()) return;

@@ -20,7 +20,8 @@ test('vínculo só é enviado quando a migração está presente; sem ela, cadas
   const api = read('supabase-client.js');
   assert.match(api, /missingFluxSourceColumns\(response\.error\)/);
   assert.match(api, /if \(values\.sourceModule && !fluxSourceAvailable\) fail/);
-  assert.match(api, /if \(fluxSourceAvailable && hasOwn\(values, 'sourceModule'\)\)/);
+  assert.match(api, /if \(hasOwn\(values, 'sourceModule'\)\)/);
+  assert.match(api, /if \(!fluxSourceAvailable\) \{\s*delete payload\.source_module;/);
 });
 
 test('068 não inventa vínculos legados e valida a identidade no banco', () => {

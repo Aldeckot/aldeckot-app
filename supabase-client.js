@@ -829,6 +829,34 @@
   let fluxSourceAvailable = null;
   const missingFluxSourceColumns = error => /(?:source_module|source_record_id|inventory_item_id)/i.test(error?.message || '') &&
     /(?:column|schema cache|could not find)/i.test(error?.message || '');
+  const fluxPayload = (tableId, values) => {
+    const payload = {
+      table_id: tableId,
+      movement: values.movement,
+      equipment: values.equipment.trim(),
+      model: values.model.trim(),
+      brand: values.brand.trim(),
+      sender_company: values.senderCompany.trim(),
+      destination_company: values.destinationCompany.trim(),
+      sender_responsible: values.senderResponsible.trim(),
+      receiver_responsible: values.receiverResponsible.trim(),
+      send_date: values.sendDate,
+      received_date: values.receivedDate,
+      shipping_type: values.shippingType,
+      reason: values.situation,
+      status: values.status,
+      notes: storeItemPriority(values.notes, values.priority),
+      position: 0
+    };
+    if (hasOwn(values, 'sourceModule')) {
+      payload.source_module = values.sourceModule || null;
+      payload.source_record_id = values.sourceRecordId || null;
+      payload.inventory_item_id = values.inventoryItemId || null;
+    }
+    if (hasOwn(values, 'serial')) payload.serial = String(values.serial || '').trim();
+    if (hasOwn(values, 'tag')) payload.tag = String(values.tag || '').trim();
+    return payload;
+  };
   const flux = {
     async load() {
       await init();
@@ -887,7 +915,33 @@
       await Promise.all(ordered.map((table, position) => client.from('module_tables').update({ position }).eq('id', table.id).then(check)));
     },
 
-    async saveItem(tableId, values, existingId, logMessage) {
+    async previewMovement(tableId, values, existingId) {
+      await init();
+      const result = await client.rpc('flux_preview_movement', {
+        p_table_id: tableId, p_existing_id: existingId || null,
+        p_payload: fluxPayload(tableId, values)
+      });
+      if (result.error?.code === 'PGRST202')
+        fail('A confirmação inteligente aguarda a migração 075 no Supabase. Nenhuma movimentação foi salva.');
+      return check(result);
+    },
+
+    async previewReversal(itemId) {
+      await init();
+      const result = await client.rpc('flux_preview_reversal', { p_flux_item_id: itemId });
+      if (result.error?.code === 'PGRST202') return { eligible: false, unavailable: true };
+      return check(result);
+    },
+
+    async reverseMovement(itemId, reviewToken, requestId, reason) {
+      await init();
+      return check(await client.rpc('flux_reverse_movement', {
+        p_flux_item_id: itemId, p_review_token: reviewToken,
+        p_request_id: requestId, p_reason: reason
+      }));
+    },
+
+    async saveItem(tableId, values, existingId, logMessage, review = null) {
       await init();
       if (fluxSourceAvailable === null && hasOwn(values, 'sourceModule')) {
         const probe = await client.from('flux_items').select('id, source_module').limit(1);
@@ -896,31 +950,19 @@
       }
       if (values.sourceModule && !values.sourceRecordId) fail('Selecione novamente o equipamento de origem.');
       if (values.sourceModule && !fluxSourceAvailable) fail('O vínculo ainda não está disponível no banco. Aplique a migração 068 ou remova a seleção e salve manualmente.');
-      const payload = {
-        table_id: tableId,
-        movement: values.movement,
-        equipment: values.equipment.trim(),
-        model: values.model.trim(),
-        brand: values.brand.trim(),
-        sender_company: values.senderCompany.trim(),
-        destination_company: values.destinationCompany.trim(),
-        sender_responsible: values.senderResponsible.trim(),
-        receiver_responsible: values.receiverResponsible.trim(),
-        send_date: values.sendDate,
-        received_date: values.receivedDate,
-        shipping_type: values.shippingType,
-        reason: values.situation,
-        status: values.status,
-        notes: storeItemPriority(values.notes, values.priority),
-        position: 0
-      };
-      if (fluxSourceAvailable && hasOwn(values, 'sourceModule')) {
-        payload.source_module = values.sourceModule || null;
-        payload.source_record_id = values.sourceRecordId || null;
-        payload.inventory_item_id = values.inventoryItemId || null;
+      const payload = fluxPayload(tableId, values);
+      if (!fluxSourceAvailable) {
+        delete payload.source_module;
+        delete payload.source_record_id;
+        delete payload.inventory_item_id;
       }
-      if (!existingId || hasOwn(values, 'serial')) payload.serial = String(values.serial || '').trim();
-      if (!existingId || hasOwn(values, 'tag')) payload.tag = String(values.tag || '').trim();
+      if (existingId && !hasOwn(values, 'serial')) delete payload.serial;
+      if (existingId && !hasOwn(values, 'tag')) delete payload.tag;
+      if (review) return check(await client.rpc('flux_confirm_movement', {
+        p_table_id: tableId, p_existing_id: existingId || null,
+        p_payload: payload, p_review_token: review.token,
+        p_request_id: review.requestId, p_log_message: logMessage || null
+      }));
       const result = existingId
         ? await client.from('flux_items').update(payload).eq('id', existingId).select().single()
         : await client.from('flux_items').insert(payload).select().single();

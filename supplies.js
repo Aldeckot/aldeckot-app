@@ -162,7 +162,13 @@
       ? !row.variant_id : row.variant_id === state.selectedVariantId) : all;
     return `<div class="sp-section-title"><h3>Movimentações</h3></div>${rows.length ? rows.map(row => `<article class="sp-log"><time>${fmtDate(row.created_at)} · ${safe(row.actor_name || 'Equipe ALDECKOT')}</time><b>${safe(row.type)}${row.supply_unit_id ? ` · ${safe((state.detail?.units || []).find(unit => unit.id === row.supply_unit_id)?.code || '')}` : ''}</b><p>${safe(`${row.origin || '—'} → ${row.destination || '—'} · ${row.previous_stock} → ${row.new_stock} disponíveis · ${row.reason}`)}</p></article>`).join('') : '<p class="sp-muted">Nenhum evento registrado.</p>'}`;
   };
-  const renderCompatibility = item => `<div class="sp-fields"><div><span>Categoria de componente</span><strong>${safe(item.category)}</strong></div><div><span>Equipamentos vinculáveis</span><strong>Inventário e Gestão TI</strong></div></div><p class="sp-muted">Na substituição, somente componentes da mesma categoria são aceitos. A instalação usa o ID real do equipamento selecionado.</p>`;
+  const renderCompatibility = item => {
+    const relations = state.detail?.compatibility || [];
+    const available = state.detail?.compatibilityAvailable;
+    return `<div class="sp-fields"><div><span>Categoria do suprimento</span><strong>${safe(item.category)}</strong></div><div><span>Regra por categoria</span><strong>Preservada</strong></div></div><p class="sp-muted">A substituição continua limitada à mesma categoria. Relações por modelo são cadastradas explicitamente; ausência de relação não significa incompatibilidade.</p>
+      <div class="sp-section-title"><h3>Modelos compatíveis · ${relations.length}</h3>${available && canEdit() ? '<button type="button" class="sp-btn primary" data-sp-action="compat-add">＋ Adicionar modelo</button>' : ''}</div>
+      ${available ? relations.length ? `<div class="sp-compat-list">${relations.map(row => `<article class="sp-card sp-compat-card"><div><b>${safe([row.brand, row.model].filter(Boolean).join(' ') || row.model)}</b><small>${safe([row.equipment_category, row.connection_type, row.specification].filter(Boolean).join(' · ') || 'Modelo cadastrado')}</small></div>${canEdit() ? `<div class="sp-card-actions"><button type="button" class="sp-btn" data-sp-action="compat-edit" data-id="${safe(row.id)}">Editar</button><button type="button" class="sp-btn" data-sp-action="compat-remove" data-id="${safe(row.id)}">Inativar</button></div>` : ''}</article>`).join('')}</div>` : '<p class="sp-muted">Nenhum modelo específico informado. Consulte a regra por categoria antes de decidir a instalação.</p>' : `<p class="sp-muted">${state.detail?.compatibilityMissingCatalog ? 'O vínculo de catálogo do Inventário ainda está sendo preparado. Aguarde a atualização automática.' : 'Compatibilidade por modelo indisponível até a migração 074.'} A regra por categoria continua ativa.</p>`}`;
+  };
   const renderVariationFields = (variant, inventory) => {
     const health = variations.health(variant);
     const optional = [
@@ -177,7 +183,7 @@
     if (!item) return '<aside class="sp-detail" tabindex="0" aria-label="Detalhes do suprimento"><div class="sp-empty">Selecione um suprimento na tabela para ver seus detalhes.</div></aside>';
     const inventory = isInventory(item);
     const chosen = selectedVariant(item);
-    const tabs = inventory ? [['general','Geral'],['variants','Variações'],['units','Unidades'],['logs','Logs']]
+    const tabs = inventory ? [['general','Geral'],['variants','Variações'],['units','Unidades'],['compatibility','Compatibilidade'],['logs','Logs']]
       : [['general','Geral'],['variants','Variações'],...(item.tracking_type === 'unit' ? [['units','Unidades']] : []),['movements','Movimentações'],['compatibility','Compatibilidade'],['logs','Logs']];
     const body = state.activeTab === 'variants' ? renderVariants(item) : state.activeTab === 'units' && (item.tracking_type === 'unit' || inventory) ? renderUnits(item)
       : state.activeTab === 'movements' || state.activeTab === 'logs' ? renderTimeline(state.activeTab)
@@ -185,8 +191,8 @@
     const detailFields = chosen
       ? renderVariationFields(chosen, inventory)
       : inventory
-      ? `<div class="sp-detail-fields"><span>Fonte</span><b>Inventário</b><span>Total</span><b>${item.total_units} unidades</b><span>Estoque</span><b class="sp-stock">${item.available_stock} em Reserva</b><span>Indicador</span><b>${item.active_count} Ativos</b><span>Mínimo</span><b>${item.minimum_stock}</b></div>`
-      : `<div class="sp-detail-fields"><span>Categoria</span><b>${safe(item.category)}</b><span>Marca</span><b>${safe(item.brand || '—')}</b><span>Modelo</span><b>${safe(item.model || '—')}</b><span>Estoque</span><b class="sp-stock">${quantityAvailable(item)} disponíveis</b><span>Estoque mínimo</span><b>${item.minimum_stock}</b><span>Local padrão</span><b>${safe(item.default_location)}</b></div>`;
+      ? `<div class="sp-detail-fields"><span>Categoria</span><b>${safe(item.category)}</b><span>Origem</span><b>Inventário</b><span>Total</span><b>${item.total_units} unidades</b><span>Estoque</span><b class="sp-stock">${item.available_stock} em Reserva</b><span>Indicador</span><b>${item.active_count} Ativos</b><span>Mínimo</span><b>${item.minimum_stock}</b></div>`
+      : `<div class="sp-detail-fields"><span>Categoria</span><b>${safe(item.category)}</b><span>Origem</span><b>Suprimentos</b><span>Marca</span><b>${safe(item.brand || '—')}</b><span>Modelo</span><b>${safe(item.model || '—')}</b><span>Estoque</span><b class="sp-stock">${quantityAvailable(item)} disponíveis</b><span>Estoque mínimo</span><b>${item.minimum_stock}</b><span>Local padrão</span><b>${safe(item.default_location)}</b></div>`;
     const overviewButton = chosen ? `<button type="button" class="sp-btn sp-overview" data-sp-action="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 3 2 8l5 5M2 8h12"/></svg><span>Visão geral</span></button>` : '';
     const variationHealth = chosen && variations.health(chosen);
     const situationBadge = variationHealth
@@ -298,6 +304,10 @@
             movements: [], logs: supplyLogs, inventoryLogs, maintenance: [] };
         })()
         : await api.detail(id);
+      const compatibility = await api.compatibility(isInventory(item) ? item.manual_id : id);
+      detail.compatibility = compatibility.rows;
+      detail.compatibilityAvailable = compatibility.available;
+      detail.compatibilityMissingCatalog = Boolean(compatibility.missingCatalog);
       if (version !== state.renderVersion || id !== state.selectedId) return;
       state.detail = detail;
       render();
@@ -331,6 +341,31 @@
   };
   const field = (label, name, value = '', extra = '') => `<label>${safe(label)}<input name="${name}" value="${safe(value)}" ${extra}></label>`;
   const textArea = (label, name, value = '') => `<label class="full">${safe(label)}<textarea name="${name}">${safe(value)}</textarea></label>`;
+  const compatibilityDialog = row => {
+    const item = active();
+    const supplyId = isInventory(item) ? item?.manual_id : item?.id;
+    if (!supplyId || !state.detail?.compatibilityAvailable) throw new Error('A compatibilidade por modelo ainda não está disponível neste item.');
+    showDialog(row ? 'Editar modelo compatível' : 'Adicionar modelo compatível', `<p class="sp-muted">Cadastre apenas modelos cuja compatibilidade técnica foi verificada. A regra por categoria permanece independente.</p><div class="sp-form">
+      ${field('Categoria do equipamento','equipment_category',row?.equipment_category || '', 'maxlength="120" placeholder="Ex.: Impressoras"')}
+      ${field('Marca do equipamento','brand',row?.brand || '', 'maxlength="120" placeholder="Ex.: Samsung"')}
+      ${field('Modelo exato *','model',row?.model || '', 'required maxlength="160"')}
+      ${field('Tipo de conexão','connection_type',row?.connection_type || '', 'maxlength="120" placeholder="Ex.: HDMI"')}
+      ${textArea('Especificação aplicável','specification',row?.specification || '')}</div>`, async form => {
+      const data = new FormData(form);
+      await api.saveModelCompatibility({ p_supply_id: supplyId, p_id: row?.id || null,
+        p_equipment_category: data.get('equipment_category'), p_brand: data.get('brand'),
+        p_model: data.get('model'), p_connection_type: data.get('connection_type'),
+        p_specification: data.get('specification') });
+      notify(row ? 'Compatibilidade atualizada.' : 'Compatibilidade cadastrada.');
+    });
+  };
+  const deactivateCompatibilityDialog = row => {
+    if (!row || !state.detail?.compatibilityAvailable) return;
+    showDialog('Inativar compatibilidade', `<p>Inativar a relação com <b>${safe([row.brand, row.model].filter(Boolean).join(' '))}</b>? O registro anterior permanecerá no histórico.</p>`, async () => {
+      await api.deactivateModelCompatibility(row.id);
+      notify('Relação inativada; histórico preservado.');
+    });
+  };
   const imageFields = row => `<div class="sp-image-editor"><span>Imagem${row.supply_id && !row.image_path ? ' herdada do item principal' : ''}</span>${img(row.image_path || (row.supply_id ? active()?.image_path : null),'sp-edit-image')}<label>Adicionar ou substituir<input name="image" type="file" accept="image/png,image/jpeg,image/webp"></label>${row.image_path ? '<label><input type="checkbox" name="remove_image" value="1"> Remover imagem atual</label>' : ''}<div data-sp-preview></div><small>PNG, JPG ou WebP até 5 MB. As variações herdam a imagem principal.</small></div>`;
   const saveEditedImage = async (form, target, id, previousPath) => {
     const image = form.querySelector('[name=image]')?.files?.[0];
@@ -798,6 +833,13 @@
     try {
       if (action === 'add') itemDialog(null);
       else if (action === 'edit') itemDialog(item);
+      else if (action === 'compat-add') compatibilityDialog(null);
+      else if (action === 'compat-edit') {
+        const relation = state.detail?.compatibility?.find(row => row.id === button.dataset.id);
+        if (!relation) throw new Error('Relação alterada. Reabra os detalhes antes de editar.');
+        compatibilityDialog(relation);
+      }
+      else if (action === 'compat-remove') deactivateCompatibilityDialog(state.detail?.compatibility?.find(row => row.id === button.dataset.id));
       else if (action === 'variant-focus') { state.variantFormOpen = true; render(); app.querySelector('#spInlineVariantForm [name=brand]')?.focus(); }
       else if (action === 'variant-cancel') { state.variantFormOpen = false; render(); }
       else if (action === 'variant') variantDialog(null);

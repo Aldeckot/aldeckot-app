@@ -47,6 +47,8 @@ test('Estoque e Indicador vêm apenas dos status reais; sincronizar novamente é
   assert.deepEqual(first, second);
   assert.equal(first.length, 1);
   assert.equal(first[0].manual_id, 'metadata');
+  assert.equal(first[0].category, 'IMPRESSORAS');
+  assert.equal(first[0].source, 'inventory');
   assert.equal(first[0].image_path, 'metadata/photo.webp');
   assert.equal(first[0].available_stock, 1);
   assert.equal(first[0].active_count, 2);
@@ -69,6 +71,13 @@ test('não absorve cadastro manual com estoque independente', () => {
   const rows = project(manual, groupInventory(tables, inventory));
   assert.equal(rows.length, 2);
   assert.equal(rows[1].id, 'standalone');
+  assert.equal(rows[1].category, undefined, 'a categoria do cadastro próprio não é inferida da origem');
+});
+
+test('categoria e origem são exibidas separadamente no painel', () => {
+  const ui = readFileSync(new URL('../supplies.js', import.meta.url), 'utf8');
+  assert.match(ui, /<span>Categoria<\/span><b>\$\{safe\(item\.category\)\}<\/b><span>Origem<\/span><b>Inventário<\/b>/);
+  assert.match(ui, /<span>Categoria<\/span><b>\$\{safe\(item\.category\)\}<\/b><span>Origem<\/span><b>Suprimentos<\/b>/);
 });
 
 test('cadastro manual reconhece o nome singular ou plural de um tipo já integrado', () => {

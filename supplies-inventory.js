@@ -90,7 +90,7 @@
         ...metadataRows.filter(row => row.supply_id === metadata?.id).map(row => row.updated_at)]
         .filter(Boolean).sort().at(-1) || '';
       return { id: metadata?.id || `inventory:${group.key}`, inventory_group: projectedGroup,
-        source: 'inventory', name: group.name, category: 'Inventário',
+        source: 'inventory', name: group.name, category: group.name,
         brand: '', model: '', description: metadata?.description || '',
         image_path: metadata?.image_path || null, tracking_type: 'inventory', minimum_stock: minimum,
         legacy_minimum_unallocated: Number(metadata?.base_minimum_stock ?? metadata?.minimum_stock ?? 0),

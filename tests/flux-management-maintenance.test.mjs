@@ -51,8 +51,9 @@ test('falhas de identidade e de sincronização abortam a transação, sem alter
 });
 
 test('cliente não faz gravação tardia que possa parecer falha de um commit concluído', () => {
-  const start = api.indexOf('async saveItem(tableId, values, existingId, logMessage)', api.indexOf('missingFluxSourceColumns'));
+  const start = api.indexOf('async saveItem(tableId, values, existingId, logMessage, review = null)', api.indexOf('missingFluxSourceColumns'));
   const fluxSave = api.slice(start, api.indexOf('async inventoryCategories()', start));
+  assert.match(fluxSave, /if \(review\) return check\(await client\.rpc\('flux_confirm_movement'/);
   assert.match(fluxSave, /const saved = check\(result\);[\s\S]*?if \(values\.sourceModule === 'management' && values\.situation === 'Manutenção' &&[\s\S]*?values\.movement === 'Envio'\) return saved;/);
   assert.ok(fluxSave.indexOf("values.sourceModule === 'management'") < fluxSave.indexOf("client.from('flux_item_logs').insert"));
 });

@@ -13,7 +13,8 @@ test('verificador aceita lista vazia ou recusa explícita de permissão sem expo
 
 test('verificação anônima cobre as tabelas e a visão de Suprimentos', () => {
   for (const table of ['supplies', 'supply_variants', 'supply_units', 'supply_movements',
-    'supply_logs', 'supply_maintenance_links', 'supply_stock_summary']) {
+    'supply_logs', 'supply_maintenance_links', 'supply_stock_summary',
+    'supply_model_compatibility', 'flux_reviewed_movements']) {
     assert.ok(protectedTables.includes(table), `${table} precisa de verificação anônima`);
   }
 });

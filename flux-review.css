@@ -1,0 +1,12 @@
+.flux-review-backdrop{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:16px;background:#020b19ba;backdrop-filter:blur(8px)}
+.flux-review-dialog{width:min(100%,520px);max-height:min(88vh,720px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #5f83aa99;border-radius:14px;background:#0c1e34ee;box-shadow:0 20px 60px #0008;color:#eaf5ff;font:inherit}
+.flux-review-dialog header,.flux-review-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px}
+.flux-review-dialog header{border-bottom:1px solid #7ea2c633}.flux-review-dialog h2{font-size:16px;margin:0}.flux-review-dialog h3{font-size:12px;margin:14px 0 8px}
+.flux-review-dialog button{border:1px solid #6b8cac88;border-radius:8px;background:#17304e;color:inherit;padding:8px 12px;cursor:pointer;font:inherit}
+.flux-review-dialog header button{padding:3px 9px;font-size:19px}.flux-review-dialog button:hover,.flux-review-dialog button:focus-visible{border-color:#42beff;outline:none}
+.flux-review-dialog footer{justify-content:flex-end;border-top:1px solid #7ea2c633}.flux-review-dialog [data-flux-review-confirm]{background:#158bea;border-color:#51b8ff;color:#fff;font-weight:700}
+.flux-review-body{overflow:auto;padding:14px 18px}.flux-review-type{font-weight:700;color:#83d9ff;margin:0 0 12px}
+.flux-review-dialog dl{display:grid;grid-template-columns:minmax(90px,35%) minmax(0,1fr);gap:7px 12px;margin:0;font-size:12px}.flux-review-dialog dt{color:#a1bed4}.flux-review-dialog dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.flux-review-dialog ul{margin:0;padding-left:19px;font-size:12px;line-height:1.55}.flux-review-note{margin:12px 0 0;color:#a1bed4;font-size:11px}
+.theme-light .flux-review-backdrop{background:#182f5380}.theme-light .flux-review-dialog{background:#eef7fff2;color:#213a55;border-color:#8bb6d5}.theme-light .flux-review-dialog button{background:#dcecf8;color:#213a55;border-color:#90b3cd}.theme-light .flux-review-dialog [data-flux-review-confirm]{background:#0f86d9;color:#fff}.theme-light .flux-review-type{color:#0d6ea6}.theme-light .flux-review-dialog dt,.theme-light .flux-review-note{color:#536c83}
+@media(max-width:520px){.flux-review-dialog dl{grid-template-columns:1fr;gap:2px}.flux-review-dialog dd{margin-bottom:6px}.flux-review-dialog footer{flex-wrap:wrap}.flux-review-dialog footer button{flex:1 1 140px}}

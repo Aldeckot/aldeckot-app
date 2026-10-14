@@ -131,6 +131,14 @@
   };
   const logs = async id => check(await (await client()).from('supply_logs').select('*')
     .eq('supply_id', id).order('created_at', { ascending: false }).limit(200));
+  const compatibility = async id => {
+    if (!id) return { available: false, missingCatalog: true, rows: [] };
+    const result = await (await client()).from('supply_model_compatibility').select('*')
+      .eq('supply_id', id).is('inactive_at', null).order('brand').order('model');
+    if (result.error && /^(42P01|PGRST205)$/.test(result.error.code || ''))
+      return { available: false, rows: [] };
+    return { available: true, rows: check(result) };
+  };
   const equipment = async () => {
     const db = await client();
     const [inventory, management] = await Promise.all([
@@ -305,11 +313,13 @@
     }
   };
   window.AldeckotSupplies = {
-    list, detail, logs, inventorySnapshot, inventoryHistory, inventoryGroupHistory, inventoryReplacements, ensureInventoryCatalog,
+    list, detail, logs, compatibility, inventorySnapshot, inventoryHistory, inventoryGroupHistory, inventoryReplacements, ensureInventoryCatalog,
     inventoryVariantMetadata, ensureInventoryVariants,
     equipment, availableReplacements, maintenanceAlerts, imageUrl, uploadImage, removeImage, installedFor, relatedFor, maintenanceFor, subscribe, integrationReady,
     backup,
     saveItem: row => rpc('supply_save_item', row),
+    saveModelCompatibility: row => rpc('supply_save_model_compatibility', row),
+    deactivateModelCompatibility: id => rpc('supply_deactivate_model_compatibility', { p_id: id }),
     saveVariant: row => rpc('supply_save_variant', row),
     saveLocalVariant: row => rpc('supply_save_local_variant', row),
     setInventoryVariantMinimum: (id, minimum) => rpc('supply_set_inventory_variant_minimum', { p_variant_id: id, p_minimum_stock: minimum }),
