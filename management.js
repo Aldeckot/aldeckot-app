@@ -59,7 +59,7 @@
       home: '<path d="m3 11 9-8 9 8v9H3v-9Z"/><path d="M9 20v-6h6v6"/>',
       plus: '<path d="M12 5v14M5 12h14"/>',
       export: '<path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/>',
-      pdf: '<path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h4M8.5 14.5h1.2a1.2 1.2 0 0 0 0-2.4H8.5v4.8M12 16.9v-4.8h1.1a2.4 2.4 0 1 1 0 4.8H12ZM16.3 16.9v-4.8h2.5M16.3 14.5h2"/>',
+      pdf: '<path d="M3.5 4.3 16.8 2l.7 3.5H5.2Z" fill="#b90c29" stroke="none"/><path d="M6.1 4.5h12.8v14H6.1Z" fill="#f9fafb" stroke="none"/><path d="M4.2 6.1h13v13.8c0 .9-.6 1.5-1.5 1.5h-10c-.9 0-1.5-.6-1.5-1.5Z" fill="#ff3048" stroke="none"/><path d="M5.8 11.9V7.8h1.7c1.1 0 1.7.5 1.7 1.35s-.6 1.35-1.7 1.35H5.8M10 7.8v4.1h1c1.3 0 2-.7 2-2.05s-.7-2.05-2-2.05ZM13.8 11.9V7.8h2.4M13.8 9.8H16" fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.8" cy="17.8" r="5.3" fill="#35d82e" stroke="#24a61e" stroke-width=".5"/><path d="M17.8 14.5v4.2m-2-1.9 2 2 2-2m-4.6 3.6h5.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
       backup: '<ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/>',
       database: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>',
       download: '<path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/>',

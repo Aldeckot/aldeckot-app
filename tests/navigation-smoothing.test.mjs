@@ -51,7 +51,8 @@ test('quadros de dados mantêm suas dimensões e a sincronização exibe feedbac
   assert.doesNotMatch(dashboard, /host\.offsetWidth/);
   assert.match(routeCss, /aldeckot-module-booting body\[data-inventory-page\] \.app/);
   assert.match(routeCss, /aldeckot-module-booting body\.supplies-open \.supplies-app/);
-  assert.match(source('supplies.html'), /page-transition\.js\?v=2\.0\.113/);
+  const version = JSON.parse(source('package.json')).version;
+  assert.ok(source('supplies.html').includes(`page-transition.js?v=${version}`));
   assert.match(source('supplies.js'), /AldeckotModuleStage\?\.reveal\?\.\(\)/);
 });
 

@@ -29,6 +29,8 @@ const contentTypes = {
   '.webp': 'image/webp',
   '.woff2': 'font/woff2'
 };
+const publicPageTypes = new Set(['.html', '.css', '.js']);
+const publicAssetTypes = new Set(['.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.woff2']);
 
 const send = (response, status, body, headers = {}) => {
   response.writeHead(status, { 'Cache-Control': 'no-store', ...headers });
@@ -55,11 +57,17 @@ const proxyApi = async (request, response, requestUrl) => {
   send(response, remote.status, remoteBody, { 'Content-Type': contentType });
 };
 
-const localFilePath = pathname => {
+export const localFilePath = pathname => {
   const decoded = decodeURIComponent(pathname === '/' ? '/index.html' : pathname);
   const relative = normalize(decoded).replace(/^[/\\]+/, '');
   const candidate = resolve(projectRoot, relative);
   if (candidate !== projectRoot && !candidate.startsWith(`${projectRoot}${sep}`)) return null;
+  const segments = relative.split(sep);
+  if (segments.some(segment => !segment || segment.startsWith('.'))) return null;
+  const extension = extname(candidate).toLowerCase();
+  const isPublicPage = segments.length === 1 && publicPageTypes.has(extension);
+  const isPublicAsset = segments[0] === 'assets' && segments.length > 1 && publicAssetTypes.has(extension);
+  if (!isPublicPage && !isPublicAsset) return null;
   return candidate;
 };
 
@@ -84,7 +92,9 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`Prévia local disponível em http://localhost:${port}/`);
-  console.log(`Autenticação encaminhada com segurança para ${apiOrigin}`);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`Prévia local disponível em http://localhost:${port}/`);
+    console.log(`Autenticação encaminhada com segurança para ${apiOrigin}`);
+  });
+}

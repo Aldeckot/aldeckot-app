@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const appVersion = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
 const pages = ['index.html', 'login.html', 'inventory.html', 'management.html', 'control.html', 'flux.html', 'nfe.html', 'supplies.html', 'settings.html'];
 
 test('todas as páginas principais possuem monitoramento e carregamento global', () => {
@@ -33,10 +34,10 @@ test('as telas permanecem disponíveis durante consultas e atualizações autom�
   assert.match(loading, /x-aldeckot-background/);
   assert.match(loading, /return \['GET', 'HEAD'\]\.includes\(requestMethod\(input, options\)\) \|\| isReadOnlyRpc\(input\) \|\| isMarkedBackgroundRequest\(input, options\);/);
   assert.match(loading, /return isBackgroundRequest\(input, options\) \? request : track\(request\);/);
-  assert.match(home, /loading-indicator\.js\?v=2\.0\.113/);
+  assert.ok(home.includes(`loading-indicator.js?v=${appVersion}`));
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /loading-indicator\.js\?v=2\.0\.113/);
+    assert.ok(source.includes(`loading-indicator.js?v=${appVersion}`));
   }
 });
 

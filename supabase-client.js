@@ -171,6 +171,7 @@
   };
   const itemFromRow = row => ({
     id: row.id,
+    branchId: row.branch_id || null,
     equipment: row.equipment,
     model: row.model,
     brand: row.brand,
@@ -184,6 +185,7 @@
     priority: splitItemPriority(row.notes).priority,
     notes: splitItemPriority(row.notes).notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
+    createdAt: row.created_at || '',
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.inventory_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
@@ -211,24 +213,71 @@
     catch (error) { bootPromise = null; throw error; }
   }
 
+  let inventoryBranchSchema = null;
+  let inventorySharingSchema = null;
   const inventory = {
     async replaceEquipment(values) {
       await init();
       return check(await client.rpc('inventory_replace_equipment', values));
     },
-    async load() {
+    async load(tableId = null) {
       await init();
-      let response = await client
+      let branches = [];
+      if (inventoryBranchSchema !== false) {
+        let branchQuery = client.from('inventory_branches')
+          .select('id,table_id,name,classification_key,position').order('position', { ascending: true }).order('created_at');
+        if (tableId) branchQuery = branchQuery.eq('table_id', tableId);
+        const branchResponse = await branchQuery;
+        if (branchResponse.error && /inventory_branches|42P01|PGRST205/i.test(`${branchResponse.error.code || ''} ${branchResponse.error.message || ''}`)) {
+          inventoryBranchSchema = false;
+        } else {
+          branches = check(branchResponse);
+          inventoryBranchSchema = true;
+        }
+      }
+      let memberships = [];
+      if (inventoryBranchSchema && inventorySharingSchema !== false) {
+        let offset = 0;
+        while (true) {
+          let query = client.from('inventory_branch_memberships')
+            .select('item_id,branch_id')
+            .order('item_id', { ascending: true }).order('branch_id', { ascending: true })
+            .range(offset, offset + 999);
+          if (tableId) query = query.eq('table_id', tableId);
+          const response = await query;
+          if (response.error && /inventory_branch_memberships|42P01|PGRST205/i.test(`${response.error.code || ''} ${response.error.message || ''}`)) {
+            inventorySharingSchema = false;
+            memberships = [];
+            break;
+          }
+          const page = check(response);
+          memberships.push(...page);
+          inventorySharingSchema = true;
+          if (page.length < 1000) break;
+          offset += 1000;
+        }
+      }
+      const sharesByItem = new Map();
+      for (const link of memberships) {
+        if (!sharesByItem.has(link.item_id)) sharesByItem.set(link.item_id, []);
+        sharesByItem.get(link.item_id).push(link.branch_id);
+      }
+      const itemColumns = `id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at${inventoryBranchSchema ? ', branch_id' : ''}`;
+      let query = client
         .from('module_tables')
-        .select('id, name, icon, position, created_at, inventory_items(id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at, inventory_item_logs(id, message, created_at, source_module, source_log_id))')
-        .eq('module', 'inventory')
+        .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at, source_module, source_log_id))`)
+        .eq('module', 'inventory');
+      if (tableId) query = query.eq('id', tableId);
+      let response = await query
         .order('position', { ascending: true })
         .order('created_at', { ascending: false });
       if (response.error && /source_module|source_log_id/i.test(response.error.message || '')) {
-        response = await client
+        let fallback = client
           .from('module_tables')
-          .select('id, name, icon, position, created_at, inventory_items(id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at, inventory_item_logs(id, message, created_at))')
-          .eq('module', 'inventory')
+          .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at))`)
+          .eq('module', 'inventory');
+        if (tableId) fallback = fallback.eq('id', tableId);
+        response = await fallback
           .order('position', { ascending: true })
           .order('created_at', { ascending: false });
       }
@@ -238,14 +287,100 @@
           id: table.id,
           name: table.name,
           icon: table.icon,
+          itemsLoaded: true,
+          branches: branches.filter(branch => branch.table_id === table.id).map(branch => ({ id: branch.id, name: branch.name, classificationKey: branch.classification_key || null })),
           items: withoutDuplicateItems(
             (table.inventory_items || [])
               .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
-              .map(itemFromRow),
+              .map(row => ({ ...itemFromRow(row), sharedBranchIds: sharesByItem.get(row.id) || [] })),
             ['equipment', 'model', 'brand', 'sector', 'location', 'status', 'situation', 'cleaning', 'notes']
           )
         }))
       };
+    },
+
+    async globalCategories() {
+      await init();
+      return check(await client.from('module_tables').select('id,name,icon,position,created_at')
+        .eq('module', 'inventory').order('position', { ascending: true })
+        .order('created_at', { ascending: false }));
+    },
+    async globalOverview() {
+      await init();
+      return check(await client.rpc('inventory_global_overview'));
+    },
+    async globalPage(filters) {
+      await init();
+      return check(await client.rpc('inventory_global_page', {
+        p_query: filters.query || '', p_category: filters.category || null,
+        p_status: filters.status || null, p_situation: filters.situation || null,
+        p_page: filters.page || 1, p_page_size: filters.pageSize || 25,
+        p_order: filters.order || 'recent'
+      }));
+    },
+    async categoryBranches(tableId) {
+      await init();
+      return check(await client.from('inventory_branches')
+        .select('id,table_id,name,classification_key,position')
+        .eq('table_id', tableId).order('position', { ascending: true }).order('id'))
+        .map(row => ({ id: row.id, name: row.name, classificationKey: row.classification_key || null }));
+    },
+    async categoryPage(filters) {
+      await init();
+      const parameters = {
+        p_category: filters.category, p_query: filters.query || '',
+        p_status: filters.status || null, p_situation: filters.situation || null,
+        p_page: filters.page || 1, p_page_size: filters.pageSize || 25,
+        p_order: filters.order || 'recent'
+      };
+      let page;
+      if (filters.branchId) {
+        const response = await client.rpc('inventory_branch_page', { ...parameters, p_branch: filters.branchId });
+        if (response.error && /PGRST202|42883|inventory_branch_page/i.test(`${response.error.code || ''} ${response.error.message || ''}`)) {
+          // Preserve branch navigation until migration 081 is applied. The normal path remains server-paginated.
+          const table = (await inventory.load(filters.category)).tables[0];
+          const branches = window.AldeckotInventoryBranches;
+          const query = String(filters.query || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          const filtered = (table?.items || []).filter(item => branches.inBranch(table, item, filters.branchId)
+            && (!filters.status || item.status === filters.status)
+            && (!filters.situation || item.situation === filters.situation)
+            && (!query || [item.tag, item.serial, item.equipment, item.brand, item.model, item.sector, item.location]
+              .some(value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(query))));
+          filtered.sort((a, b) => branches.lastChangedAt(b) - branches.lastChangedAt(a) || String(a.id).localeCompare(String(b.id)));
+          const size = Math.max(1, Math.min(100, Number(filters.pageSize) || 25));
+          const number = Math.max(1, Number(filters.page) || 1);
+          return { items: filtered.slice((number - 1) * size, number * size), total: filtered.length, page: number, pageSize: size };
+        }
+        page = check(response);
+      } else page = check(await client.rpc('inventory_global_page', parameters));
+      const ids = (page.items || []).map(row => row.id);
+      if (!ids.length) return { ...page, items: [] };
+      const columns = 'id,equipment,model,brand,serial,tag,sector,location,status,situation,cleaning_type,notes,position,created_at,updated_at,branch_id';
+      let response = await client.from('inventory_items')
+        .select(`${columns},inventory_item_logs(id,message,created_at,source_module,source_log_id)`).in('id', ids);
+      if (response.error && /source_module|source_log_id/i.test(response.error.message || '')) {
+        response = await client.from('inventory_items')
+          .select(`${columns},inventory_item_logs(id,message,created_at)`).in('id', ids);
+      }
+      const itemsById = new Map(check(response).map(row => [row.id, row]));
+      const memberships = check(await client.from('inventory_branch_memberships')
+        .select('item_id,branch_id').in('item_id', ids));
+      const sharesById = new Map();
+      for (const link of memberships) {
+        if (!sharesById.has(link.item_id)) sharesById.set(link.item_id, []);
+        sharesById.get(link.item_id).push(link.branch_id);
+      }
+      return { ...page, items: ids.filter(id => itemsById.has(id)).map(id => ({
+        ...itemFromRow(itemsById.get(id)), sharedBranchIds: sharesById.get(id) || []
+      })) };
+    },
+    async shareAdd(itemId, branchId) {
+      await init();
+      return check(await client.rpc('inventory_branch_share_add', { p_item_id: itemId, p_branch_id: branchId }));
+    },
+    async shareRemove(itemId, branchId) {
+      await init();
+      return check(await client.rpc('inventory_branch_share_remove', { p_item_id: itemId, p_branch_id: branchId }));
     },
 
     async createTable(values) {
@@ -253,6 +388,27 @@
       return check(await client.from('module_tables').insert({
         module: 'inventory', name: values.name.trim(), icon: values.icon || '📁', position: 0
       }).select().single());
+    },
+
+    async createBranch(tableId, name, classificationKey = null) {
+      await init();
+      return check(await client.rpc('inventory_branch_create', { p_table_id: tableId, p_name: name, p_classification_key: classificationKey }));
+    },
+    async renameBranch(id, name) {
+      await init();
+      return check(await client.rpc('inventory_branch_rename', { p_branch_id: id, p_name: name }));
+    },
+    async deleteBranch(id) {
+      await init();
+      return check(await client.rpc('inventory_branch_delete', { p_branch_id: id }));
+    },
+    async swapLocations(first, second, operationId, expected) {
+      await init();
+      return check(await client.rpc('inventory_swap_locations', {
+        p_first: first, p_second: second, p_operation_id: operationId,
+        p_first_sector: expected.first.sector, p_first_location: expected.first.location,
+        p_second_sector: expected.second.sector, p_second_location: expected.second.location
+      }));
     },
 
     async updateTable(id, values) {
@@ -301,6 +457,7 @@
       };
       if (!existingId || hasOwn(values, 'serial')) payload.serial = values.serial || '';
       if (!existingId || hasOwn(values, 'tag')) payload.tag = values.tag || '';
+      if (inventoryBranchSchema && hasOwn(values, 'branchId')) payload.branch_id = values.branchId || null;
       const result = existingId
         ? await client.from('inventory_items').update(payload).eq('id', existingId).select().single()
         : await client.from('inventory_items').insert(payload).select().single();
@@ -392,10 +549,32 @@
 
     async replace(snapshot) {
       await init();
+      const hasBranches = snapshot.tables?.some(table => table.branches?.length || table.items?.some(item => item.branchId || item.sharedBranchIds?.length));
+      const hasShares = snapshot.tables?.some(table => table.items?.some(item => item.sharedBranchIds?.length));
+      if (hasBranches) {
+        const probe = await client.from('inventory_branches').select('id').limit(1);
+        if (probe.error) throw new Error('Restauração interrompida: a migração 079 de ramificações precisa estar disponível.');
+      }
+      if (hasShares) {
+        for (const table of snapshot.tables || []) {
+          const branchIds = new Set((table.branches || []).map(branch => branch.id));
+          for (const item of table.items || []) {
+            if ((item.sharedBranchIds || []).some(id => !branchIds.has(id))) {
+              throw new Error('Restauração interrompida: backup contém vínculo com ramificação ausente.');
+            }
+          }
+        }
+        const probe = await client.from('inventory_branch_memberships').select('item_id').limit(1);
+        if (probe.error) throw new Error('Restauração interrompida: a migração 080 de compartilhamento precisa estar disponível.');
+      }
       const existing = check(await client.from('module_tables').select('id').eq('module', 'inventory'));
       if (existing.length) check(await client.from('module_tables').delete().in('id', existing.map(table => table.id)));
       for (const sourceTable of snapshot.tables || []) {
         const table = await this.createTable(sourceTable);
+        const restoredBranchIds = new Map();
+        for (const branch of sourceTable.branches || []) {
+          restoredBranchIds.set(branch.id, await this.createBranch(table.id, branch.name, branch.classificationKey || null));
+        }
         for (const sourceItem of sourceTable.items || []) {
           const restored = check(await client.from('inventory_items').insert({
             table_id: table.id,
@@ -410,6 +589,7 @@
             situation: sourceItem.situation || 'Normal',
             cleaning_type: sourceItem.cleaning || 'Não realizada',
             notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
+            ...(sourceItem.branchId ? { branch_id: restoredBranchIds.get(sourceItem.branchId) || null } : {}),
             position: 0
           }).select().single());
           const logs = sourceItem.logs?.length ? sourceItem.logs : [{ text: 'Equipamento restaurado a partir de backup.' }];
@@ -418,6 +598,11 @@
             action: 'restore',
             message: log.at && log.at !== 'Backup antigo' ? `${log.at} — ${log.text || 'Histórico restaurado.'}` : (log.text || 'Histórico restaurado.')
           }))));
+          for (const sharedId of new Set(sourceItem.sharedBranchIds || [])) {
+            if (sharedId !== sourceItem.branchId) {
+              await this.shareAdd(restored.id, restoredBranchIds.get(sharedId));
+            }
+          }
           await recordItemActivity({
             module: 'inventory',
             itemId: restored.id,

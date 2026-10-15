@@ -44,13 +44,24 @@
   const clone = value => JSON.parse(JSON.stringify(value));
   const stamp = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const dateValue = value => value ? new Date(`${value}T12:00`).toLocaleDateString('pt-BR') : '—';
+  const dateTimeValue = value => value && Number.isFinite(typeof value === 'number' ? value : Date.parse(value))
+    ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
   let data = { tables: [] };
   let backupMeta = { last: null, lastAt: null, lastSource: null, automatic: false, frequencyDays: 7, history: [] };
   let pendingRestore = null;
   let backupBusy = false;
   let initialized = false;
+  let backupMetaLoadedAt = 0;
+  let reloadSequence = 0;
+  let emptyPresentationCache;
+  const branchModel = window.AldeckotInventoryBranches;
   const moduleRoute = new URLSearchParams(window.location.search);
-  let state = { active: moduleRoute.get('table'), pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  let state = { active: moduleRoute.get('table'), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: !controlMode && !fluxMode && !moduleRoute.get('table'), tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  const globalState = { view: 'recent', query: '', category: '', status: '', situation: '', order: 'recent', page: 1, pageSize: 25, overview: null, result: null, busy: false };
+  let globalRequestSequence = 0;
+  let globalSearchTimer;
+  let categoryRequestSequence = 0;
+  let categorySearchTimer;
 
   const readBackupMeta = () => ({ ...backupMeta });
   const writeBackupMeta = value => { backupMeta = { ...backupMeta, ...value }; };
@@ -71,6 +82,8 @@
     if (controlMode && /control_(items|item_logs|backups|backup_settings)/i.test(message)) return 'O banco ainda não possui a estrutura do Controle TI. Execute o arquivo supabase/003_control_ti.sql no SQL Editor do Supabase.';
     if (fluxMode && /flux_(items|item_logs|backups|backup_settings)/i.test(message)) return 'O banco ainda não possui a estrutura do Flux. Execute o arquivo supabase/008_flux.sql no SQL Editor do Supabase.';
     if (!controlMode && /cleaning_type/i.test(message)) return 'O banco ainda não possui o campo de Limpeza do Inventário. Execute o arquivo supabase/006_inventory_cleaning.sql no SQL Editor do Supabase.';
+    if (!controlMode && !fluxMode && /inventory_global_|inventory_branch_memberships|inventory_branch_share_/i.test(message)) return 'A visão global e o compartilhamento exigem a migração 080. Aplique-a após backup e validação em homologação.';
+    if (!controlMode && !fluxMode && /inventory_branches|inventory_branch_|inventory_swap_locations|branch_id/i.test(message)) return 'As ramificações ainda não estão disponíveis nesta base. Aplique a migração 079 após backup e validação em homologação.';
     return message;
   };
   const clean = value => String(value ?? '').trim();
@@ -132,7 +145,14 @@
     if (state.operation === 'transfers-open') return status === 'pendente' || status === 'em transito';
     return true;
   };
-  const matchesActiveFilters = item => JSON.stringify(item).toLowerCase().includes(state.query.toLowerCase())
+  const searchIndex = new WeakMap();
+  const searchable = item => {
+    if (!searchIndex.has(item)) searchIndex.set(item, [item.equipment, item.tag, item.model, item.brand, item.serial, item.sector, item.location, item.status, item.situation, item.cleaning, item.priority, item.notes].map(comparable).join(' '));
+    return searchIndex.get(item);
+  };
+  const matchesActiveFilters = item => (controlMode || fluxMode
+    ? JSON.stringify(item).toLowerCase().includes(state.query.toLowerCase())
+    : searchable(item).includes(comparable(state.query)))
     && (!state.status || item.status === state.status)
     && (!state.situation || item.situation === state.situation)
     && matchesOperation(item);
@@ -256,19 +276,87 @@
     };
   }
 
+  const globalFilters = () => ({
+    query: globalState.query, category: globalState.category, status: globalState.status,
+    situation: globalState.situation, order: globalState.order, page: globalState.page,
+    pageSize: globalState.pageSize
+  });
+  const categoryFilters = () => ({
+    category: state.active, branchId: state.branchId, query: state.query,
+    status: state.status, situation: state.situation,
+    page: state.page, pageSize: state.pageSize, order: 'recent'
+  });
+  const globalListingActive = () => globalState.view === 'all' || Boolean(globalState.query.trim());
+  async function reloadGlobal() {
+    const request = ++reloadSequence;
+    ++globalRequestSequence;
+    await (window.AldeckotAuthReady || Promise.resolve());
+    if (!window.AldeckotAuth?.session) return false;
+    await backend().init();
+    const [categories, overview, page, setting, history] = await Promise.all([
+      moduleApi().globalCategories(), moduleApi().globalOverview(),
+      globalListingActive() ? moduleApi().globalPage(globalFilters()) : Promise.resolve(null),
+      backupApi().settings(), backupApi().list()
+    ]);
+    if (request !== reloadSequence) return false;
+    data = { tables: categories.map(table => ({
+      id: table.id, name: table.name, icon: table.icon, items: [], branches: [], itemsLoaded: false
+    })) };
+    globalState.overview = overview;
+    globalState.result = page || { items: overview.recent || [], total: overview.total || 0, page: 1 };
+    let latest = history[0] || null;
+    const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
+    if (window.AldeckotAuth?.isAdmin && setting.automatic &&
+      (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
+      const fullSnapshot = await moduleApi().load();
+      if (request !== reloadSequence) return false;
+      latest = await backupApi().create(clone(fullSnapshot), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
+      history.unshift(latest);
+    }
+    writeBackupMeta({
+      last: latest?.created_at ? new Date(latest.created_at).toLocaleString('pt-BR') : null,
+      lastAt: latest?.created_at || null, lastSource: latest?.source || null,
+      automatic: setting.automatic, frequencyDays, history: history.slice(0, 3)
+    });
+    backupMetaLoadedAt = Date.now();
+    initialized = true;
+    return true;
+  }
+
   async function reloadInventory() {
+    if (!controlMode && !fluxMode && !state.active) return reloadGlobal();
+    const request = ++reloadSequence;
     await (window.AldeckotAuthReady || Promise.resolve());
     if (!window.AldeckotAuth?.session) return;
     const api = backend();
     if (!api) throw new Error('Cliente Supabase não foi carregado.');
     await api.init();
-    data = await moduleApi().load();
+    let nextData;
+    if (!controlMode && !fluxMode) {
+      const [categories, branches, page] = await Promise.all([
+        moduleApi().globalCategories(), moduleApi().categoryBranches(state.active),
+        moduleApi().categoryPage(categoryFilters())
+      ]);
+      if (!categories.some(table => table.id === state.active)) {
+        state.active = null;
+        state.sidebarOpen = true;
+        return reloadGlobal();
+      }
+      nextData = { tables: categories.map(category => category.id === state.active
+        ? { ...category, items: page.items, pageItems: page.items, total: Number(page.total || 0), branches, itemsLoaded: true }
+        : { ...category, items: [], branches: [], itemsLoaded: false }) };
+    } else nextData = await moduleApi().load();
+    if (request !== reloadSequence) return false;
+    data = nextData;
+    if (!initialized || Date.now() - backupMetaLoadedAt > 30000) {
     const [setting, initialHistory] = await Promise.all([backupApi().settings(), backupApi().list()]);
+    if (request !== reloadSequence) return false;
     let history = initialHistory;
     let latest = history[0] || null;
     const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
     if (window.AldeckotAuth?.isAdmin && setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
-      latest = await backupApi().create(clone(data), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
+      const snapshot = !controlMode && !fluxMode ? await moduleApi().load() : data;
+      latest = await backupApi().create(clone(snapshot), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
       history = [latest, ...history.filter(backup => backup.id !== latest.id)].slice(0, 3);
     }
     writeBackupMeta({
@@ -279,10 +367,17 @@
       frequencyDays,
       history
     });
+    backupMetaLoadedAt = Date.now();
+    }
     // A área de trabalho só deve carregar depois que a pessoa escolher uma tabela.
     // Mantemos a seleção atual em atualizações, mas nunca escolhemos a primeira tabela automaticamente.
-    if (state.active && !data.tables.some(table => table.id === state.active)) state.active = null;
+    if (state.active && !data.tables.some(table => table.id === state.active)) {
+      state.active = null;
+      if (!controlMode && !fluxMode) state.sidebarOpen = true;
+    }
+    if (state.branchId && !activeTable()?.branches?.some(branch => branch.id === state.branchId)) state.branchId = null;
     initialized = true;
+    return true;
   }
 
   function renderConnectionState(title, message, reveal = false) {
@@ -293,6 +388,83 @@
   }
 
   const activeTable = () => data.tables.find(table => table.id === state.active) || null;
+  const imageCatalog = window.AldeckotInventoryImages;
+  const imageKey = imageCatalog.modelKey;
+  let sharedImageCatalog = imageCatalog.build();
+  const signedImageUrls = new Map();
+  let sharedImagesLoadedAt = 0;
+  let sharedImagesRequest = null;
+  let currentSimulationReport = null;
+  async function imageMetadataPages(query) {
+    const rows = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await query(offset, offset + 499);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < 500) return rows;
+    }
+  }
+  async function applySharedImages() {
+    if (controlMode || fluxMode || !document.querySelector('[data-inv-image-key]')) return;
+    if (sharedImagesRequest) return sharedImagesRequest.then(() => applySharedImages());
+    sharedImagesRequest = (async () => {
+      if (Date.now() - sharedImagesLoadedAt > 60000) {
+        const db = (await backend().init()).client;
+        const [supplies, variants] = await Promise.all([
+          imageMetadataPages((from, to) => db.from('supplies')
+            .select('id,name,category,brand,model,inventory_group_key,image_path').order('id').range(from, to)),
+          imageMetadataPages((from, to) => db.from('supply_variants')
+            .select('id,supply_id,inventory_brand,inventory_model,inventory_variant_key,image_path')
+            .not('image_path', 'is', null).order('id').range(from, to))
+        ]);
+        sharedImageCatalog = imageCatalog.build(supplies, variants);
+        sharedImagesLoadedAt = Date.now();
+      }
+      await Promise.all([...document.querySelectorAll('[data-inv-image-key]')].map(async node => {
+        const path = imageCatalog.pathForKey(sharedImageCatalog, node.dataset.invImageKey);
+        if (!path) {
+          node.removeAttribute('src');
+          node.hidden = true;
+          if (node.previousElementSibling) node.previousElementSibling.hidden = false;
+          return;
+        }
+        let promise = signedImageUrls.get(path);
+        if (!promise) {
+          promise = Promise.resolve(window.AldeckotSupplies?.imageUrl(path) || backend().init().then(({ client }) =>
+            client.storage.from('supply-images').createSignedUrl(path, 3600).then(result => {
+              if (result.error) throw result.error;
+              return result.data?.signedUrl || '';
+            })));
+          signedImageUrls.set(path, promise);
+          window.setTimeout(() => {
+            if (signedImageUrls.get(path) === promise) signedImageUrls.delete(path);
+          }, 55 * 60 * 1000);
+        }
+        let url;
+        try { url = await promise; }
+        catch (error) {
+          if (signedImageUrls.get(path) === promise) signedImageUrls.delete(path);
+          console.warn('Imagem do modelo indisponível:', error);
+          return;
+        }
+        if (node.isConnected && url) {
+          if (node.getAttribute('src') === url && !node.hidden) return;
+          node.onload = () => { node.hidden = false; if (node.previousElementSibling) node.previousElementSibling.hidden = true; };
+          node.onerror = () => { node.hidden = true; if (node.previousElementSibling) node.previousElementSibling.hidden = false; };
+          node.src = url;
+          if (node.complete && node.naturalWidth) node.onload();
+        }
+      }));
+    })().catch(error => console.warn('Imagens compartilhadas indisponíveis:', error))
+      .finally(() => { sharedImagesRequest = null; });
+    return sharedImagesRequest;
+  }
+  const scopedItems = table => {
+    const items = !controlMode && !fluxMode && table?.pageItems ? table.pageItems : (table?.items || []);
+    return !controlMode && !fluxMode && state.branchId
+      ? items.filter(item => branchModel.inBranch(table, item, state.branchId)) : items;
+  };
+  const selectedBranch = table => table?.branches?.find(branch => branch.id === state.branchId) || null;
   const className = value => String(value || '').toLowerCase().replaceAll(' ', '-');
   const choiceTone = (kind, value) => {
     if (kind === 'priority') return ({ Alta: 'red', 'Média': 'yellow', 'Estável': 'turquoise' })[value] || 'turquoise';
@@ -319,13 +491,22 @@
 
   function chart(title, items, field, values, prefix = '') {
     const counts = countBy(items, values, field);
-    const max = Math.max(1, ...Object.values(counts));
-    return `<section class="inventory-panel inventory-chart"><h3>${title}</h3><div class="inventory-chart-stage">${values.map(value => `<div class="inventory-chart-bar ${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)};height:${Math.max(4, Math.round((counts[value] / max) * 116))}px" title="${escape(value)}: ${counts[value]}"></div>`).join('')}</div><div class="inventory-legend">${values.map(value => `<span class="${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)}"><i></i><em>${escape(value)}</em><b>${counts[value]}</b></span>`).join('')}</div></section>`;
+    return chartWithCounts(title, counts, field, values, prefix);
   }
+  function chartWithCounts(title, counts, field, values, prefix = '') {
+    const max = Math.max(1, ...Object.values(counts));
+    return `<section class="inventory-panel inventory-chart"><h3>${title}</h3><div class="inventory-chart-stage">${values.map(value => `<div class="inventory-chart-bar ${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)};height:${Math.max(4, Math.round(((counts[value] || 0) / max) * 116))}px" title="${escape(value)}: ${counts[value] || 0}"></div>`).join('')}</div><div class="inventory-legend">${values.map(value => `<span class="${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)}"><i></i><em>${escape(value)}</em><b>${counts[value] || 0}</b></span>`).join('')}</div></section>`;
+  }
+  const globalChart = (title, rows, field, preferred, prefix = '') => {
+    const counts = Object.fromEntries((rows || []).map(row => [row.value, Number(row.count) || 0]));
+    const values = [...new Set([...preferred, ...Object.keys(counts)])];
+    return chartWithCounts(title, counts, field, values, prefix);
+  };
 
   function applyInventoryCleaningColumn(table) {
     if (controlMode || fluxMode || !table) return;
     const grid = document.querySelector('.inventory-data');
+    if (grid?.dataset.invStandardColumns) return;
     const situationHeader = [...(grid?.querySelectorAll('thead th') || [])].find(header => header.textContent.trim() === 'SITUAÇÃO');
     if (!grid || !situationHeader || grid.querySelector('[data-inv-cleaning-column]')) return;
     const header = document.createElement('th');
@@ -345,30 +526,117 @@
     if (empty) empty.colSpan = Number(empty.colSpan || 7) + 1;
   }
 
+  function applyInventoryImageColumn(table) {
+    if (controlMode || fluxMode || !table) return;
+    const grid = document.querySelector('.inventory-data');
+    if (grid?.dataset.invStandardColumns) return;
+    const header = grid?.querySelector('thead tr');
+    if (!header || header.querySelector('[data-inv-image-column]')) return;
+    const imageHeader = document.createElement('th'); imageHeader.textContent = 'IMAGEM'; imageHeader.dataset.invImageColumn = 'true';
+    header.prepend(imageHeader);
+    const itemById = new Map(table.items.map(item => [item.id, item]));
+    for (const row of grid.querySelectorAll('tbody tr[data-inv-item]')) {
+      const item = itemById.get(row.dataset.invItem);
+      if (!item) continue;
+      const image = document.createElement('td'); image.className = 'inventory-image-cell';
+      const placeholder = document.createElement('span'); placeholder.className = 'inventory-image-placeholder'; placeholder.textContent = '◇';
+      const picture = document.createElement('img'); picture.alt = ''; picture.loading = 'eager'; picture.decoding = 'async'; picture.hidden = true;
+      picture.dataset.invImageKey = imageKey(branchModel.categoryForTable(table), item.brand, item.model);
+      image.append(placeholder, picture); row.prepend(image);
+    }
+    for (const row of grid.querySelectorAll('tbody tr:not([data-inv-item])')) row.cells[0].colSpan = header.cells.length;
+    void applySharedImages();
+  }
+
   function applyInventoryFilters() {
     const table = activeTable();
     if (!table) return;
-    const matched = (table.items || []).filter(matchesActiveFilters);
-    const lastPage = Math.max(1, Math.ceil(matched.length / state.pageSize));
+    if (!controlMode && !fluxMode && table.pageItems) {
+      const shown = table.pageItems;
+      const total = Number(table.total || 0);
+      const lastPage = Math.max(1, Math.ceil(total / state.pageSize));
+      const body = document.querySelector('.inventory-data tbody');
+      if (body) body.innerHTML = shown.length ? shown.map(item => inventoryRowMarkup(table, item)).join('')
+        : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
+      let footer = document.querySelector('.inventory-pagination');
+      if (!footer) {
+        footer = document.createElement('footer');
+        footer.className = 'inventory-panel inventory-pagination';
+        document.querySelector('.inventory-workspace')?.appendChild(footer);
+      }
+      footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, total)} de ${total} itens</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
+      void applySharedImages();
+      return;
+    }
+    const scope = scopedItems(table);
+    const matched = scope.filter(matchesActiveFilters);
+    const results = matched;
+    const lastPage = Math.max(1, Math.ceil(results.length / state.pageSize));
     state.page = Math.max(1, Math.min(state.page, lastPage));
-    const shown = matched.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
-    const matchedIds = new Set(shown.map(item => item.id));
-    document.querySelectorAll('.inventory-data tbody tr[data-inv-item]').forEach(row => {
-      row.hidden = !matchedIds.has(row.dataset.invItem);
-    });
+    const shown = results.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+    if (!controlMode && !fluxMode) {
+      const body = document.querySelector('.inventory-data tbody');
+      if (body) body.innerHTML = shown.length ? shown.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
+      void applySharedImages();
+    } else {
+      const matchedIds = new Set(shown.map(item => item.id));
+      document.querySelectorAll('.inventory-data tbody tr[data-inv-item]').forEach(row => {
+        row.hidden = !matchedIds.has(row.dataset.invItem);
+      });
+    }
     const emptyRow = document.querySelector('.inventory-filter-empty-row');
-    if (emptyRow) emptyRow.hidden = !(table.items?.length && !matched.length);
+    if (emptyRow) emptyRow.hidden = !(scope.length && !matched.length);
     let footer = document.querySelector('.inventory-pagination');
     if (!footer) {
       footer = document.createElement('footer');
       footer.className = 'inventory-panel inventory-pagination';
       document.querySelector('.inventory-workspace')?.appendChild(footer);
     }
-    footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, matched.length)} de ${matched.length} itens</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
+    footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, results.length)} de ${results.length} itens</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
+  }
+
+  async function refreshCategoryPage() {
+    if (controlMode || fluxMode || !state.active) return;
+    const request = ++categoryRequestSequence;
+    const category = state.active;
+    const branch = state.branchId;
+    try {
+      const result = await moduleApi().categoryPage(categoryFilters());
+      if (request !== categoryRequestSequence || state.active !== category || state.branchId !== branch) return;
+      const lastPage = Math.max(1, Math.ceil(Number(result.total || 0) / state.pageSize));
+      if (state.page > lastPage) { state.page = lastPage; return refreshCategoryPage(); }
+      const table = activeTable();
+      if (!table) return;
+      table.items = result.items;
+      table.pageItems = result.items;
+      table.total = Number(result.total || 0);
+      table.fullItemsLoaded = false;
+      const search = document.activeElement?.matches?.('[data-inv-search]') ? document.activeElement : null;
+      const caret = search?.selectionStart ?? null;
+      renderBranchView();
+      if (search) {
+        const replacement = document.querySelector('[data-inv-search]');
+        replacement?.focus({ preventScroll: true });
+        if (caret !== null) replacement?.setSelectionRange(caret, caret);
+      }
+    } catch (error) {
+      if (request === categoryRequestSequence) window.AldeckotMessage.show(backendMessage(error));
+    }
+  }
+  async function ensureFullActiveTable() {
+    const table = activeTable();
+    if (!table || controlMode || fluxMode || table.fullItemsLoaded) return table;
+    const snapshot = await moduleApi().load(table.id);
+    const complete = snapshot.tables.find(entry => entry.id === table.id);
+    if (!complete) throw new Error('A categoria não está mais disponível.');
+    table.items = complete.items;
+    table.fullItemsLoaded = true;
+    return table;
   }
 
   function ensureFilterEmptyRow(table) {
     const grid = document.querySelector('.inventory-data');
+    if (grid?.dataset.invStandardColumns) return;
     const body = grid?.tBodies?.[0];
     if (!grid || !body || !table?.items?.length || body.querySelector('.inventory-filter-empty-row')) return;
     const row = document.createElement('tr');
@@ -385,8 +653,71 @@
     if (!data.tables.length) return '<p class="inventory-no-tables">Nenhuma tabela criada.</p>';
     return data.tables.map(entry => {
       const icon = entry.icon && entry.icon !== '📁' ? ` ${escape(entry.icon)}` : '';
-      return `<div class="inventory-table-choice ${entry.id === state.active ? 'active' : ''}"><button class="inventory-table-select" data-inv-table="${entry.id}" aria-label="Abrir tabela ${escape(entry.name)}, ${entry.items.length} ${entry.items.length === 1 ? 'item' : 'itens'}"><b>${escape(entry.name)}${icon}</b></button></div>`;
+      return `<div class="inventory-table-choice ${entry.id === state.active ? 'active' : ''}"><button class="inventory-table-select" data-inv-table="${entry.id}" aria-label="Abrir tabela ${escape(entry.name)}${entry.itemsLoaded === false ? '' : `, ${entry.items.length} ${entry.items.length === 1 ? 'item' : 'itens'}`}"><b>${escape(entry.name)}${icon}</b></button></div>`;
     }).join('');
+  }
+
+  const globalItemFromRow = row => ({
+    id: row.id, tableId: row.table_id, equipment: row.equipment, tag: row.tag,
+    serial: row.serial, brand: row.brand, model: row.model, sector: row.sector,
+    location: row.location, status: row.status, situation: row.situation,
+    cleaning: row.cleaning_type, createdAt: row.created_at,
+    updatedAt: row.changed_at || row.updated_at, logs: []
+  });
+  const globalRowsMarkup = () => (globalState.result?.items || []).map(row => {
+    const table = data.tables.find(entry => entry.id === row.table_id)
+      || { name: row.category, branches: [] };
+    return inventoryRowMarkup(table, globalItemFromRow(row));
+  }).join('') || '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento encontrado.</td></tr>';
+  function globalPaginationMarkup() {
+    const total = Number(globalState.result?.total || 0);
+    if (!globalListingActive()) return `<span>${(globalState.result?.items || []).length} equipamentos recentes · ${total} no Inventário</span>`;
+    const pages = Math.max(1, Math.ceil(total / globalState.pageSize));
+    return `<span>${total} ${total === 1 ? 'equipamento' : 'equipamentos'} encontrados</span><nav aria-label="Páginas da consulta global"><button type="button" data-inv-global-page="${globalState.page - 1}" ${globalState.page <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button><span>Página ${globalState.page} de ${pages}</span><button type="button" data-inv-global-page="${globalState.page + 1}" ${globalState.page >= pages ? 'disabled' : ''} aria-label="Próxima página">›</button></nav>`;
+  }
+  function globalMarkup() {
+    const all = globalState.view === 'all';
+    const options = (values, chosen) => values.map(value => `<option value="${escape(value)}" ${chosen === value ? 'selected' : ''}>${escape(value)}</option>`).join('');
+    const availableStatuses = [...new Set([...statuses, ...(globalState.overview?.statuses || []).map(row => row.value)])];
+    const availableSituations = [...new Set([...situations, ...(globalState.overview?.situations || []).map(row => row.value)])];
+    return `<section class="inventory-panel inventory-global-search"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-global-search value="${escape(globalState.query)}" placeholder="Buscar TAG, série, equipamento, categoria ou ramificação…" aria-label="Buscar em todo o Inventário" autocomplete="off"></div><button type="button" class="inventory-global-view-button" data-inv-global-view="${all ? 'recent' : 'all'}">${all ? 'Ver recentes' : 'Ver todos'}</button></section>
+      ${all ? `<section class="inventory-panel inventory-global-filters"><select data-inv-global-category aria-label="Filtrar por categoria"><option value="">Todas as categorias</option>${data.tables.map(table => `<option value="${escape(table.id)}" ${globalState.category === table.id ? 'selected' : ''}>${escape(table.name)}</option>`).join('')}</select><select data-inv-global-status aria-label="Filtrar por status"><option value="">Todos os status</option>${options(availableStatuses, globalState.status)}</select><select data-inv-global-situation aria-label="Filtrar por situação"><option value="">Todas as situações</option>${options(availableSituations, globalState.situation)}</select><select data-inv-global-order aria-label="Ordenar equipamentos"><option value="recent" ${globalState.order === 'recent' ? 'selected' : ''}>Mais recentes</option><option value="oldest" ${globalState.order === 'oldest' ? 'selected' : ''}>Mais antigos</option><option value="name" ${globalState.order === 'name' ? 'selected' : ''}>Equipamento A–Z</option><option value="tag" ${globalState.order === 'tag' ? 'selected' : ''}>TAG A–Z</option></select></section>` : ''}
+      <section class="inventory-panel inventory-data-wrap inventory-global-data"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>IMAGEM</th><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${globalRowsMarkup()}</tbody></table></section>
+      <footer class="inventory-panel inventory-pagination inventory-global-pagination">${globalPaginationMarkup()}</footer><span class="inventory-global-loading" role="status" ${globalState.busy ? '' : 'hidden'}>Atualizando consulta…</span>`;
+  }
+  function renderGlobalTable() {
+    if (state.active) return;
+    const body = document.querySelector('.inventory-global-data tbody');
+    if (body) body.innerHTML = globalRowsMarkup();
+    const footer = document.querySelector('.inventory-global-pagination');
+    if (footer) footer.innerHTML = globalPaginationMarkup();
+    const loading = document.querySelector('.inventory-global-loading');
+    if (loading) loading.hidden = !globalState.busy;
+    void applySharedImages();
+  }
+  async function refreshGlobalPage() {
+    if (state.active) return;
+    const request = ++globalRequestSequence;
+    if (!globalListingActive()) {
+      globalState.result = { items: globalState.overview?.recent || [], total: globalState.overview?.total || 0 };
+      globalState.busy = false;
+      renderGlobalTable();
+      return;
+    }
+    globalState.busy = true;
+    renderGlobalTable();
+    try {
+      const result = await moduleApi().globalPage(globalFilters());
+      if (request !== globalRequestSequence || state.active) return;
+      globalState.result = result;
+    } catch (error) {
+      if (request === globalRequestSequence) window.AldeckotMessage.show(backendMessage(error));
+    } finally {
+      if (request === globalRequestSequence) {
+        globalState.busy = false;
+        renderGlobalTable();
+      }
+    }
   }
 
   function tableActionsPopover() {
@@ -402,7 +733,7 @@
 
   function applyHeaderPresentation() {
     const actions = {
-      'export-pdf': { label: 'Exportar PDF', className: 'inventory-pdf-action', icon: '<path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h4M8.5 14.5h1.2a1.2 1.2 0 0 0 0-2.4H8.5v4.8M12 16.9v-4.8h1.1a2.4 2.4 0 1 1 0 4.8H12ZM16.3 16.9v-4.8h2.5M16.3 14.5h2"/>' },
+      'export-pdf': { label: 'Exportar PDF', className: 'inventory-pdf-action', icon: '<path d="M3.5 4.3 16.8 2l.7 3.5H5.2Z" fill="#b90c29" stroke="none"/><path d="M6.1 4.5h12.8v14H6.1Z" fill="#f9fafb" stroke="none"/><path d="M4.2 6.1h13v13.8c0 .9-.6 1.5-1.5 1.5h-10c-.9 0-1.5-.6-1.5-1.5Z" fill="#ff3048" stroke="none"/><path d="M5.8 11.9V7.8h1.7c1.1 0 1.7.5 1.7 1.35s-.6 1.35-1.7 1.35H5.8M10 7.8v4.1h1c1.3 0 2-.7 2-2.05s-.7-2.05-2-2.05ZM13.8 11.9V7.8h2.4M13.8 9.8H16" fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.8" cy="17.8" r="5.3" fill="#35d82e" stroke="#24a61e" stroke-width=".5"/><path d="M17.8 14.5v4.2m-2-1.9 2 2 2-2m-4.6 3.6h5.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' },
       backup: { label: 'Backup', className: 'inventory-backup-action', icon: '<ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/>' },
       'add-table': { label: 'Nova tabela', className: 'inventory-new-table-action', icon: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>' },
       home: { label: 'Home', className: 'inventory-home-action', icon: '<path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/>' }
@@ -424,12 +755,13 @@
     document.body.classList.remove('home-page');
     document.body.classList.add('inventory-open');
     const table = activeTable();
-    const items = table?.items || [];
-    const emptyPresentation = emptyPresentationMarkup();
+    const items = scopedItems(table);
+    const globalHome = !controlMode && !fluxMode && !table;
+    const emptyPresentation = emptyPresentationCache ||= emptyPresentationMarkup();
     $('#app').innerHTML = `<div class="inventory-shell">
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
-      <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg viewBox="0 0 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4m0 3v4m0 3v4"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-      ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+      <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
+        ${table ? `<main class="inventory-workspace">${branchNavigationMarkup(table)}${controlMode || fluxMode ? tableMarkup(table, items) : inventoryTableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
     const inventoryHeader = document.querySelector('.inventory-header');
     const previousHeading = inventoryHeader?.querySelector('.inventory-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = moduleHeaderSummaryMarkup();
@@ -449,9 +781,42 @@
     }
     if (emptyPresentation.illustration) {
       const animationDock = document.createElement('div');
-      animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : ''}`;
+      animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : controlMode ? '' : 'inventory-header-cube-scene'}`;
       animationDock.setAttribute('aria-hidden', 'true');
       animationDock.innerHTML = emptyPresentation.illustration;
+      if (!controlMode && !fluxMode) {
+        const illustration = animationDock.querySelector('.inventory-empty-illustration');
+        illustration?.setAttribute('viewBox', '0 0 620 110');
+        const faces = animationDock.querySelectorAll('#inventory-empty-cube path');
+        ['.34', '.2', '.48'].forEach((opacity, index) => faces[index]?.setAttribute('fill-opacity', opacity));
+        faces[3]?.setAttribute('fill', 'none');
+        animationDock.querySelector('.inventory-empty-object-main use')?.setAttribute('transform', 'translate(277 14) scale(1.5)');
+        for (const [name, transform] of [
+          ['purple', 'translate(67 19) scale(.8)'],
+          ['cyan', 'translate(494 13) scale(.85)'],
+          ['lilac', 'translate(173 58) scale(.68)'],
+          ['green', 'translate(379 54) scale(.7)'],
+          ['yellow', 'translate(554 55) scale(.8)']
+        ]) animationDock.querySelector(`.inventory-empty-object-${name} use`)?.setAttribute('transform', transform);
+        for (const [name, source, transform, delay] of [
+          ['edge-left', 'cyan', 'translate(18 54) scale(.7)', '-3.6s'],
+          ['upper-left', 'green', 'translate(120 16) scale(.6)', '-1.2s'],
+          ['left-mid', 'yellow', 'translate(153 30) scale(.58)', '-4.1s'],
+          ['middle-left', 'purple', 'translate(218 21) scale(.74)', '-2.7s'],
+          ['middle-low', 'cyan', 'translate(241 63) scale(.61)', '-4.8s'],
+          ['middle-right-high', 'yellow', 'translate(363 16) scale(.58)', '-1.9s'],
+          ['right-mid', 'lilac', 'translate(430 20) scale(.72)', '-3.3s'],
+          ['right-low', 'purple', 'translate(452 60) scale(.63)', '-.8s'],
+          ['edge-right', 'green', 'translate(584 16) scale(.5)', '-4.4s']
+        ]) {
+          const cube = illustration?.querySelector(`.inventory-empty-object-${source}`)?.cloneNode(true);
+          if (!cube) continue;
+          cube.classList.add('inventory-header-extra-cube', `inventory-header-extra-cube-${name}`);
+          cube.querySelector('use')?.setAttribute('transform', transform);
+          cube.style.animationDelay = delay;
+          illustration.append(cube);
+        }
+      }
       if (fluxMode) {
         // Enquadra apenas a cópia no cabeçalho; a ilustração do estado vazio permanece completa.
         animationDock.querySelector('.flux-empty-illustration')?.setAttribute('viewBox', '0 42 520 160');
@@ -460,8 +825,16 @@
     }
     applyHeaderPresentation();
     applyInventoryCleaningColumn(table);
+    applyInventoryImageColumn(table);
     ensureFilterEmptyRow(table);
-    applyInventoryFilters();
+    setupInventoryAddMenu(table);
+    if (table) applyInventoryFilters();
+    else if (globalHome) void applySharedImages();
+    if (table && !controlMode && !fluxMode) {
+      const titles = document.querySelectorAll('.inventory-charts .inventory-chart h3');
+      if (titles[0]) titles[0].textContent = 'Status nesta página';
+      if (titles[1]) titles[1].textContent = 'Situação nesta página';
+    }
     if (controlMode || fluxMode) {
       const chartTitles = document.querySelectorAll('.inventory-charts .inventory-chart h3');
       if (chartTitles[1]) chartTitles[1].textContent = moduleConfig.situationChart;
@@ -473,8 +846,58 @@
       state.pendingItemId = null;
       if (window.history?.replaceState) window.history.replaceState({}, '', moduleConfig.page);
       details(pendingItem);
+    } else if (state.pendingItemId && table && !controlMode && !fluxMode) {
+      const wanted = state.pendingItemId;
+      state.pendingItemId = null;
+      void ensureFullActiveTable().then(complete => {
+        const found = complete?.items.find(item => item.id === wanted);
+        if (found) { window.history?.replaceState?.({}, '', moduleConfig.page); details(found); }
+      }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
     window.AldeckotModuleStage?.reveal?.();
+  }
+
+  function branchNavigationMarkup(table) {
+    if (controlMode || fluxMode || !table) return '';
+    const current = selectedBranch(table);
+    return `<nav class="inventory-branch-nav" aria-label="Navegação da categoria"><button type="button" class="inventory-global-back" data-inv-global-home aria-label="Voltar à visão global">← Inventário</button><div class="inventory-branch-tabs"><button type="button" class="inventory-branch-tab ${current ? '' : 'active'}" data-inv-branch-home aria-current="${current ? 'false' : 'page'}">${escape(table.name)}</button>${(table.branches || []).map(branch => `<button type="button" class="inventory-branch-tab ${current?.id === branch.id ? 'active' : ''}" data-inv-branch="${escape(branch.id)}" aria-current="${current?.id === branch.id ? 'page' : 'false'}">${escape(branch.name)}</button>`).join('')}</div>${current && canManage() ? `<div class="inventory-branch-admin"><button type="button" data-inv-branch-edit="${escape(current.id)}">Renomear</button><button type="button" data-inv-branch-delete="${escape(current.id)}">Excluir</button></div>` : ''}</nav>`;
+  }
+
+  function setupInventoryAddMenu(table) {
+    if (controlMode || fluxMode || !table) return;
+    const button = document.querySelector('.inventory-workspace [data-inv-action="add-item"]');
+    if (!button) return;
+    button.dataset.invAction = 'toggle-add-menu';
+    button.setAttribute('aria-expanded', String(state.addMenu));
+    button.setAttribute('aria-haspopup', 'menu');
+    if (state.addMenu) button.insertAdjacentHTML('afterend', '<div class="inventory-add-menu" role="menu"><button type="button" data-inv-action="new-equipment" role="menuitem">Novo equipamento</button><button type="button" data-inv-action="new-branch" role="menuitem">Nova ramificação</button></div>');
+  }
+
+  function renderBranchView() {
+    const table = activeTable();
+    const workspace = document.querySelector('.inventory-workspace');
+    const charts = document.querySelector('.inventory-charts');
+    if (!table || !workspace || !charts) return renderInventory();
+    const items = scopedItems(table);
+    workspace.innerHTML = branchNavigationMarkup(table) + inventoryTableMarkup(table, items);
+    charts.innerHTML = chart('Status nesta página', items, 'status', statuses) + chart('Situação nesta página', items, 'situation', situations, 'situation-');
+    applyInventoryCleaningColumn(table);
+    applyInventoryImageColumn(table);
+    ensureFilterEmptyRow(table);
+    setupInventoryAddMenu(table);
+    applyInventoryFilters();
+  }
+
+  function branchForm(branch = null) {
+    const node = modal(`<form data-inv-branch-form class="table-form"><h2>${branch ? 'Renomear ramificação' : 'Nova ramificação'}</h2><label class="table-form-label">Nome da ramificação <b>*</b><input class="table-form-input" name="name" required maxlength="80" value="${escape(branch?.name || '')}" autofocus></label><div class="table-form-actions"><button class="table-form-submit" type="submit">Salvar</button><button class="table-form-cancel" type="button" data-inv-close>Cancelar</button></div></form>`, 'table-form-dialog');
+    node.dataset.branchId = branch?.id || '';
+  }
+
+  async function showClassificationSimulation() {
+    const snapshot = await moduleApi().load();
+    currentSimulationReport = branchModel.simulation(snapshot.tables);
+    const entries = Object.entries(currentSimulationReport.counts).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+    modal(`<div class="inv-dialog-head"><h2>Simulação de ramificações</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Prévia somente leitura. Nenhum equipamento foi alterado.</p><div class="inventory-simulation-summary"><strong>${currentSimulationReport.total} equipamentos</strong><span>${currentSimulationReport.pending.length} pendentes de revisão</span></div><div class="inventory-simulation-list">${entries.map(([label, count]) => `<div><span>${escape(label)}</span><b>${count}</b></div>`).join('') || '<p>Nenhum equipamento carregado.</p>'}</div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Fechar</button><button type="button" class="inv-primary" data-inv-action="download-branch-report">Exportar relatório JSON</button></div>`, 'equipment-dialog');
   }
 
   function emptyPresentationMarkup() {
@@ -539,6 +962,17 @@
     return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, número de série, empresa..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Motivo ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data flux-data"><thead><tr><th>MOVIMENTAÇÃO</th><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>TAG</th><th>REMETENTE</th><th>DESTINO</th><th>ENVIO</th><th>RECEBIMENTO</th><th>TIPO DE ENVIO</th><th>MOTIVO</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td>${fluxMovementIndicator(item.movement)}</td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td><span class="inventory-shipping ${className(item.shippingType)}">${escape(item.shippingType)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="12" class="inventory-empty-row">Nenhuma movimentação nesta tabela.</td></tr>'}</tbody></table></section>`;
   }
 
+  function inventoryRowMarkup(table, item) {
+    const image = escape(imageKey(branchModel.categoryForTable(table), item.brand, item.model));
+    const changedAt = branchModel.lastChangedAt(item);
+    return `<tr data-inv-item="${escape(item.id)}"><td class="inventory-image-cell"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="" loading="eager" decoding="async" hidden></td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.sector || '—')}</td><td>${escape(item.location || '—')}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-situation ${className(item.cleaning || 'Não realizada')}">${escape(item.cleaning || 'Não realizada')}</span></td><td>${dateTimeValue(changedAt)}</td></tr>`;
+  }
+
+  function inventoryTableMarkup(table, visible) {
+    const initial = visible.slice(0, state.pageSize);
+    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, modelo, marca..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" type="button" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>IMAGEM</th><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${initial.length ? initial.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento nesta categoria.</td></tr>'}</tbody></table></section>`;
+  }
+
   function tableMarkup(table, visible) {
     if (controlMode) return controlTableMarkup(table, visible);
     if (fluxMode) return fluxTableMarkup(table, visible);
@@ -601,7 +1035,47 @@
       field.innerHTML = '<span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="cleaning" data-inv-cleaning-choice>' + cleanings.map(option => '<option' + (cleaning === option ? ' selected' : '') + '>' + escape(option) + '</option>').join('') + '</select></div>';
       notesField.before(field);
     }
+    if (activeTable()?.branches?.length) {
+      const branchField = document.createElement('label');
+      const selectedId = value.branchId || branchModel.branchFor(activeTable(), value)?.id || state.branchId || '';
+      branchField.className = 'inv-choice-field';
+      branchField.innerHTML = `<span>Categoria / Ramificação *</span><div class="inv-choice-select"><select name="branchId" required><option value="" disabled ${selectedId ? '' : 'selected'}>Selecione a ramificação</option>${activeTable().branches.map(branch => `<option value="${branch.id}" ${branch.id === selectedId ? 'selected' : ''}>${escape(branch.name)}</option>`).join('')}</select></div>`;
+      notesField?.before(branchField);
+    }
     node.dataset.itemId = entry?.id || '';
+  }
+
+  function transferForm(item) {
+    const table = activeTable();
+    if (!table || table.items.length < 2) { window.AldeckotMessage.show('É necessário outro equipamento na categoria para realizar a permuta.'); return; }
+    const node = modal(`<div class="inv-dialog-head"><h2>Transferência · Permuta</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Somente Setor e Local serão trocados. TAG, ramificação, status e histórico permanecem vinculados a cada equipamento.</p><form data-inv-transfer-form><div class="inv-fields equipment-fields">${table.branches?.length ? `<label><span>Ramificação do segundo equipamento</span><select name="branch"><option value="">Todas as ramificações</option>${table.branches.map(branch => `<option value="${branch.id}">${escape(branch.name)}</option>`).join('')}</select></label>` : ''}<label><span>Segundo equipamento *</span><select name="other" required><option value="">Selecione o equipamento</option></select></label></div><div class="inventory-transfer-preview" aria-live="polite"></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Confirmar permuta</button></div></form>`, 'equipment-dialog');
+    node.dataset.itemId = item.id;
+    node.dataset.operationId = crypto.randomUUID();
+    node.dataset.firstSector = item.sector || '';
+    node.dataset.firstLocation = item.location || '';
+    const form = node.querySelector('[data-inv-transfer-form]');
+    const branchSelect = form.querySelector('[name="branch"]');
+    if (branchSelect) {
+      branchSelect.options[0].text = 'Selecione uma ramificação';
+      branchSelect.options[0].disabled = true;
+      branchSelect.required = true;
+      if (table.items.some(row => !branchModel.branchFor(table, row))) branchSelect.add(new Option('Sem ramificação', '__unassigned'));
+    }
+    const otherSelect = form.querySelector('[name="other"]');
+    const preview = form.querySelector('.inventory-transfer-preview');
+    const updateCandidates = () => {
+      const chosenBranch = branchSelect?.value || '';
+      otherSelect.innerHTML = '<option value="">Selecione o equipamento</option>' + table.items.filter(row => row.id !== item.id && (!table.branches?.length || (chosenBranch && (chosenBranch === '__unassigned' ? !branchModel.branchFor(table, row) : branchModel.inBranch(table, row, chosenBranch))))).map(row => `<option value="${row.id}">${escape(row.tag || row.equipment)} · ${escape(row.equipment)}</option>`).join('');
+      preview.textContent = '';
+    };
+    branchSelect?.addEventListener('change', updateCandidates);
+    otherSelect.addEventListener('change', () => {
+      const other = table.items.find(row => row.id === otherSelect.value);
+      node.dataset.secondSector = other?.sector || '';
+      node.dataset.secondLocation = other?.location || '';
+      preview.innerHTML = other ? `<div><b>${escape(item.tag || item.equipment)}</b><span>${escape(item.sector || '—')} / ${escape(item.location || '—')} → ${escape(other.sector || '—')} / ${escape(other.location || '—')}</span></div><div><b>${escape(other.tag || other.equipment)}</b><span>${escape(other.sector || '—')} / ${escape(other.location || '—')} → ${escape(item.sector || '—')} / ${escape(item.location || '—')}</span></div>` : '';
+    });
+    updateCandidates();
   }
 
   function replaceEquipmentForm(item) {
@@ -748,17 +1222,38 @@
   }
 
   function itemActionMenu(item) {
-    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button>${!controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo' && activeTable()?.items.some(row => row.id !== item.id && row.status === 'Reserva') ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : ''}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
+    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button>${!controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo' ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : ''}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
   }
 
   function details(item) {
     if (controlMode) { controlDetails(item); return; }
     if (fluxMode) { fluxDetails(item); return; }
-    const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['sector', 'Setor'], ['location', 'Local'], ['status', 'Status'], ['priority', 'Prioridade'], ['situation', 'Situação'], ['cleaning', 'Tipo de Limpeza'], ['date', 'Atualizado'], ['notes', 'Observações']];
+    const table = activeTable();
+    const branch = branchModel.branchFor(table, item);
+    const branches = branchModel.branchesFor(table, item);
+    const field = (label, value, tone = '') => `<div class="inv-detail ${tone}"><span>${label}</span><b>${escape(value || '—')}</b></div>`;
+    const section = (title, fields) => `<section class="inv-equipment-section"><h3>${title}</h3><div class="inv-detail-grid">${fields.join('')}</div></section>`;
+    const image = escape(imageKey(branchModel.categoryForTable(table), item.brand, item.model));
+    const latest = branchModel.lastChangedAt(item);
     const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
-    const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : (item[key] || '—'))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
+    const node = modal(`<div class="inv-dialog-head"><div><small class="inv-equipment-eyebrow">INVENTÁRIO / ${escape(table?.name || '—')}</small><h2>${escape(item.equipment)}</h2><p class="inv-equipment-subtitle">${escape(item.tag || 'TAG não informada')} · ${escape(item.model || 'Modelo não informado')}</p></div><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close aria-label="Fechar detalhes">×</button></div></div><div class="inv-equipment-top"><div class="inv-equipment-image"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="Imagem de ${escape(item.equipment)}" decoding="async" hidden></div><div class="inv-equipment-summary">${section('Identificação', [field('Equipamento', item.equipment), field('TAG', item.tag), field('Nº de série', item.serial), field('Categoria', table?.name), ...(branches.length ? [field('Ramificações', branches.map(entry => entry.name).join(' · '))] : []), field('Marca', item.brand), field('Modelo', item.model)])}</div></div>${section('Localização', [field('Setor', item.sector), field('Local de instalação', item.location)])}${section('Estado atual', [field('Status', item.status, `inv-priority-detail priority-${choiceTone('status', item.status)}`), field('Situação', item.situation), field('Tipo de limpeza', item.cleaning), field('Prioridade', item.priority || 'Estável')])}${section('Informações complementares', [field('Data de cadastro', dateTimeValue(item.createdAt)), field('Última alteração', dateTimeValue(latest)), field('Observações', item.notes)])}<div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`, 'inv-equipment-detail-dialog');
     node.dataset.itemId = item.id;
+    if (canManage()) node.querySelector('.inv-actions')?.insertAdjacentHTML('afterbegin', `<button type="button" class="inv-primary" data-inv-transfer-item="${item.id}">Transferência</button>${table?.branches?.length ? `<button type="button" class="inv-ghost" data-inv-manage-shares="${item.id}">Ramificações</button>` : ''}`);
     applyStatusModalGlow(node, item.status);
+    void applySharedImages();
+  }
+
+  function shareDialog(item) {
+    const table = activeTable();
+    if (!table || !item || !canManage()) return;
+    const primary = branchModel.branchFor(table, item);
+    const shared = new Set(item.sharedBranchIds || []);
+    const rows = (table.branches || []).map(branch => {
+      const isPrimary = primary?.id === branch.id;
+      const isShared = shared.has(branch.id);
+      return `<div class="inventory-share-row"><div><b>${escape(branch.name)}</b><small>${isPrimary ? 'Principal' : isShared ? 'Compartilhada' : 'Não vinculada'}</small></div>${isPrimary ? '' : `<button type="button" data-inv-share-${isShared ? 'remove' : 'add'}="${escape(branch.id)}" data-inv-share-item="${escape(item.id)}">${isShared ? 'Remover' : 'Compartilhar'}</button>`}</div>`;
+    }).join('') || '<p>Nenhuma ramificação criada nesta categoria.</p>';
+    modal(`<div class="inv-dialog-head"><h2>Ramificações de ${escape(item.equipment)}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">O mesmo cadastro pode aparecer em várias ramificações desta categoria. Status, localização e histórico continuam únicos.</p><div class="inventory-share-list">${rows}</div><div class="inv-actions"><button type="button" class="inv-ghost" data-inv-close>Fechar</button></div>`, 'inventory-share-dialog');
   }
 
   function controlDetails(item) {
@@ -989,6 +1484,14 @@
   async function saveItem(form) {
     if (fluxMode && form.dataset.fluxBusy === 'true') return;
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    if (!controlMode && !fluxMode && values.branchId) {
+      const suggested = branchModel.proposalForTable(table, { equipment: values.equipment });
+      const chosen = table.branches.find(branch => branch.id === values.branchId);
+      if (suggested && chosen && branchModel.normalize(suggested) !== branchModel.normalize(chosen.classificationKey || chosen.name)) {
+        const proceed = await window.AldeckotMessage.confirm(`Este equipamento normalmente pertence a “${suggested}”. Continuar em “${chosen.name}”?`, { title: 'Conferir ramificação', confirmText: 'Continuar' });
+        if (!proceed) return;
+      }
+    }
     const valuesToSave = { ...item };
     if (fluxMode) {
       valuesToSave.sourceModule = modalNode.dataset.sourceModule || null;
@@ -1040,9 +1543,15 @@
     if (submit) { submit.disabled = true; submit.textContent = 'Salvando…'; }
     let savedCommitted = false;
     try {
+      let message = updateLogMessage(old, item);
+      if (!controlMode && !fluxMode && old && values.branchId) {
+        const before = branchModel.branchFor(table, old)?.name || 'Sem ramificação';
+        const after = table.branches.find(branch => branch.id === values.branchId)?.name || 'Sem ramificação';
+        if (before !== after) message = `Ramificação: ${before} → ${after}. ${message}`;
+      }
       const saved = maintenanceStatus
         ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
-        : await moduleApi().saveItem(table.id, valuesToSave, id || null, updateLogMessage(old, item), fluxReview);
+        : await moduleApi().saveItem(table.id, valuesToSave, id || null, message.slice(0, 490), fluxReview);
       savedCommitted = true;
       let peripheralSync;
       try { peripheralSync = await moduleApi().syncManagementPeripheral?.(saved, old); }
@@ -1052,6 +1561,7 @@
       }
       closeModal();
       await reloadInventory();
+      if (!controlMode && !fluxMode && state.branchId && values.branchId) state.branchId = values.branchId;
       renderInventory();
       const updatedItem = activeTable()?.items.find(entry => entry.id === saved.id);
       if (updatedItem && fluxMode && updatedItem.situation === 'Aquisição' && canManage()) await fluxAcquisitionWizard(updatedItem);
@@ -1071,13 +1581,13 @@
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
   function formattedNow() { return new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); }
 
-  function exportPdf() {
+  function exportPdf(popupWindow = null) {
     const table = activeTable();
     if (!table) { window.AldeckotMessage.show('Selecione uma tabela para exportá-la em PDF.'); return; }
     const printBrand = new URL('assets/aldeckot-symbol.png?v=2.0.71', location.href).href;
     if (fluxMode) {
       const rows = table.items.map(item => `<tr><td>${escape(item.movement)}</td><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.serial)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${escape(item.senderResponsible)}</td><td>${escape(item.receiverResponsible)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td>${escape(item.shippingType)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="16" class="empty">Nenhuma movimentação cadastrada nesta tabela.</td></tr>';
-      const popup = window.open('', '_blank', 'width=1280,height=860');
+      const popup = popupWindow || window.open('', '_blank', 'width=1280,height=860');
       if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
       popup.document.open();
       popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A3 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:6px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:10px;padding-bottom:7px}h1{font-size:17px;margin:0 0 3px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:6px;letter-spacing:.1px;padding:5px 2px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:4px 2px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:7px;color:#647386}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><header><img class="print-brand" src="${printBrand}" alt=""><h1>ALDECKOT · FLUX</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} movimentação(ões) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Movimentação</th><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>TAG</th><th>Nº Série</th><th>Remetente</th><th>Destino</th><th>Responsável Envio</th><th>Responsável Recebimento</th><th>Envio</th><th>Recebimento</th><th>Tipo</th><th>Motivo</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de envio e recebimento</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
@@ -1086,7 +1596,7 @@
     }
     if (controlMode) {
       const rows = table.items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.sector)}</td><td>${dateValue(item.entryDate)}</td><td>${dateValue(item.exitDate)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Nenhum equipamento cadastrado nesta tabela.</td></tr>';
-      const popup = window.open('', '_blank', 'width=1280,height=860');
+      const popup = popupWindow || window.open('', '_blank', 'width=1280,height=860');
       if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
       popup.document.open();
       popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:7px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:12px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:7px;letter-spacing:.15px;padding:6px 3px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:5px 3px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:8px;color:#647386}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><header><img class="print-brand" src="${printBrand}" alt=""><h1>ALDECKOT · CONTROLE TI</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} item(ns) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>Nº Série</th><th>TAG</th><th>Setor</th><th>Entrada</th><th>Saída</th><th>Limpeza</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de Manutenção</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
@@ -1094,7 +1604,7 @@
       return;
     }
     const rows = table.items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.status)}</td><td>${escape(item.situation)}</td><td>${escape(item.cleaning || 'Não realizada')}</td><td>${escape(item.date || '—')}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhum equipamento cadastrado nesta tabela.</td></tr>';
-    const popup = window.open('', '_blank', 'width=1280,height=860');
+    const popup = popupWindow || window.open('', '_blank', 'width=1280,height=860');
     if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
     popup.document.open();
     popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:9px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:14px;padding-bottom:10px}h1{font-size:20px;margin:0 0 4px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:8px;letter-spacing:.2px;padding:8px 5px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:7px 5px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:8px;color:#647386}@media print{footer{position:fixed}}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><header><img class="print-brand" src="${printBrand}" alt=""><h1>ALDECKOT · INVENTÁRIO</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} item(ns) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>Nº Série</th><th>TAG</th><th>Status</th><th>Situação</th><th>Limpeza</th><th>Data</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de Equipamentos</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
@@ -1177,14 +1687,20 @@
     return replaceBackupModal(`<section class="backup-dialog-content backup-confirm-dialog"><header class="backup-dialog-header"><div class="backup-title-icon restore-title-icon">${backupSvg('upload')}</div><div><h2>Confirmar restauração</h2><p>${escape(pendingRestore.label)}</p></div><button class="backup-close" data-inv-close aria-label="Fechar">${backupSvg('close')}</button></header><div class="backup-confirm-summary">${backupSvg('calendar')}<span><b>${escape(pendingRestore.dateLabel)}</b><small>${tableCount} ${tableCount === 1 ? 'tabela será restaurada' : 'tabelas serão restauradas'}</small></span></div><div class="backup-confirm-warning">${backupSvg('warning')}<div><b>Atenção</b><p>A restauração substituirá os dados atuais do Inventário pelos dados do backup selecionado. Esta ação não poderá ser desfeita.</p></div></div><footer class="backup-choice-footer"><button class="backup-secondary-button" data-inv-action="restore-backup">Cancelar</button><button class="backup-critical-button" data-inv-action="confirm-backup-restore">Restaurar Backup</button></footer></section>`);
   }
 
-  function createLocalBackup(button) {
+  async function createLocalBackup(button) {
     if (!backupButtonBusy(button, 'Criando Backup…')) return;
-    const now = new Date();
-    const payload = { application: 'ALDECKOT', module: moduleConfig.backupModule, version: 1, createdAt: now.toISOString(), data: clone(data) };
-    download(JSON.stringify(payload, null, 2), `aldeckot-${moduleConfig.backupFile}-backup-${now.toISOString().slice(0, 10)}.json`, 'application/json');
-    writeBackupMeta({ last: formattedNow(), lastAt: now.toISOString(), lastSource: 'local' });
-    closeModal(); renderInventory(); window.AldeckotMessage.show('Backup local criado com sucesso.');
-    backupBusy = false;
+    try {
+      const snapshot = !controlMode && !fluxMode ? await moduleApi().load() : data;
+      const now = new Date();
+      const payload = { application: 'ALDECKOT', module: moduleConfig.backupModule, version: 1, createdAt: now.toISOString(), data: clone(snapshot) };
+      download(JSON.stringify(payload, null, 2), `aldeckot-${moduleConfig.backupFile}-backup-${now.toISOString().slice(0, 10)}.json`, 'application/json');
+      writeBackupMeta({ last: formattedNow(), lastAt: now.toISOString(), lastSource: 'local' });
+      closeModal(); renderInventory(); window.AldeckotMessage.show('Backup local criado com sucesso.');
+    } catch (error) {
+      console.error('Falha ao criar backup local:', error);
+      clearBackupBusy();
+      window.AldeckotMessage.show(backendMessage(error));
+    } finally { backupBusy = false; }
   }
 
   function restoreLocalBackup() {
@@ -1215,7 +1731,8 @@
   async function createNetworkBackup(button) {
     if (!backupButtonBusy(button, 'Criando Backup…')) return;
     try {
-      const row = await backupApi().create(clone(data), `Backup manual do ${moduleConfig.backupName}`, 'network');
+      const snapshot = !controlMode && !fluxMode ? await moduleApi().load() : data;
+      const row = await backupApi().create(clone(snapshot), `Backup manual do ${moduleConfig.backupName}`, 'network');
       const meta = readBackupMeta();
       writeBackupMeta({ last: new Date(row.created_at).toLocaleString('pt-BR'), lastAt: row.created_at, lastSource: row.source, history: [row, ...meta.history.filter(backup => backup.id !== row.id)].slice(0, 3) });
       closeModal(); renderInventory(); window.AldeckotMessage.show('Backup criado com sucesso.');
@@ -1287,17 +1804,30 @@
   async function openInventorySafely() {
     try {
       if (!initialized) renderConnectionState(`Conectando ao ${moduleConfig.name}`, 'Preparando seus dados com segurança…');
-      if (!controlMode && !fluxMode) {
+      if (!controlMode && !fluxMode && !initialized) {
         const result = await (await backend().init()).client.from('equipment_sync_events').select('id').limit(1);
         inventoryIntegrationReady = !result.error && Array.isArray(result.data);
         statuses[3] = inventoryIntegrationReady ? 'Inativo' : 'Troca';
       }
-      await reloadInventory();
-      renderInventory();
+      const globalVisible = !controlMode && !fluxMode && !state.active
+        && Boolean(document.querySelector('.inventory-global-workspace'));
+      const categoriesBefore = globalVisible
+        ? JSON.stringify(data.tables.map(table => [table.id, table.name, table.icon])) : '';
+      if (await reloadInventory()) {
+        const categoriesAfter = JSON.stringify(data.tables.map(table => [table.id, table.name, table.icon]));
+        if (globalVisible && !state.active && categoriesBefore === categoriesAfter) {
+          renderGlobalTable();
+          const charts = document.querySelector('.inventory-global-charts');
+          if (charts) charts.innerHTML = globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)
+            + globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-');
+        } else renderInventory();
+      }
     }
     catch (error) {
       console.error(error);
-      renderConnectionState(`${moduleConfig.name} indisponível`, backendMessage(error), true);
+      if (initialized && document.querySelector('.inventory-shell')) {
+        window.AldeckotMessage?.show?.(`Não foi possível atualizar agora: ${backendMessage(error)}`);
+      } else renderConnectionState(`${moduleConfig.name} indisponível`, backendMessage(error), true);
     }
   }
   let realtimeRefreshTimer;
@@ -1305,18 +1835,35 @@
     ? ['module_tables', 'control_items', 'control_item_logs', 'control_backups', 'control_backup_settings']
     : fluxMode
       ? ['module_tables', 'flux_items', 'flux_item_logs', 'flux_backups', 'flux_backup_settings']
-      : ['module_tables', 'inventory_items', 'inventory_item_logs', 'inventory_backups', 'inventory_backup_settings'];
+      : ['module_tables', 'inventory_items', 'inventory_item_logs', 'inventory_branches', 'inventory_backups', 'inventory_backup_settings'];
   window.addEventListener('aldeckot:realtime-change', event => {
+    if (!controlMode && !fluxMode && ['supplies', 'supply_variants'].includes(event.detail?.table)) {
+      sharedImagesLoadedAt = 0;
+      signedImageUrls.clear();
+      void applySharedImages();
+      return;
+    }
     if (!realtimeTables.includes(event.detail?.table)) return;
+    if (event.detail.table.includes('backup')) backupMetaLoadedAt = 0;
     window.clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = window.setTimeout(() => openInventorySafely(), 180);
   });
   window.openInventory = openInventorySafely;
-  window.AldeckotInventoryOpenDetails = ({ id, tableId } = {}) => {
+  window.AldeckotInventoryOpenDetails = async ({ id, tableId } = {}) => {
+    if (!controlMode && !fluxMode && tableId && (!data.tables.find(entry => entry.id === tableId)?.itemsLoaded)) {
+      state.active = tableId;
+      if (!await reloadInventory()) return;
+    }
     const table = data.tables.find(entry => entry.id === tableId) || data.tables.find(entry => entry.items?.some(item => item.id === id));
-    const item = table?.items?.find(entry => entry.id === id);
+    let item = table?.items?.find(entry => entry.id === id);
+    if (!item && table && !controlMode && !fluxMode) {
+      state.active = table.id;
+      try { item = (await ensureFullActiveTable())?.items.find(entry => entry.id === id); }
+      catch (error) { window.AldeckotMessage.show(backendMessage(error)); return; }
+    }
     if (!table || !item) return;
     state.active = table.id;
+    state.sidebarOpen = false;
     state.query = '';
     state.status = '';
     state.situation = '';
@@ -1333,10 +1880,62 @@
   document.addEventListener('click', async event => {
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
+    const globalView = event.target.closest('[data-inv-global-view]');
+    if (globalView && !controlMode && !fluxMode) {
+      globalState.view = globalView.dataset.invGlobalView;
+      globalState.query = ''; globalState.category = ''; globalState.status = '';
+      globalState.situation = ''; globalState.order = 'recent'; globalState.page = 1;
+      globalState.result = { items: globalState.overview?.recent || [], total: globalState.overview?.total || 0 };
+      renderInventory();
+      void refreshGlobalPage();
+      return;
+    }
+    const globalPage = event.target.closest('[data-inv-global-page]');
+    if (globalPage && !globalPage.disabled) {
+      globalState.page = Number(globalPage.dataset.invGlobalPage);
+      void refreshGlobalPage();
+      return;
+    }
+    if (event.target.closest('[data-inv-global-home]')) {
+      const previousTable = state.active;
+      const previousBranch = state.branchId;
+      const previousSidebarOpen = state.sidebarOpen;
+      state.active = null; state.branchId = null; state.page = 1;
+      state.sidebarOpen = true;
+      globalState.view = 'recent'; globalState.query = ''; globalState.page = 1;
+      try { if (await reloadGlobal()) renderInventory(); }
+      catch (error) {
+        state.active = previousTable; state.branchId = previousBranch; state.sidebarOpen = previousSidebarOpen;
+        window.AldeckotMessage.show(backendMessage(error));
+      }
+      return;
+    }
+    const branchCard = event.target.closest('[data-inv-branch]');
+    if (branchCard) { state.branchId = branchCard.dataset.invBranch; state.page = 1; state.query = ''; state.status = ''; state.situation = ''; state.addMenu = false; void refreshCategoryPage(); return; }
+    if (event.target.closest('[data-inv-branch-home]')) { state.branchId = null; state.page = 1; state.query = ''; state.status = ''; state.situation = ''; state.addMenu = false; void refreshCategoryPage(); return; }
+    const recent = event.target.closest('[data-inv-recent]');
+    if (recent) { const item = activeTable()?.items.find(row => row.id === recent.dataset.invRecent); if (item) details(item); return; }
+    const editBranch = event.target.closest('[data-inv-branch-edit]');
+    if (editBranch && canManage()) { branchForm(activeTable()?.branches.find(row => row.id === editBranch.dataset.invBranchEdit)); return; }
+    const deleteBranch = event.target.closest('[data-inv-branch-delete]');
+    if (deleteBranch && canManage()) {
+      let table;
+      try { table = await ensureFullActiveTable(); }
+      catch (error) { window.AldeckotMessage.show(backendMessage(error)); return; }
+      const id = deleteBranch.dataset.invBranchDelete;
+      const count = table.items.filter(item => branchModel.inBranch(table, item, id)).length;
+      if (count) { window.AldeckotMessage.show(`Realocar os ${count} equipamentos desta ramificação antes de excluí-la.`); return; }
+      if (await window.AldeckotMessage.confirm('Excluir esta ramificação vazia?', { title: 'Excluir ramificação', confirmText: 'Excluir' })) {
+        try { await moduleApi().deleteBranch(id); state.branchId = null; await reloadInventory(); renderInventory(); }
+        catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      }
+      return;
+    }
     const pageButton = event.target.closest('[data-inv-page]');
     if (pageButton && !pageButton.disabled) {
       state.page = Number(pageButton.dataset.invPage);
-      applyInventoryFilters();
+      if (!controlMode && !fluxMode) void refreshCategoryPage();
+      else applyInventoryFilters();
       return;
     }
     if (!event.target.closest('.inventory-table-action-menu-wrap') && state.tableActionMenu) {
@@ -1353,13 +1952,31 @@
       }
       renderInventory(); return;
     }
-    const chosen = event.target.closest('[data-inv-table]'); if (chosen && !event.target.closest('[data-inv-edit-table],[data-inv-delete-table],[data-inv-table-menu]')) { state.active = chosen.dataset.invTable; state.query = ''; state.status = ''; state.situation = ''; state.page = 1; state.sidebarOpen = false; state.tableMenu = null; state.tableMenuPosition = null; state.tableActionMenu = false; renderInventory(); return; }
+    const chosen = event.target.closest('[data-inv-table]');
+    if (chosen && !event.target.closest('[data-inv-edit-table],[data-inv-delete-table],[data-inv-table-menu]')) {
+      const previousTable = state.active;
+      const previousSidebarOpen = state.sidebarOpen;
+      state.active = chosen.dataset.invTable;
+      state.branchId = null; state.addMenu = false; state.query = '';
+      state.status = ''; state.situation = ''; state.page = 1;
+      state.sidebarOpen = false;
+      state.tableMenu = null; state.tableMenuPosition = null; state.tableActionMenu = false;
+      try { if (await reloadInventory()) renderInventory(); }
+      catch (error) {
+        state.active = previousTable; state.sidebarOpen = previousSidebarOpen;
+        window.AldeckotMessage.show(backendMessage(error));
+      }
+      return;
+    }
     const editTable = event.target.closest('[data-inv-edit-table]'); if (editTable) { event.stopPropagation(); state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove(); tableForm(data.tables.find(table => table.id === editTable.dataset.invEditTable)); return; }
     const deleteTable = event.target.closest('[data-inv-delete-table]'); if (deleteTable) {
       state.tableMenu = null; state.tableMenuPosition = null; document.querySelector('.inventory-table-actions-popover')?.remove();
       if (await window.AldeckotMessage.confirm('Excluir esta tabela e todos os seus itens?', { title: 'Excluir tabela', confirmText: 'Excluir' })) {
         moduleApi().deleteTable(deleteTable.dataset.invDeleteTable).then(async () => {
-          if (state.active === deleteTable.dataset.invDeleteTable) state.active = null;
+          if (state.active === deleteTable.dataset.invDeleteTable) {
+            state.active = null;
+            if (!controlMode && !fluxMode) state.sidebarOpen = true;
+          }
           await reloadInventory(); closeModal(); renderInventory();
         }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
       }
@@ -1368,11 +1985,16 @@
     const action = event.target.closest('[data-inv-action]');
     if (action) {
       const type = action.dataset.invAction;
-      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup']);
+      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-add-menu', 'new-equipment', 'new-branch', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup']);
       if (restrictedActions.has(type) && !canManage()) { event.preventDefault(); return; }
       if (type === 'toggle-tables') { state.sidebarOpen = !state.sidebarOpen; state.tableMenu = null; state.tableMenuPosition = null; renderInventory(); }
       if (type === 'add-table') tableForm();
       if (type === 'add-item') itemForm();
+      if (type === 'simulate-branches') { try { await showClassificationSimulation(); } catch (error) { window.AldeckotMessage.show(backendMessage(error)); } return; }
+      if (type === 'download-branch-report' && currentSimulationReport) { download(JSON.stringify(currentSimulationReport, null, 2), 'aldeckot-simulacao-ramificacoes.json', 'application/json'); return; }
+      if (type === 'toggle-add-menu') { state.addMenu = !state.addMenu; renderBranchView(); return; }
+      if (type === 'new-equipment') { state.addMenu = false; itemForm(); return; }
+      if (type === 'new-branch') { state.addMenu = false; branchForm(); return; }
       if (type === 'toggle-active-table-actions') { state.tableActionMenu = !state.tableActionMenu; renderInventory(); return; }
       if (type === 'edit-active-table') { state.tableActionMenu = false; tableForm(activeTable()); return; }
       if (type === 'delete-active-table') {
@@ -1380,7 +2002,9 @@
         const table = activeTable();
         if (table && await window.AldeckotMessage.confirm(`Excluir a tabela “${table.name}” e todos os seus itens?`, { title: 'Excluir tabela', confirmText: 'Excluir' })) {
           moduleApi().deleteTable(table.id).then(async () => {
-            state.active = null; await reloadInventory(); renderInventory();
+            state.active = null;
+            if (!controlMode && !fluxMode) state.sidebarOpen = true;
+            await reloadInventory(); renderInventory();
           }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
         return;
@@ -1412,7 +2036,14 @@
           })().catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
       }
-      if (type === 'export-pdf') exportPdf();
+      if (type === 'export-pdf') {
+        if (!controlMode && !fluxMode && activeTable()) {
+          const popup = window.open('', '_blank', 'width=1280,height=860');
+          if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
+          try { await ensureFullActiveTable(); exportPdf(popup); }
+          catch (error) { popup.close(); window.AldeckotMessage.show(backendMessage(error)); }
+        } else exportPdf();
+      }
       if (type === 'backup') backupModal();
       if (type === 'create-backup') backupChoice('create');
       if (type === 'restore-backup') backupChoice('restore');
@@ -1431,7 +2062,28 @@
       }
       return;
     }
-    const row = event.target.closest('[data-inv-item]'); if (row) { state.itemActionMenu = false; details(activeTable().items.find(item => item.id === row.dataset.invItem)); return; }
+    const row = event.target.closest('[data-inv-item]'); if (row) {
+      state.itemActionMenu = false;
+      if (!state.active && !controlMode && !fluxMode) {
+        const found = (globalState.result?.items || []).find(item => item.id === row.dataset.invItem);
+        if (!found) return;
+        state.active = found.table_id;
+        state.sidebarOpen = false;
+        try {
+          if (!await reloadInventory()) return;
+          await ensureFullActiveTable();
+          const item = activeTable()?.items.find(entry => entry.id === found.id);
+          state.branchId = item ? branchModel.branchFor(activeTable(), item)?.id || null : null;
+          renderInventory();
+          if (item) details(item);
+          else window.AldeckotMessage.show('O equipamento mudou. Atualize a consulta e tente novamente.');
+        } catch (error) { state.active = null; state.sidebarOpen = true; window.AldeckotMessage.show(backendMessage(error)); }
+      } else {
+        const item = activeTable()?.items.find(entry => entry.id === row.dataset.invItem);
+        if (item) details(item);
+      }
+      return;
+    }
     if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
     const acquisition = event.target.closest('[data-inv-flux-acquisition]');
     if (acquisition && fluxMode && canManage()) {
@@ -1448,12 +2100,41 @@
       }
       return;
     }
+    const manageShares = event.target.closest('[data-inv-manage-shares]');
+    if (manageShares && canManage()) {
+      shareDialog(activeTable()?.items.find(item => item.id === manageShares.dataset.invManageShares));
+      return;
+    }
+    const shareAction = event.target.closest('[data-inv-share-add],[data-inv-share-remove]');
+    if (shareAction && canManage()) {
+      const itemId = shareAction.dataset.invShareItem;
+      const branchId = shareAction.dataset.invShareAdd || shareAction.dataset.invShareRemove;
+      shareAction.disabled = true;
+      try {
+        if (shareAction.hasAttribute('data-inv-share-add')) await moduleApi().shareAdd(itemId, branchId);
+        else await moduleApi().shareRemove(itemId, branchId);
+        if (await reloadInventory()) {
+          renderInventory();
+          shareDialog(activeTable()?.items.find(item => item.id === itemId));
+        }
+      } catch (error) {
+        shareAction.disabled = false;
+        window.AldeckotMessage.show(backendMessage(error));
+      }
+      return;
+    }
     const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
+    const transferItem = event.target.closest('[data-inv-transfer-item]');
+    if (transferItem && canManage() && !controlMode && !fluxMode) {
+      try { const table = await ensureFullActiveTable(); const item = table?.items.find(row => row.id === transferItem.dataset.invTransferItem); if (item) { closeModal(); transferForm(item); } }
+      catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      return;
+    }
     const replaceItem = event.target.closest('[data-inv-replace-item]');
     if (replaceItem) {
       if (!canManage()) return;
-      const item = activeTable()?.items.find(entry => entry.id === replaceItem.dataset.invReplaceItem);
-      if (item) replaceEquipmentForm(item);
+      try { const table = await ensureFullActiveTable(); const item = table?.items.find(entry => entry.id === replaceItem.dataset.invReplaceItem); if (item) replaceEquipmentForm(item); }
+      catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
       return;
     }
     const deleteItem = event.target.closest('[data-inv-delete-item]');
@@ -1462,15 +2143,44 @@
       if (confirmed) moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
     }
   }, true);
-  document.addEventListener('input', event => { if (event.target.matches('[data-inv-search]')) { state.query = event.target.value; state.page = 1; applyInventoryFilters(); } });
+  document.addEventListener('input', event => {
+    if (event.target.matches('[data-inv-global-search]')) {
+      globalState.query = event.target.value.slice(0, 100);
+      globalState.page = 1;
+      window.clearTimeout(globalSearchTimer);
+      globalSearchTimer = window.setTimeout(() => { void refreshGlobalPage(); }, 260);
+      return;
+    }
+    if (event.target.matches('[data-inv-search]')) {
+      state.query = event.target.value; state.page = 1;
+      if (!controlMode && !fluxMode) {
+        ++categoryRequestSequence;
+        window.clearTimeout(categorySearchTimer);
+        categorySearchTimer = window.setTimeout(() => { void refreshCategoryPage(); }, 260);
+      } else applyInventoryFilters();
+    }
+  });
   document.addEventListener('change', event => {
+    const globalFields = {
+      '[data-inv-global-category]': 'category', '[data-inv-global-status]': 'status',
+      '[data-inv-global-situation]': 'situation', '[data-inv-global-order]': 'order'
+    };
+    for (const [selector, key] of Object.entries(globalFields)) {
+      if (event.target.matches(selector)) {
+        globalState[key] = event.target.value;
+        globalState.page = 1;
+        void refreshGlobalPage();
+        return;
+      }
+    }
     if (event.target.matches('[data-inv-page-size]')) {
       const size = Number(event.target.value);
       if (!pageSizes.includes(size)) return;
       state.pageSize = size;
       state.page = 1;
       try { window.localStorage.setItem(pageSizeKey, String(size)); } catch { /* A preferência não impede a navegação. */ }
-      applyInventoryFilters();
+      if (!controlMode && !fluxMode) void refreshCategoryPage();
+      else applyInventoryFilters();
       return;
     }
     if (event.target.matches('[data-inv-status-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('status', event.target.value));
@@ -1479,8 +2189,8 @@
     if (event.target.matches('[data-inv-priority-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('priority', event.target.value));
     if (event.target.matches('[data-inv-movement-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('movement', event.target.value));
     if (event.target.matches('[data-inv-shipping-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('shipping', event.target.value));
-    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; state.page = 1; applyInventoryFilters(); }
-    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; state.page = 1; applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-status]')) { state.status = event.target.value; state.operation = ''; state.page = 1; if (!controlMode && !fluxMode) void refreshCategoryPage(); else applyInventoryFilters(); }
+    if (event.target.matches('[data-inv-situation]')) { state.situation = event.target.value; state.operation = ''; state.page = 1; if (!controlMode && !fluxMode) void refreshCategoryPage(); else applyInventoryFilters(); }
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
@@ -1608,7 +2318,41 @@
         });
       return;
     }
-    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form]')) { event.preventDefault(); return; }
+    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form], [data-inv-branch-form], [data-inv-transfer-form]')) { event.preventDefault(); return; }
+    if (event.target.matches('[data-inv-branch-form]')) {
+      event.preventDefault();
+      const form = event.target; const name = String(new FormData(form).get('name') || '').trim();
+      const current = form.closest('.inv-modal')?.dataset.branchId;
+      const table = activeTable();
+      if (!name || !table) return;
+      if (table.branches.some(branch => branch.id !== current && branchModel.normalize(branch.name) === branchModel.normalize(name))) {
+        window.AldeckotMessage.show('Já existe uma ramificação com este nome na categoria.'); return;
+      }
+      const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+      const request = current ? moduleApi().renameBranch(current, name) : moduleApi().createBranch(table.id, name);
+      request.then(async () => { await reloadInventory(); closeModal(); renderInventory(); })
+        .catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { if (submit.isConnected) submit.disabled = false; });
+      return;
+    }
+    if (event.target.matches('[data-inv-transfer-form]')) {
+      event.preventDefault();
+      const form = event.target; const node = form.closest('.inv-modal');
+      const first = node?.dataset.itemId; const second = String(new FormData(form).get('other') || '');
+      if (!first || !second || first === second || form.dataset.busy) return;
+      form.dataset.busy = 'true';
+      const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+      const expected = { first: { sector: node.dataset.firstSector, location: node.dataset.firstLocation },
+        second: { sector: node.dataset.secondSector, location: node.dataset.secondLocation } };
+      moduleApi().swapLocations(first, second, node.dataset.operationId, expected).then(async () => {
+        await reloadInventory(); closeModal(); renderInventory();
+        const updated = activeTable()?.items.find(item => item.id === first);
+        if (updated) details(updated);
+        window.AldeckotMessage.show('Setor e Local permutados nos dois equipamentos.');
+      }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { delete form.dataset.busy; if (submit.isConnected) submit.disabled = false; });
+      return;
+    }
     if (event.target.matches('[data-inv-table-form]')) {
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.target)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.tableId;
