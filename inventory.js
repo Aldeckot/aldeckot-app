@@ -751,6 +751,20 @@
     toolbar?.setAttribute('aria-label', `Ações do ${moduleConfig.name}`);
   }
 
+  function ensureHeaderBrand() {
+    const actions = document.querySelector('.inventory-header-actions');
+    if (!actions) return;
+    actions.querySelector('[data-inv-action="home"]')?.remove();
+    if (actions.querySelector('[data-system-header-brand]')) return;
+    const brand = document.createElement('a');
+    brand.className = 'system-header-brand';
+    brand.dataset.systemHeaderBrand = 'true';
+    brand.href = 'index.html';
+    brand.setAttribute('aria-label', 'Voltar para a Home do Aldeckot');
+    brand.innerHTML = '<span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span>';
+    actions.append(brand);
+  }
+
   function renderInventory() {
     document.body.classList.remove('home-page');
     document.body.classList.add('inventory-open');
@@ -824,6 +838,7 @@
       inventoryHeader?.querySelector('.module-header-summary')?.insertAdjacentElement('afterend', animationDock);
     }
     applyHeaderPresentation();
+    ensureHeaderBrand();
     applyInventoryCleaningColumn(table);
     applyInventoryImageColumn(table);
     ensureFilterEmptyRow(table);

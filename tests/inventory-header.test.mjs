@@ -5,7 +5,21 @@ import { readFileSync } from 'node:fs';
 const view = readFileSync(new URL('../inventory.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../module-header-cards.css', import.meta.url), 'utf8');
 const inventoryStyles = readFileSync(new URL('../inventory.css', import.meta.url), 'utf8');
+const inventoryPage = readFileSync(new URL('../inventory.html', import.meta.url), 'utf8');
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+
+test('cabeçalho preserva arte, etiquetas, cubos e marca após recarregamento parcial', () => {
+  const fallback = inventoryPage.match(/<style id="inventory-header-critical">([\s\S]*?)<\/style>/)?.[1];
+  assert.ok(fallback, 'estilos essenciais estão no próprio HTML');
+  assert.ok(inventoryPage.indexOf('inventory-header-critical') < inventoryPage.indexOf('module-header-cards.css'), 'estilo completo mantém prioridade');
+  assert.match(fallback, /\.module-header-summary-tags\{display:flex/);
+  assert.match(fallback, /module-inventory-illustration\.png/);
+  assert.match(fallback, /--inventory-empty-main:#39cdf4/);
+  assert.match(fallback, /\.system-header-brand-copy b\{display:block/);
+  assert.match(view, /function ensureHeaderBrand\(\)/);
+  assert.match(view, /applyHeaderPresentation\(\);\s*ensureHeaderBrand\(\);/);
+  assert.match(view, /brand\.dataset\.systemHeaderBrand = 'true'/);
+});
 
 test('alternador lateral usa ícone de tabela e mantém rótulo acessível', () => {
   assert.match(view, /class="inventory-table-toggle-icon" viewBox="0 0 24 24"/);

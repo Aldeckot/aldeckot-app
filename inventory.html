@@ -6,9 +6,11 @@
   <title>Aldeckot</title>
 <link rel="icon" type="image/png" href="assets/aldeckot-favicon.png?v=2.0.71">
   <script>document.documentElement.classList.add('aldeckot-module-booting', 'auth-pending');</script>
-  <link rel="stylesheet" href="inventory.css?v=2.1.8">
-  <link rel="stylesheet" href="inventory-branches.css?v=2.1.8">
-  <link rel="stylesheet" href="inventory-global.css?v=2.1.8">
+  <script>window.__aldeckotResourceErrors=[];window.addEventListener('error',event=>{const resource=event.target;if(resource?.tagName==='LINK'||resource?.tagName==='SCRIPT')window.__aldeckotResourceErrors.push(resource)},true)</script>
+  <script src="ui-resource-recovery.js?v=2.1.10" onerror="this.onerror=null;var retry=document.createElement('script');retry.src='ui-resource-recovery.js?v=2.1.10&amp;retry=1';this.after(retry)"></script>
+  <link rel="stylesheet" href="inventory.css?v=2.1.10">
+  <link rel="stylesheet" href="inventory-branches.css?v=2.1.10">
+  <link rel="stylesheet" href="inventory-global.css?v=2.1.10">
   <link rel="stylesheet" href="inventory-pagination.css?v=2.0.82">
   <link rel="stylesheet" href="item-detail-modals.css?v=20260911-3">
   <link rel="stylesheet" href="module-charts.css">
@@ -17,13 +19,40 @@
   <link rel="stylesheet" href="realtime-sync.css">
   <link rel="stylesheet" href="auth-ui.css">
   <link rel="stylesheet" href="mascot.css">
-  <link rel="stylesheet" href="page-transition.css?v=2.1.8">
+  <link rel="stylesheet" href="page-transition.css?v=2.1.10">
   <link rel="stylesheet" href="module-notifications.css?v=20261007-translucent1">
-  <link rel="stylesheet" href="module-header-cards.css?v=2.1.8">
+  <style id="inventory-header-critical">
+    /* O cabeçalho continua legível se um recurso visual não voltar após a aba ficar ociosa. */
+    body.inventory-open .inventory-header{justify-content:flex-start}
+    body.inventory-open .inventory-header .module-header-summary{display:grid;grid-template-columns:minmax(0,205px) minmax(170px,210px);align-items:center;gap:4px;flex:0 1 420px;max-width:420px;min-width:0;min-height:64px}
+    .module-header-summary-copy{display:grid;gap:4px;min-width:0}
+    .module-header-summary-title{margin:0;overflow:hidden;color:#f4f9ff;font-size:clamp(19px,1.75vw,27px);font-weight:800;letter-spacing:-.65px;line-height:1.05;text-overflow:ellipsis;white-space:nowrap}
+    .module-header-summary-description{margin:0;overflow:hidden;color:#b8cbe0;font-size:clamp(10px,.82vw,12px);line-height:1.25}
+    .module-header-summary-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+    .module-header-summary-tags span{padding:2px 5px;border:1px solid #57728c82;border-radius:999px;background:#06182a91;color:#d1e8f8;font-size:7px;font-weight:850;letter-spacing:.02em;line-height:1;text-transform:uppercase;white-space:nowrap}
+    .module-header-summary-art{display:block;width:100%;height:clamp(88px,8vw,120px);background-position:center;background-repeat:no-repeat;background-size:contain;filter:drop-shadow(0 8px 12px #00000045);transform:translateX(-78px);pointer-events:none}
+    .module-header-summary-art.inventory{background-image:url('assets/module-inventory-illustration.png')}
+    body.inventory-open .inventory-header .module-header-animation{--inventory-empty-main:#39cdf4;--inventory-empty-purple:#a97cff;--inventory-empty-pink:#fb73dd;--inventory-empty-cyan:#3ee7f4;--inventory-empty-green:#55e6b2;--inventory-empty-yellow:#ffd45d;--inventory-empty-dot:#55bfff;--inventory-empty-glow:#2fbef44a;position:relative;display:grid;flex:1 1 300px;place-items:center;min-width:130px;height:104px;padding:0!important;overflow:hidden;pointer-events:none}
+    body.inventory-open .inventory-header .inventory-header-cube-scene .inventory-empty-illustration{position:relative;width:min(100%,590px)!important;height:104px;filter:drop-shadow(0 3px 8px #24bfff70);transform:none}
+    body.inventory-open .inventory-header .module-mascot-dock{flex:0 0 72px;width:72px;height:76px;margin:0 24px 0 auto}
+    body.inventory-open .inventory-header .inventory-header-actions{margin-left:0!important}
+    .system-header-brand{display:flex;align-items:center;gap:8px;min-width:0;padding:2px 0 2px 7px;color:inherit;text-decoration:none}
+    .system-header-brand-mark{display:block;flex:0 0 56px;width:56px;height:52px;overflow:hidden}
+    .system-header-brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
+    .system-header-brand-copy b{display:block;color:#75cfff;font-size:18px;font-weight:850;white-space:nowrap}
+    .theme-light .module-header-summary-title{color:#1c3d59}
+    .theme-light .module-header-summary-description{color:#4b708e}
+    .theme-light .module-header-summary-tags span{border-color:#80a6bf91;background:#f6fbffb5;color:#29516e}
+    .theme-light .module-header-summary-art{filter:drop-shadow(0 6px 9px #38546d28) saturate(1.12) contrast(1.04);transform:translateX(-68px)}
+    .theme-light .inventory-header .module-header-animation{--inventory-empty-main:#149bcb;--inventory-empty-purple:#8060d3;--inventory-empty-pink:#d75aa9;--inventory-empty-cyan:#119caf;--inventory-empty-green:#169d72;--inventory-empty-yellow:#bd8914;--inventory-empty-dot:#3184ce;--inventory-empty-glow:#347fc42e}
+    @media(max-width:1050px){body.inventory-open .inventory-header{flex-wrap:wrap}body.inventory-open .inventory-header .module-header-summary{flex-basis:360px}body.inventory-open .inventory-header .module-header-animation{order:3;flex-basis:100%;height:82px}body.inventory-open .inventory-header .inventory-header-cube-scene .inventory-empty-illustration{height:74px}}
+    @media(max-width:760px){.system-header-brand-mark{flex-basis:43px;width:43px;height:42px}.system-header-brand-copy b{font-size:14px}}
+  </style>
+  <link rel="stylesheet" href="module-header-cards.css?v=2.1.10">
   <link rel="stylesheet" href="official-logo.css?v=2.0.71">
   <link rel="stylesheet" href="light-theme-vivid.css?v=2.0.75">
   <link rel="stylesheet" href="mobile-optimization.css?v=20260909-1">
-  <link rel="stylesheet" href="loading-indicator.css?v=2.1.8">
+  <link rel="stylesheet" href="loading-indicator.css?v=2.1.10">
   <link rel="stylesheet" href="system-messages.css?v=20260909-1">
   <link rel="stylesheet" href="typography-balance.css?v=20260914-1">
   <link rel="stylesheet" href="supply-links.css">
@@ -37,20 +66,20 @@
     <div id="app" class="inventory-shell"><section class="inventory-panel inventory-empty-state"><div><div class="empty-cubes">◇ ◇</div><span class="aldeckot-inline-loading" aria-hidden="true"></span><h2>Conectando ao Inventário</h2><p>Preparando seus dados com segurança…</p></div></section></div>
   </main></div>
   <script src="error-monitor.js"></script>
-  <script src="loading-indicator.js?v=2.1.8"></script>
+  <script src="loading-indicator.js?v=2.1.10"></script>
   <script src="system-messages.js?v=20260909-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="runtime-config.js"></script>
-  <script src="supabase-client.js?v=2.1.8"></script>
+  <script src="supabase-client.js?v=2.1.10"></script>
   <script src="auth-guard.js"></script>
   <script src="access-control.js"></script>
   <script src="realtime-sync.js?v=20260912-silent-layout2"></script>
   <script src="theme.js"></script>
-  <script src="page-transition.js?v=2.1.8"></script>
-  <script src="inventory-branches.js?v=2.1.8"></script>
-  <script src="inventory-images.js?v=2.1.8"></script>
-  <script src="inventory.js?v=2.1.8"></script>
+  <script src="page-transition.js?v=2.1.10"></script>
+  <script src="inventory-branches.js?v=2.1.10"></script>
+  <script src="inventory-images.js?v=2.1.10"></script>
+  <script src="inventory.js?v=2.1.10"></script>
   <script src="supplies-api.js"></script>
   <script src="supply-links.js?v=2.0.64"></script>
   <script src="module-notifications.js?v=2.0.78"></script>
