@@ -80,6 +80,8 @@ A migração `072_flux_management_maintenance.sql` corrige o envio para manuten�
 
 A migração `073_control_maintenance_completion.sql` corrige a conclusão bidirecional. A interface exige escolher **Ativo** ou **Reserva**; a função transacional atualiza o chamado e o equipamento de origem, preserva localização e histórico do Flux, e grava logs/eventos com o mesmo ID. Um erro de vínculo, permissão ou gravação cancela toda a operação. Ela impede que uma situação antiga de manutenção na Gestão TI reabra o chamado e bloqueia a conclusão direta de chamados vinculados fora do fluxo. Aplique após a `072`, primeiro em homologação, e valide um caso de cada origem e destino antes de usar em produção. Esta migração não reconcilia registros anteriores.
 
+A migração `082_inventory_monitors_visoraj.sql` permite que o Modelo fique vazio apenas nos itens do Inventário e cadastra `VISORAJ` na categoria `MONITORES` com as TAGs `MON001` a `MON033`. Execute-a depois da `081`, após uma cópia de segurança. Ela exige uma única tabela MONITORES, ignora TAGs já usadas em qualquer categoria e registra histórico somente para os itens novos. Não altera equipamentos existentes. Confira o aviso de quantidade inserida e os registros da tabela após a execução.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:
