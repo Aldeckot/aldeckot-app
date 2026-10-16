@@ -6,7 +6,7 @@
     homeRenderReleased = true;
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => releaseHomeRender?.()));
   };
-  const today = new Date();
+  let today = new Date();
   let view = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const pad = value => String(value).padStart(2, '0');
@@ -115,8 +115,9 @@
       panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
     });
     document.querySelectorAll('.agenda-today-panel').forEach(panel => {
+      panel.hidden = !todays.length;
       if (!todays.length) {
-        panel.innerHTML = '<div class="agenda-panel-heading"><div><h3>Tarefas e eventos de hoje</h3><small>Nenhum compromisso</small></div></div><p>Nenhuma tarefa ou evento para hoje.</p>';
+        panel.replaceChildren();
         return;
       }
       const completedEntries = todays.filter(isCompleted).length;
@@ -129,6 +130,12 @@
   }
 
   function renderAll() {
+    const previousToday = today;
+    today = new Date();
+    if (view.getFullYear() === previousToday.getFullYear() && view.getMonth() === previousToday.getMonth()
+      && (view.getFullYear() !== today.getFullYear() || view.getMonth() !== today.getMonth())) {
+      view = new Date(today.getFullYear(), today.getMonth(), 1);
+    }
     ensurePanels();
     document.querySelectorAll('.home-calendar').forEach(renderWidget);
     renderPanels();
@@ -373,6 +380,10 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrapAgenda);
   else bootstrapAgenda();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && iso(new Date()) !== iso(today)) renderAll();
+  });
+  setInterval(() => { if (iso(new Date()) !== iso(today)) renderAll(); }, 60000);
   setInterval(checkAlerts, 30000);
   let agendaRealtimeTimer;
   window.addEventListener('aldeckot:agenda-reload', () => {

@@ -448,6 +448,31 @@
     catch (error) { console.warn('Atualização em tempo real indisponível para a Central.', error); }
   }
 
+  function animateSearchPlaceholder(input) {
+    const text = 'Seeking...';
+    const staticHint = 'TAG ou série';
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (reducedMotion?.matches) {
+      input.placeholder = staticHint;
+      return;
+    }
+    let length = 0;
+    let deleting = false;
+    const tick = () => {
+      if (document.hidden || document.activeElement === input || input.value) {
+        input.placeholder = staticHint;
+        window.setTimeout(tick, 350);
+        return;
+      }
+      length = Math.max(0, Math.min(text.length, length + (deleting ? -1 : 1)));
+      input.placeholder = text.slice(0, length);
+      if (length === text.length) deleting = true;
+      if (length === 0) deleting = false;
+      window.setTimeout(tick, length === text.length ? 1500 : length === 0 ? 700 : deleting ? 140 : 190);
+    };
+    tick();
+  }
+
   function setupSearch() {
     const input = $('[data-central-search-input]');
     const panel = $('[data-central-search-results]');
@@ -465,6 +490,7 @@
     document.addEventListener('click', event => {
       if (!event.target.closest('[data-central-search]')) hideResults();
     });
+    animateSearchPlaceholder(input);
   }
 
   window.openEquipmentCentral = openCentral;

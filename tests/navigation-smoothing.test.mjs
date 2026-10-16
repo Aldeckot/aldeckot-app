@@ -56,11 +56,12 @@ test('quadros de dados mantêm suas dimensões e a sincronização exibe feedbac
   assert.match(source('supplies.js'), /AldeckotModuleStage\?\.reveal\?\.\(\)/);
 });
 
-test('a agenda reserva seus quadros antes de buscar dados e mantém o quadro de hoje', () => {
+test('a agenda reserva seus quadros antes de buscar dados e oculta o quadro de hoje quando vazio', () => {
   const agenda = source('agenda.js');
   assert.match(agenda, /async function bootstrapAgenda\(\)\s*\{\s*\/\/[^\n]*\n\s*renderAll\(\);\s*try/);
-  assert.doesNotMatch(agenda, /panel\.hidden = !todays\.length/);
-  assert.match(agenda, /Nenhuma tarefa ou evento para hoje/);
+  assert.match(agenda, /panel\.hidden = !todays\.length/);
+  assert.match(agenda, /if \(!todays\.length\) \{\s*panel\.replaceChildren\(\);\s*return;/);
+  assert.match(agenda, /iso\(new Date\(\)\) !== iso\(today\)/);
 });
 
 test('o efeito visual não reinicia nos quadros da Home a cada atualização', () => {

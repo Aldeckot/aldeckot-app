@@ -326,8 +326,8 @@ test('as notas Post-it ficam integradas à agenda e preservam o limite corporati
   const styles = readFileSync(resolve(root, 'postit-notes.css'), 'utf8');
   const migration = readFileSync(resolve(root, 'supabase/045_agenda_postit_notes.sql'), 'utf8');
 
-  assert.match(home, /postit-notes\.css\?v=20260914-11/);
-  assert.match(home, /postit-notes\.js\?v=20260914-11/);
+  assert.match(home, /postit-notes\.css\?v=2\.1\.6/);
+  assert.match(home, /postit-notes\.js\?v=2\.1\.6/);
   assert.match(agenda, /aldeckot:agenda-create-request/);
   assert.match(agenda, /aldeckot:agenda-open-entry-form/);
   assert.match(agenda, /data-postit-archive-trigger/);

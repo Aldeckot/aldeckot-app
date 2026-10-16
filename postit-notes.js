@@ -12,6 +12,7 @@
   let notes = [];
   let agendaReceived = false;
   let dragState = null;
+  let renderedDay = '';
 
   const safe = value => String(value || '').replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -19,7 +20,10 @@
   const api = () => window.AldeckotSupabase?.agenda;
   const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const notify = message => window.AldeckotMessage?.show(message);
-  const localDate = () => new Date().toISOString().slice(0, 10);
+  const localDate = () => {
+    const now = new Date();
+    return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  };
   const identify = () => globalThis.crypto?.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(16).slice(2);
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
   const numeric = value => Number.isFinite(Number(value)) ? Number(value) : null;
@@ -50,6 +54,8 @@
     const tasks = normalizeTasks(note.postitTasks);
     return tasks.length > 0 && tasks.every(task => task.completed);
   };
+  const noteOverdue = (note, today) => /^\d{4}-\d{2}-\d{2}$/.test(note.date || '')
+    && note.date < today && normalizeTasks(note.postitTasks).some(task => !task.completed);
   const activeNotes = () => notes.filter(note => !noteFinalized(note));
   const finalizedNotes = () => notes.filter(noteFinalized);
   const sortNotes = items => items
@@ -84,9 +90,10 @@
     return element;
   }
 
-  function card(note, index, total) {
+  function card(note, index, total, today) {
     const level = noteLevel(note);
     const tasks = normalizeTasks(note.postitTasks);
+    const overdue = noteOverdue(note, today);
     const layout = resolvedLayout(note, index, total);
     const taskMarkup = tasks.map((task, taskIndex) => '<li class="' + (task.completed ? 'is-completed' : '') + '">'
       + '<label><input type="checkbox" data-postit-task="' + safe(note.id) + '" data-postit-task-index="' + taskIndex + '"'
@@ -96,7 +103,7 @@
       : '';
     const rotation = [-2.3, 1.35, -.7][index % 3];
     const style = 'left:' + layout.x + '%;top:' + layout.y + '%;z-index:' + layout.z + ';--postit-auto-scale:' + automaticScale(total) + ';--postit-manual-scale:' + layout.scale + ';--postit-rotation:' + rotation + 'deg';
-    return '<article class="postit-note postit-' + safe(note.postitLevel || 'verify') + '" data-postit-id="' + safe(note.id) + '" style="' + style + '" aria-label="Nota ' + safe(note.title) + '. Arraste pelo cabeçalho para reposicionar. Clique duas vezes no ícone para editar.">'
+    return '<article class="postit-note postit-' + safe(note.postitLevel || 'verify') + (overdue ? ' is-overdue' : '') + '" data-postit-id="' + safe(note.id) + '" style="' + style + '" aria-label="Nota ' + safe(note.title) + (overdue ? '. Prazo vencido com tarefas pendentes' : '') + '. Arraste pelo cabeçalho para reposicionar. Clique duas vezes no ícone para editar.">'
       + '<button type="button" class="postit-tape" data-postit-resize="' + safe(note.id) + '" aria-label="Ajustar tamanho da nota ' + safe(note.title) + '" title="Clique para ajustar o tamanho"></button>'
       + '<header><button type="button" class="postit-level-icon" data-postit-edit="' + safe(note.id) + '" aria-label="Editar Post-it ' + safe(note.title) + '" title="Clique duas vezes para editar">' + level.icon + '</button><div><small>' + level.label + '</small><h2>' + safe(note.title) + '</h2></div></header>'
       + '<ul class="postit-checklist">' + taskMarkup + '</ul>'
@@ -106,11 +113,13 @@
   }
 
   function render() {
+    const today = localDate();
+    renderedDay = today;
     const element = board();
     if (!element) return;
     const visible = activeNotes();
     element.dataset.postitCount = String(visible.length);
-    element.innerHTML = visible.map((note, index) => card(note, index, visible.length)).join('');
+    element.innerHTML = visible.map((note, index) => card(note, index, visible.length, today)).join('');
     element.hidden = !visible.length;
     renderArchive();
   }
@@ -547,6 +556,12 @@
     if (task) toggleTask(task);
   });
   document.addEventListener('submit', saveNote);
+
+  const refreshOverdueState = () => {
+    if (renderedDay && localDate() !== renderedDay) render();
+  };
+  window.setInterval(refreshOverdueState, 60_000);
+  document.addEventListener('visibilitychange', refreshOverdueState);
 
   window.setTimeout(() => {
     if (!agendaReceived) loadNotes();
