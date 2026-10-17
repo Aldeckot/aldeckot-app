@@ -134,7 +134,23 @@
 
 /* Equipamentos do Inventário são projeções, não unidades duplicadas de Suprimentos. */
 .sp-metric[type=button]{width:100%;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.sp-badge.attention{background:#402453;color:#d9a7ff}
+.sp-badge.normal{background:#1b95646c;color:#b4ffcf;border:1px solid #ffffff24}
+.sp-badge.reserve{background:#b4871e70;color:#ffec98;border:1px solid #ffffff24}
+.sp-badge.maintenance{background:#b94b5a70;color:#ffc0c4;border:1px solid #ffffff24}
+.sp-badge.defect{background:#c66b3470;color:#ffd0a7;border:1px solid #ffffff24}
+.sp-badge.inactive{background:#66728c70;color:#eef3ff;border:1px solid #ffffff24}
+.sp-badge.attention{background:#b56fff46;color:#e2c6ff;border:1px solid #cc9aff8c}
+.theme-light .sp-badge.normal{background:#bdebd3bd;color:#17613d;border-color:#80caa5}
+.theme-light .sp-badge.reserve{background:#fff0b6c2;color:#785a09;border-color:#e7c957}
+.theme-light .sp-badge.maintenance{background:#ffd2d6c4;color:#8f2635;border-color:#eba1aa}
+.theme-light .sp-badge.defect{background:#ffdec7c4;color:#924614;border-color:#eeb280}
+.theme-light .sp-badge.inactive{background:#dce4efc5;color:#4d5d75;border-color:#b6c3d4}
+.theme-light .sp-badge.attention{background:#eadcffc7;color:#5e378d;border-color:#b484de}
+.sp-equipment-statuses{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;max-width:230px}
+.sp-equipment-statuses small{color:#c3d7e9;font-size:10px;margin-right:4px}
+.sp-equipment-statuses:empty::after{content:'Sem equipamentos';color:#9bb1c7;font-size:11px}
+.sp-table td:last-child{white-space:normal;min-width:130px}
+.sp-detail-fields b:has(.sp-badge){font-weight:400}
 .sp-health-healthy,.sp-variation-health.healthy{--sp-health-color:#64e2a4;--sp-health-bg:#145d3b7a}
 .sp-health-one-above,.sp-variation-health.one-above{--sp-health-color:#7acbff;--sp-health-bg:#164e797a}
 .sp-health-at-minimum,.sp-variation-health.at-minimum{--sp-health-color:#ffd273;--sp-health-bg:#7250197a}

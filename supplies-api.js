@@ -13,6 +13,7 @@
       if (rows.length < 500) return results;
     }
   };
+  let equipmentStatusAvailable = false;
   const unitSummaries = async db => {
     const query = (from, to, columns) => db.from('supply_units').select(columns).order('id').range(from, to);
     try { return await allPages((from, to) => query(from, to, 'id,supply_id,variant_id,status,updated_at,exited_at')); }
@@ -23,15 +24,22 @@
   };
   const list = async () => {
     const db = await client();
-    const [rows, variants, units] = await Promise.all([
+    const [rows, variants, units, equipmentStatuses] = await Promise.all([
       allPages((from, to) => db.from('supply_stock_summary').select('*').order('updated_at', { ascending: false }).range(from, to)),
       allPages((from, to) => db.from('supply_variants').select('*').order('id').range(from, to)),
-      unitSummaries(db)
+      unitSummaries(db),
+      allPages((from, to) => db.from('supplies').select('id,equipment_status').order('id').range(from, to))
+        .then(rows => { equipmentStatusAvailable = true; return rows; }, error => {
+          if (!/42703|PGRST204|equipment_status/i.test(`${error.code || ''} ${error.message || ''}`)) throw error;
+          equipmentStatusAvailable = false;
+          return [];
+        })
     ]);
     const counts = new Map();
+    const statuses = new Map(equipmentStatuses.map(row => [row.id, row.equipment_status]));
     for (const variant of variants) counts.set(variant.supply_id, (counts.get(variant.supply_id) || 0) + 1);
     return rows.map(row => window.AldeckotSupplyVariations.decorateLocal(
-      { ...row, variant_count: counts.get(row.id) || 0 }, variants, units));
+      { ...row, equipment_status: statuses.get(row.id) || null, variant_count: counts.get(row.id) || 0 }, variants, units));
   };
   const inventorySnapshot = async () => {
     const db = await client();
@@ -142,14 +150,14 @@
   const equipment = async () => {
     const db = await client();
     const [inventory, management] = await Promise.all([
-      allPages((from,to) => db.from('inventory_items').select('id,table_id,equipment,tag,serial,model,location,sector').range(from,to)),
+      allPages((from,to) => db.from('inventory_items').select('id,table_id,equipment,tag,serial,model,location,sector,status').range(from,to)),
       allPages((from,to) => db.from('module_records').select('id,payload,module_tables!inner(module)').eq('module_tables.module','management').range(from,to))
     ]);
     return [
-      ...inventory.map(row => ({ source: 'inventory', id: row.id, tableId: row.table_id, name: row.equipment, tag: row.tag, serial: row.serial, model: row.model, location: row.location || row.sector })),
+      ...inventory.map(row => ({ source: 'inventory', id: row.id, tableId: row.table_id, name: row.equipment, tag: row.tag, serial: row.serial, model: row.model, location: row.location || row.sector, status: row.status })),
       ...management.map(row => ({ source: 'management', id: row.id, name: row.payload?.equipment || row.payload?.name || 'Computador',
         tag: row.payload?.tag || '', serial: row.payload?.serial || '', model: row.payload?.model || '',
-        location: row.payload?.location || row.payload?.area || '' }))
+        location: row.payload?.location || row.payload?.area || '', status: row.payload?.status || '' }))
     ];
   };
   const availableReplacements = async category => {
@@ -270,7 +278,7 @@
   const subscribe = async onChange => {
     const db = await client();
     const channel = db.channel(`supplies-${crypto.randomUUID()}`);
-    for (const table of ['supplies','supply_variants','supply_units','supply_movements','supply_logs','supply_maintenance_links','inventory_items','module_tables','inventory_item_logs']) {
+    for (const table of ['supplies','supply_variants','supply_units','supply_movements','supply_logs','supply_maintenance_links','inventory_items','module_records','module_tables','inventory_item_logs']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
     }
     channel.subscribe();
@@ -313,11 +321,14 @@
     }
   };
   window.AldeckotSupplies = {
+    equipmentStatusReady: () => equipmentStatusAvailable,
     list, detail, logs, compatibility, inventorySnapshot, inventoryHistory, inventoryGroupHistory, inventoryReplacements, ensureInventoryCatalog,
     inventoryVariantMetadata, ensureInventoryVariants,
     equipment, availableReplacements, maintenanceAlerts, imageUrl, uploadImage, removeImage, installedFor, relatedFor, maintenanceFor, subscribe, integrationReady,
     backup,
     saveItem: row => rpc('supply_save_item', row),
+    saveItemWithStatus: row => rpc('supply_save_item_with_status', row),
+    setEquipmentStatus: (id, status) => rpc('supply_set_equipment_status', { p_supply_id: id, p_status: status }),
     saveModelCompatibility: row => rpc('supply_save_model_compatibility', row),
     deactivateModelCompatibility: id => rpc('supply_deactivate_model_compatibility', { p_id: id }),
     saveVariant: row => rpc('supply_save_variant', row),

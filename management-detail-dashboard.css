@@ -149,8 +149,16 @@ body.management-open .management-modal-dialog.management-asset-detail {
 .management-asset-peripheral strong { color: var(--asset-text); font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
 .management-asset-data-card span:not(.management-asset-data-icon),
 .management-asset-peripheral span:not(.management-asset-data-icon) { color: var(--asset-muted); font-size: 11px; overflow-wrap: anywhere; }
-.management-asset-peripheral-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.management-asset-peripheral { min-height: 112px; }
+.management-asset-peripheral-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.management-asset-peripheral { min-height: 82px; padding: 8px; }
+.management-asset-peripheral strong { font-size: 15px; }
+.management-asset-peripheral span:not(.management-asset-data-icon) { font-size: 12px; }
+.management-asset-peripheral small { font-size: 12px; }
+.management-asset-peripheral em { font-size: 11px; }
+.management-asset-overview.has-photo { grid-template-columns: 160px minmax(0, 1fr) minmax(240px, 31%); }
+.management-asset-overview.has-photo .management-asset-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media(max-width:1000px){.management-asset-overview.has-photo{grid-template-columns:160px minmax(0,1fr)}.management-asset-overview.has-photo .management-asset-connectivity{grid-column:1/-1}}
+@media(max-width:700px){.management-asset-overview.has-photo{grid-template-columns:1fr}}
 .management-asset-peripheral em { justify-self: start; margin-top: 3px; padding: 3px 7px; border-radius: 99px; background: #20a6a32c; color: #6aefda; font-size: 10px; font-style: normal; }
 .management-asset-peripheral em.fault { background: #d4486129; color: #ff97a7; }
 .management-asset-peripheral em.warn { background: #be942d29; color: #ffdd86; }

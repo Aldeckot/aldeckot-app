@@ -288,6 +288,7 @@
 
   function openModal(content) {
     modal.innerHTML = content;
+    window.AldeckotActionMenus?.enhance(modal);
     modal.hidden = false;
     modal.querySelector('[data-nfe-close]')?.addEventListener('click', closeModal);
     modal.onclick = closeOnBackdrop;

@@ -43,6 +43,7 @@
   let payload = { table: null, items: [] };
   let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'general', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
   let toastTimer;
+  let imageUploadBusy = false;
   let detailReturnFocus = null;
   let inventoryPeripheralRows = [];
 
@@ -352,6 +353,41 @@
     return `<section class="management-modal-dialog management-asset-detail" data-supply-host-source="management" data-supply-host-id="${escape(item.id)}" role="dialog" aria-modal="true" aria-labelledby="managementDetailTitle"><header class="management-modal-head management-asset-head"><div class="management-modal-identity"><span class="management-asset-hero-icon">${workstationArt()}</span><div><div class="management-asset-status">${statusBadge(item)}</div><h2 id="managementDetailTitle">${escape(title)}</h2><p>${escape(subtitle)}</p></div></div><div class="management-modal-actions">${transferButton}<span class="management-action-menu-wrap"><button class="management-modal-action action" type="button" data-management-action="toggle-actions" aria-expanded="${state.actionMenu}" ${canManage() ? '' : 'disabled'}>Ações ${svg('chevron', 14)}</button>${actionMenu}</span><button class="management-modal-action management-asset-close" type="button" data-management-action="close" aria-label="Fechar detalhes">${svg('close', 18)}</button></div></header><div class="management-asset-overview"><div class="management-asset-facts">${facts.length ? facts.map(([icon, label, value]) => `<div class="management-asset-fact"><span class="management-asset-fact-icon">${svg(icon, 20)}</span><span><small>${escape(label)}</small><strong>${escape(value)}</strong></span></div>`).join('') : '<p class="management-asset-empty">Identificação complementar não cadastrada.</p>'}</div><div class="management-asset-connectivity"><span class="management-asset-connectivity-icon">${svg('wifi', 24)}</span><span><strong>Conectividade não monitorada</strong><small>Sem leitura em tempo real</small></span></div></div><div class="management-asset-body"><nav class="management-tabs management-asset-nav" aria-label="Seções do equipamento">${detailTabs.map(([key, label, icon]) => `<button class="management-tab ${state.tab === key ? 'active' : ''}" type="button" data-management-tab="${key}" aria-current="${state.tab === key ? 'page' : 'false'}">${svg(icon, 20)}<span>${label}</span></button>`).join('')}</nav><div class="management-asset-panel" id="managementDetailPanel">${detailContent(item)}</div></div><footer class="management-asset-footer"><div>${hasDetailValue(item.registeredAt) ? `<span>${svg('calendar', 16)} Criado em: ${escape(dateTime(item.registeredAt))}</span>` : ''}${hasDetailValue(item.updatedAt) ? `<span>${svg('sync', 16)} Última atualização: ${escape(dateTime(item.updatedAt))}</span>` : ''}</div><button class="management-modal-action" type="button" data-management-action="edit" ${canManage() ? '' : 'disabled'}>${svg('edit', 16)} Editar</button></footer></section>`;
   }
 
+  function mountComputerPhoto(item) {
+    if (state.modal?.type !== 'details' || !item?.imagePath) return;
+    const overview = modalNode.querySelector('.management-asset-overview');
+    if (!overview) return;
+    const photo = document.createElement('section');
+    photo.className = 'management-computer-photo';
+    photo.innerHTML = `<div class="management-computer-photo-frame"><span class="management-computer-photo-placeholder">${workstationArt()}</span><img alt="Foto do computador ${escape(item.equipment)}" hidden></div>`;
+    overview.classList.add('has-photo');
+    overview.prepend(photo);
+    loadComputerPhoto(photo, item);
+  }
+
+  function mountComputerImageEditor(item) {
+    if (state.modal?.type !== 'edit' || !item || !canManage()) return;
+    const firstSection = modalNode.querySelector('.management-form-section');
+    if (!firstSection) return;
+    const photo = document.createElement('section');
+    photo.className = 'management-form-section management-computer-photo-editor';
+    photo.innerHTML = `<h3>Imagem do computador</h3><div class="management-computer-photo"><div class="management-computer-photo-frame"><span class="management-computer-photo-placeholder">${workstationArt()}</span><img alt="Foto do computador ${escape(item.equipment)}" hidden></div><div class="management-computer-photo-copy"><small>${item.imagePath ? 'Foto vinculada ao PC deste terminal.' : 'Nenhuma foto cadastrada para este PC.'}</small><input type="file" accept="image/png,image/jpeg,image/webp" data-management-computer-image hidden><button type="button" data-management-action="choose-computer-image" ${imageUploadBusy ? 'disabled' : ''}>${item.imagePath ? 'Trocar imagem' : 'Adicionar imagem'}</button></div></div>`;
+    firstSection.after(photo);
+    loadComputerPhoto(photo, item);
+  }
+
+  function loadComputerPhoto(photo, item) {
+    if (!item.imagePath || !window.AldeckotEquipmentImages) return;
+    window.AldeckotEquipmentImages.urlForPath(item.imagePath).then(url => {
+      if (!url || !photo.isConnected || activeItem()?.id !== item.id || activeItem()?.imagePath !== item.imagePath) return;
+      const image = photo.querySelector('img');
+      image.onload = () => { image.hidden = false; photo.querySelector('.management-computer-photo-placeholder').hidden = true; };
+      image.onerror = () => { image.hidden = true; photo.querySelector('.management-computer-photo-placeholder').hidden = false; };
+      image.src = url;
+      if (image.complete && image.naturalWidth) image.onload();
+    }).catch(error => console.warn('Imagem do computador indisponível:', error));
+  }
+
   function transferModal(item) {
     const transferScope = sharedTransferAreas.has(item.area) ? 'Escritório e Estoque' : item.area;
     const targets = payload.items
@@ -597,6 +633,9 @@
       else modalNode.innerHTML = detailsModal(item);
     }
     applyStatusModalGlow();
+    if (state.modal?.type === 'details') mountComputerPhoto(activeItem());
+    if (state.modal?.type === 'edit') mountComputerImageEditor(activeItem());
+    window.AldeckotActionMenus?.enhance(modalNode);
   }
 
   function applyStatusModalGlow() {
@@ -940,7 +979,7 @@
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
     if (!action) return;
-    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
     if (action === 'close') {
@@ -958,6 +997,7 @@
       return;
     }
     if (action === 'toggle-actions' && activeItem()) { state.actionMenu = !state.actionMenu; renderModal(); }
+    if (action === 'choose-computer-image' && activeItem() && !imageUploadBusy) modalNode.querySelector('[data-management-computer-image]')?.click();
     if (action === 'transfer' && activeItem() && hasFixedTerminal(activeItem())) { state.modal = { type: 'transfer', id: activeItem().id }; state.transferDestinationId = ''; state.transferQuery = ''; state.actionMenu = false; renderModal(); }
     if (action === 'select-transfer-destination' && activeItem() && state.modal?.type === 'transfer') { state.transferDestinationId = actionNode.dataset.managementDestinationId || ''; renderModal(); }
     if (action === 'edit' && activeItem()) { state.modal = { type: 'edit', id: activeItem().id }; state.actionMenu = false; renderModal(); }
@@ -1018,7 +1058,35 @@
       event.target.setCustomValidity(isValidPeripheralTag(type, event.target.value) ? '' : `Informe a TAG no formato ${peripheralTagRules[type]?.example || 'correto'}.`);
     }
   });
-  document.addEventListener('change', event => {
+  document.addEventListener('change', async event => {
+    if (event.target.matches('[data-management-computer-image]')) {
+      const file = event.target.files?.[0];
+      const item = activeItem();
+      if (!file || !item || !canManage() || imageUploadBusy) return;
+      const draft = [...new FormData(modalNode.querySelector('[data-management-form]')).entries()];
+      imageUploadBusy = true;
+      const finishSave = window.AldeckotLoading?.beginSave?.('Enviando imagem do computador…');
+      try {
+        const saved = await window.AldeckotSupabase.management.setComputerImage(item.id, file,
+          { equipment: item.equipment, tag: item.tag, serial: item.serial, updatedAt: item.updatedAt });
+        payload.items = payload.items.map(row => row.id === saved.id ? saved : row);
+        notify('Imagem vinculada ao computador.');
+      } catch (error) { notify(error.message || 'Não foi possível enviar a imagem.'); }
+      finally {
+        imageUploadBusy = false;
+        await finishSave?.();
+        if (state.modal?.type === 'edit' && activeItem()?.id === item.id) {
+          renderModal();
+          const form = modalNode.querySelector('[data-management-form]');
+          for (const [name, value] of draft) {
+            const field = [...form.elements].find(element => element.name === name);
+            if (field) field.value = value;
+          }
+          form.querySelector('[data-management-priority-choice]')?.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      return;
+    }
     if (event.target.matches('[data-management-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('change', event => {

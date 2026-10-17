@@ -13,6 +13,8 @@ function harness({ inputs = [], styles = [], queuedErrors = [] } = {}) {
   const timers = new Map();
   const storage = new Map();
   let timerId = 0;
+  let interval = null;
+  let now = 1_000_000;
   let reloads = 0;
   let notice = null;
   const addListener = (scope, name, callback) => {
@@ -45,11 +47,15 @@ function harness({ inputs = [], styles = [], queuedErrors = [] } = {}) {
     __aldeckotResourceErrors: queuedErrors,
     addEventListener: (name, callback) => addListener('window', name, callback),
     setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; },
-    clearTimeout(id) { timers.delete(id); }
+    clearTimeout(id) { timers.delete(id); },
+    setInterval(callback) { interval = callback; return ++timerId; }
   };
-  runInNewContext(source, { window, document, URL, Date, Math, Set, WeakMap });
+  class ClockDate extends Date { static now() { return now; } }
+  runInNewContext(source, { window, document, URL, Date: ClockDate, Math, Set, WeakMap, Promise });
   return {
     document, window, storage,
+    advance(milliseconds) { now += milliseconds; },
+    runInterval() { assert.ok(interval); interval(); },
     get reloads() { return reloads; },
     get notice() { return notice; },
     fire(scope, name, target) {
@@ -62,6 +68,20 @@ function harness({ inputs = [], styles = [], queuedErrors = [] } = {}) {
       callback();
     }
   };
+}
+
+function styleLink(styles) {
+  const listeners = new Map();
+  const link = {
+    tagName: 'LINK', rel: 'stylesheet', href: `http://localhost:4173/module-header-cards.css?v=${version}`,
+    sheet: {}, disabled: false, isConnected: true, dataset: {},
+    cloneNode() { return styleLink(styles); },
+    addEventListener(name, callback) { listeners.set(name, callback); },
+    dispatch(name) { listeners.get(name)?.(); },
+    after(replacement) { styles.splice(styles.indexOf(this) + 1, 0, replacement); },
+    remove() { this.isConnected = false; styles.splice(styles.indexOf(this), 1); }
+  };
+  return link;
 }
 
 test('todas as páginas instalam a recuperação antes do primeiro estilo externo', () => {
@@ -141,4 +161,64 @@ test('primeira falha do próprio recuperador não provoca recarga após retentat
   const app = harness({ queuedErrors: [{ tagName: 'SCRIPT', src: `http://localhost:4173/ui-resource-recovery.js?v=${version}` }] });
   assert.equal(app.reloads, 0);
   assert.ok(app.window.AldeckotResourceRecovery);
+});
+
+test('estilos carregados são renovados após inatividade sem apagar a página', async () => {
+  const styles = [];
+  const original = styleLink(styles);
+  styles.push(original);
+  const app = harness({ styles });
+  app.advance(5 * 60 * 1000 + 1);
+  app.runInterval();
+  assert.equal(styles.length, 2, 'a cópia nova carrega enquanto a anterior permanece');
+  const replacement = styles[1];
+  assert.equal(original.isConnected, true);
+  assert.match(replacement.href, /uiRetry=/);
+  replacement.dispatch('load');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(original.isConnected, false);
+  assert.equal(styles.length, 1);
+  assert.equal(styles[0], replacement);
+  assert.equal(replacement.dataset.aldeckotRefreshing, undefined);
+  assert.equal(app.reloads, 0);
+});
+
+test('retomada curta não refaz estilos e CSS substituto vazio não elimina o anterior', async () => {
+  const styles = [];
+  const original = styleLink(styles);
+  styles.push(original);
+  const app = harness({ styles });
+  app.document.visibilityState = 'hidden';
+  app.fire('document', 'visibilitychange', app.document);
+  app.advance(10_000);
+  app.document.visibilityState = 'visible';
+  app.fire('document', 'visibilitychange', app.document);
+  assert.equal(styles.length, 1);
+  app.advance(5 * 60 * 1000);
+  app.runInterval();
+  assert.equal(styles.length, 2);
+  styles[1].sheet = null;
+  styles[1].dispatch('load');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(styles.length, 1);
+  assert.equal(original.isConnected, true);
+});
+
+test('retorno de aba oculta renova CSS e preserva o anterior se a rede falhar', async () => {
+  const styles = [];
+  const original = styleLink(styles);
+  styles.push(original);
+  const app = harness({ styles });
+  app.document.visibilityState = 'hidden';
+  app.fire('document', 'visibilitychange', app.document);
+  app.advance(31_000);
+  app.document.visibilityState = 'visible';
+  app.fire('document', 'visibilitychange', app.document);
+  assert.equal(styles.length, 2);
+  styles[1].dispatch('error');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(styles.length, 1);
+  assert.equal(original.isConnected, true);
+  assert.equal(app.reloads, 0);
+  assert.equal(app.notice?.isConnected, true);
 });

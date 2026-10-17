@@ -19,11 +19,12 @@
     equipment: [], images: new Map(), busy: false, error: '', dialog: '', renderVersion: 0,
     ensuredGroups: new Set(), ensuredVariants: new Set(), catalogUnavailable: false, catalogPromise: null,
     variantMetadataAvailable: null,
-    variantFormOpen: false, integrationReady: null, alertQuery: '', movementResume: null
+    variantFormOpen: false, integrationReady: null, alertQuery: '', movementResume: null,
+    initialized: false, bootSyncing: false
   };
   const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const fmtDate = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
-  const canEdit = () => Boolean(window.AldeckotAuth?.isAdmin) && !state.error;
+  const canEdit = () => Boolean(window.AldeckotAuth?.isAdmin) && !state.error && !state.bootSyncing;
   const active = () => state.items.find(row => row.id === state.selectedId);
   const selectedVariant = item => (isInventory(item) ? item.inventory_group.variants : item.variation_rows || [])
     .find(row => row.id === state.selectedVariantId);
@@ -32,7 +33,7 @@
     'Em estoque': 'normal', 'Instalado': 'installed', 'Ativo': 'normal', 'Reserva': 'reserve',
     'Manutenção': 'maintenance', 'Defeito': 'defect', 'Inativo': 'inactive', 'Saída': 'inactive', 'Troca': 'inactive', 'Atenção': 'attention' })[status] || 'inactive';
   const badge = status => `<span class="sp-badge ${statusTone(status)}">${safe(status)}</span>`;
-  const unitState = unit => unit.exited_at ? 'Saída' : unit.status;
+  const unitState = unit => originEquipmentFor(unit)?.status || (unit.exited_at ? 'Saída' : unit.status);
   const imagePlaceholder = '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="6" width="24" height="20" rx="3"/><circle cx="11" cy="12" r="2"/><path d="m5 22 7-7 5 5 4-4 6 6"/></svg>';
   const img = (path, className = 'sp-thumb') => `<span class="${className}"${path ? ` data-supply-image="${safe(path)}"` : ''}>${imagePlaceholder}</span>`;
   const notify = (message, error = false) => {
@@ -44,6 +45,17 @@
   };
   const equipmentFor = unit => state.equipment.find(row => row.source === 'inventory' && row.id === unit.installed_inventory_item_id)
     || state.equipment.find(row => row.source === 'management' && row.id === unit.installed_management_record_id);
+  const originEquipmentFor = unit => state.equipment.find(row => row.source === 'inventory' && row.id === unit.origin_inventory_item_id)
+    || state.equipment.find(row => row.source === 'management' && row.id === unit.origin_management_record_id);
+  const displayedUnitStatus = unit => unitState(unit);
+  const equipmentStatusMarkup = item => {
+    if (!isInventory(item)) return state.equipmentStatusAvailable
+      ? badge(item.equipment_status || (item.inactive ? 'Inativo' : 'Ativo'))
+      : '<span class="sp-muted">Aguardando migração 083</span>';
+    const counts = new Map();
+    for (const unit of item.inventory_group.units) counts.set(unit.status || 'Não informado', (counts.get(unit.status || 'Não informado') || 0) + 1);
+    return `<span class="sp-equipment-statuses" aria-label="Status dos equipamentos no Inventário">${[...counts].map(([status, count]) => `${badge(status)}<small>${count}</small>`).join('')}</span>`;
+  };
   const equipmentLink = row => {
     if (!row) return '—';
     const url = row.source === 'inventory'
@@ -84,6 +96,7 @@
   const options = values => values.map(value => `<option value="${safe(value)}">${safe(value)}</option>`).join('');
   const unitStatusOptions = values => values.map(value => `<option value="${safe(value)}"${state.unitStatus === value ? ' selected' : ''}>${safe(value)}</option>`).join('');
   const renderTable = () => {
+    if (!state.initialized && !state.error) return '<p class="sp-muted aldeckot-inline-loading" role="status">Carregando suprimentos…</p>';
     const rows = filtered();
     const max = Math.max(1, Math.ceil(rows.length / state.pageSize));
     if (state.page > max) state.page = max;
@@ -91,10 +104,10 @@
     const firstPage = Math.max(1, Math.min(state.page - 3, max - 6));
     const lastPage = Math.min(max, firstPage + 6);
     return `${metrics()}<div class="sp-toolbar"><label class="sp-search-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 5 5"/></svg><input class="sp-search" data-sp-search type="search" placeholder="Buscar por nome, categoria, marca, modelo..." value="${safe(state.query)}" aria-label="Buscar suprimentos"></label>${canEdit() ? '<button class="sp-btn primary sp-toolbar-add" data-sp-action="add" type="button">＋ Adicionar</button>' : ''}<select data-sp-filter="status" aria-label="Filtrar status"><option value="">Todos os status</option>${options(['Normal','Estoque baixo','Sem estoque','Inativo'])}</select></div>
-    <div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status</th></tr></thead><tbody>${pageRows.length ? pageRows.map(row => {
+    <div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status do estoque</th><th>Status do equipamento</th></tr></thead><tbody>${pageRows.length ? pageRows.map(row => {
       const tone = stockTone(row);
-      return `<tr data-supply-id="${safe(row.id)}" class="${row.id === state.selectedId ? 'selected' : ''}"><td>${img(row.image_path)}</td><td><button type="button" class="sp-item-open" data-sp-open="${safe(row.id)}" aria-label="Abrir ${safe(row.name)}">${safe(row.name)}</button><br><small class="sp-muted">${isInventory(row) ? `${row.total_units} equipamentos no Inventário` : row.tracking_type === 'unit' ? `${row.total_units} unidades cadastradas` : 'Por quantidade'}</small></td><td>${safe(row.category)}</td><td class="sp-stock sp-stock-${tone.className}" title="${tone.label}">${quantityAvailable(row)}</td><td>${row.minimum_stock}</td><td>${Number(row.active_count || 0)}</td><td>${badge(row.stock_status)}</td></tr>`;
-    }).join('') : '<tr><td colspan="7" class="sp-empty">Nenhum suprimento encontrado. Os indicadores e a tabela mostram somente dados reais.</td></tr>'}</tbody></table></div>
+      return `<tr data-supply-id="${safe(row.id)}" class="${row.id === state.selectedId ? 'selected' : ''}"><td>${img(row.image_path)}</td><td><button type="button" class="sp-item-open" data-sp-open="${safe(row.id)}" aria-label="Abrir ${safe(row.name)}">${safe(row.name)}</button><br><small class="sp-muted">${isInventory(row) ? `${row.total_units} equipamentos no Inventário` : row.tracking_type === 'unit' ? `${row.total_units} unidades cadastradas` : 'Por quantidade'}</small></td><td>${safe(row.category)}</td><td class="sp-stock sp-stock-${tone.className}" title="${tone.label}">${quantityAvailable(row)}</td><td>${row.minimum_stock}</td><td>${Number(row.active_count || 0)}</td><td>${badge(row.stock_status)}</td><td>${equipmentStatusMarkup(row)}</td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="sp-empty">Nenhum suprimento encontrado. Os indicadores e a tabela mostram somente dados reais.</td></tr>'}</tbody></table></div>
     <div class="sp-pagination"><span>Mostrando ${pageRows.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, rows.length)} de ${rows.length} itens</span><label class="sp-page-size">Itens por página <select data-sp-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${size === state.pageSize ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav class="sp-pages" aria-label="Páginas"><button type="button" data-sp-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button>${firstPage > 1 ? `<button type="button" data-sp-page="1">1</button>${firstPage > 2 ? '<span aria-hidden="true">…</span>' : ''}` : ''}${Array.from({length: lastPage - firstPage + 1}, (_, index) => firstPage + index).map(page => `<button type="button" data-sp-page="${page}" class="${state.page === page ? 'active' : ''}" ${state.page === page ? 'aria-current="page"' : ''}>${page}</button>`).join('')}${lastPage < max ? `${lastPage < max - 1 ? '<span aria-hidden="true">…</span>' : ''}<button type="button" data-sp-page="${max}">${max}</button>` : ''}<button type="button" data-sp-page="${state.page + 1}" aria-label="Próxima página" ${state.page === max ? 'disabled' : ''}>›</button></nav></div>`;
   };
   const renderGeneral = item => isInventory(item)
@@ -130,10 +143,10 @@
     const variant = selectedVariant(item);
     const units = variations.unitsForVariant(state.detail?.units || [], variant);
     const unitFilter = state.unitStatus || '';
-    const visibleUnits = units.filter(unit => !unitFilter || unitState(unit) === unitFilter);
+    const visibleUnits = units.filter(unit => !unitFilter || displayedUnitStatus(unit) === unitFilter);
     const canExit = canEdit() && !item.inactive && units.some(unit => variations.exitEligible(unit,
       (state.detail?.variants || []).find(variant => variant.id === unit.variant_id)));
-    return `<div class="sp-section-title"><h3>${variant ? safe(variant.name) : 'Todas as unidades rastreáveis'} · ${visibleUnits.length}</h3>${variant ? '<button type="button" class="sp-btn" data-sp-action="all-units">Todas as unidades</button>' : ''}${canEdit() ? '<button class="sp-btn primary" data-sp-action="unit">＋ Adicionar unidade</button>' : ''}${canExit ? '<button class="sp-btn" data-sp-action="unit-exit">Saída de unidades</button>' : ''}</div><select data-sp-filter="unit-status" aria-label="Filtrar unidades por status"><option value=""${unitFilter ? '' : ' selected'}>Todos os status</option>${unitStatusOptions(['Em estoque','Instalado','Reserva','Manutenção','Defeito','Inativo','Saída'])}</select><div style="margin-top:9px">${visibleUnits.map(unit => {
+    return `<div class="sp-section-title"><h3>${variant ? safe(variant.name) : 'Todas as unidades rastreáveis'} · ${visibleUnits.length}</h3>${variant ? '<button type="button" class="sp-btn" data-sp-action="all-units">Todas as unidades</button>' : ''}${canEdit() ? '<button class="sp-btn primary" data-sp-action="unit">＋ Adicionar unidade</button>' : ''}${canExit ? '<button class="sp-btn" data-sp-action="unit-exit">Saída de unidades</button>' : ''}</div><select data-sp-filter="unit-status" aria-label="Filtrar unidades por status"><option value=""${unitFilter ? '' : ' selected'}>Todos os status</option>${unitStatusOptions(['Ativo','Atenção','Em estoque','Instalado','Reserva','Manutenção','Defeito','Inativo','Saída'])}</select><div style="margin-top:9px">${visibleUnits.map(unit => {
       const equipment = equipmentFor(unit);
       const order = (state.detail?.maintenance || []).find(link => link.supply_unit_id === unit.id && !link.closed_at);
       return `<article class="sp-card" id="unit-${safe(unit.id)}"><div class="sp-card-row"><div><b>${safe(unit.code || unit.serial_number || 'Unidade sem TAG')}</b><small>ID: ${safe(unit.id)} · Série: ${safe(unit.serial_number || '—')}</small><small>Local: ${safe(unit.physical_location)} · Instalado em: ${equipmentLink(equipment)}</small><small>Atualizado em: ${fmtDate(unit.updated_at)}</small>${unit.exited_at ? `<small>Saída: ${fmtDate(unit.exited_at)} · ${safe(unit.exit_reason || 'Motivo no histórico')}</small>` : ''}</div>${badge(unitState(unit))}</div>${order ? `<small>Controle TI: <a href="control.html?table=${order.control_items?.table_id || ''}&item=${order.control_item_id}">${safe(order.status)} · abrir manutenção</a></small>` : ''}${canEdit() ? `<div class="sp-card-actions">${unit.exited_at ? '' : `${unit.status !== 'Instalado' && unit.status !== 'Manutenção' && unit.status !== 'Inativo' ? `<button class="sp-btn primary" data-sp-action="unit-transition" data-id="${unit.id}" data-status="Instalado">Instalar</button>` : ''}${unit.status === 'Instalado' ? `<button class="sp-btn" data-sp-action="unit-transition" data-id="${unit.id}" data-status="Em estoque">Remover</button><button class="sp-btn" data-sp-action="unit-transition" data-id="${unit.id}" data-status="Instalado">Transferir</button><button class="sp-btn" data-sp-action="replace" data-id="${unit.id}">Substituir</button>` : ''}${unit.status !== 'Manutenção' && unit.status !== 'Inativo' ? `<button class="sp-btn" data-sp-action="unit-transition" data-id="${unit.id}" data-status="Manutenção">Manutenção</button>` : ''}${unit.status !== 'Manutenção' ? `<button class="sp-btn" data-sp-action="unit-status" data-id="${unit.id}">${unit.status === 'Inativo' ? 'Reativar' : 'Outros estados'}</button>` : ''}<button class="sp-btn" data-sp-action="unit-edit" data-id="${unit.id}">Editar</button>`}<button class="sp-btn" data-sp-action="unit-history" data-id="${unit.id}">Histórico</button></div>` : ''}</article>`;
@@ -188,11 +201,12 @@
     const body = state.activeTab === 'variants' ? renderVariants(item) : state.activeTab === 'units' && (item.tracking_type === 'unit' || inventory) ? renderUnits(item)
       : state.activeTab === 'movements' || state.activeTab === 'logs' ? renderTimeline(state.activeTab)
       : state.activeTab === 'compatibility' ? renderCompatibility(item) : renderGeneral(item);
-    const detailFields = chosen
+    let detailFields = chosen
       ? renderVariationFields(chosen, inventory)
       : inventory
       ? `<div class="sp-detail-fields"><span>Categoria</span><b>${safe(item.category)}</b><span>Origem</span><b>Inventário</b><span>Total</span><b>${item.total_units} unidades</b><span>Estoque</span><b class="sp-stock">${item.available_stock} em Reserva</b><span>Indicador</span><b>${item.active_count} Ativos</b><span>Mínimo</span><b>${item.minimum_stock}</b></div>`
       : `<div class="sp-detail-fields"><span>Categoria</span><b>${safe(item.category)}</b><span>Origem</span><b>Suprimentos</b><span>Marca</span><b>${safe(item.brand || '—')}</b><span>Modelo</span><b>${safe(item.model || '—')}</b><span>Estoque</span><b class="sp-stock">${quantityAvailable(item)} disponíveis</b><span>Estoque mínimo</span><b>${item.minimum_stock}</b><span>Local padrão</span><b>${safe(item.default_location)}</b></div>`;
+    detailFields = detailFields.replace(/<\/div>$/, `<span>Status do equipamento</span><b>${equipmentStatusMarkup(item)}</b></div>`);
     const overviewButton = chosen ? `<button type="button" class="sp-btn sp-overview" data-sp-action="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 3 2 8l5 5M2 8h12"/></svg><span>Visão geral</span></button>` : '';
     const variationHealth = chosen && variations.health(chosen);
     const situationBadge = variationHealth
@@ -214,12 +228,15 @@
   const render = () => {
     const mainScroll = app.querySelector('.sp-main')?.scrollTop || 0;
     const detailScroll = app.querySelector('.sp-detail')?.scrollTop || 0;
-    app.innerHTML = `${renderHeader()}${state.error ? `<div class="sp-alert" role="alert">${safe(state.error)}</div>` : ''}${state.integrationReady === false ? '<div class="sp-alert" role="status">A integração estrutural aguarda a migração 061 no Supabase. As novas ações de inativação de variação e exclusão ficam indisponíveis até a ativação.</div>' : ''}${state.variantMetadataAvailable === false ? '<div class="sp-alert" role="status">A edição individual dos modelos do Inventário aguarda a migração 064 no Supabase.</div>' : ''}<div class="sp-layout"><section class="sp-main" tabindex="0" aria-label="Lista de suprimentos">${renderTable()}</section>${renderDetail()}</div>`;
-    app.querySelector('[data-sp-filter="status"]').value = state.status;
+    app.innerHTML = `${renderHeader()}${state.error ? `<div class="sp-alert" role="alert">${safe(state.error)}</div>` : ''}${state.bootSyncing ? '<div class="sp-alert" role="status">Sincronizando catálogo… A edição ficará disponível em instantes.</div>' : ''}${state.integrationReady === false ? '<div class="sp-alert" role="status">A integração estrutural aguarda a migração 061 no Supabase. As novas ações de inativação de variação e exclusão ficam indisponíveis até a ativação.</div>' : ''}${state.variantMetadataAvailable === false ? '<div class="sp-alert" role="status">A edição individual dos modelos do Inventário aguarda a migração 064 no Supabase.</div>' : ''}<div class="sp-layout"><section class="sp-main" tabindex="0" aria-label="Lista de suprimentos">${renderTable()}</section>${renderDetail()}</div>`;
+    window.AldeckotActionMenus?.enhance(app);
+    const statusFilter = app.querySelector('[data-sp-filter="status"]');
+    if (statusFilter) statusFilter.value = state.status;
     const unitFilter = app.querySelector('[data-sp-filter="unit-status"]');
     if (unitFilter) unitFilter.value = state.unitStatus || '';
     app.querySelector('.sp-main').scrollTop = mainScroll;
-    app.querySelector('.sp-detail').scrollTop = detailScroll;
+    const detailPanel = app.querySelector('.sp-detail');
+    if (detailPanel) detailPanel.scrollTop = detailScroll;
     hydrateImages(app);
   };
   const hydrateImages = root => {
@@ -236,11 +253,27 @@
   const load = async () => {
     state.error = '';
     try {
-      let [manual, snapshot, integrationReady] = await Promise.all([api.list(), api.inventorySnapshot(), api.integrationReady()]);
-      state.integrationReady = integrationReady;
+      const integrationPromise = api.integrationReady().then(value => ({ value }), error => ({ error }));
+      let [manual, snapshot] = await Promise.all([api.list(), api.inventorySnapshot()]);
+      state.equipmentStatusAvailable = api.equipmentStatusReady();
       const groups = inventoryCatalog.groupInventory(snapshot.tables, snapshot.items);
       let projected = inventoryCatalog.project(manual, groups);
-      if (canEdit() && !state.catalogUnavailable && groups.some(group => !state.ensuredGroups.has(group.key))) {
+      if (!state.initialized) {
+        state.items = variations.orderItems(projected);
+        state.initialized = true;
+        state.bootSyncing = true;
+        render();
+        window.AldeckotModuleStage?.reveal?.();
+      }
+      const integration = await integrationPromise;
+      if (integration.error) throw integration.error;
+      state.integrationReady = integration.value;
+      projected.filter(isInventory).forEach(row => {
+        if (manual.some(item => item.id === row.manual_id && item.inventory_group_key === row.inventory_group.key)) {
+          state.ensuredGroups.add(row.inventory_group.key);
+        }
+      });
+      if (window.AldeckotAuth?.isAdmin && !state.catalogUnavailable && groups.some(group => !state.ensuredGroups.has(group.key))) {
         if (!state.catalogPromise) {
           const pending = projected.filter(row => isInventory(row) && !state.ensuredGroups.has(row.inventory_group.key))
             .map(row => ({ key: row.inventory_group.key, name: row.inventory_group.name, existingId: row.manual_id }));
@@ -250,12 +283,13 @@
         if (available) {
           groups.forEach(group => state.ensuredGroups.add(group.key));
           manual = await api.list();
+          state.equipmentStatusAvailable = api.equipmentStatusReady();
           projected = inventoryCatalog.project(manual, groups);
         } else state.catalogUnavailable = true;
       }
       const variantMetadata = await api.inventoryVariantMetadata();
       state.variantMetadataAvailable = variantMetadata.available;
-      if (variantMetadata.available && canEdit()) {
+      if (variantMetadata.available && window.AldeckotAuth?.isAdmin) {
         const saved = new Set(variantMetadata.rows.map(row => `${row.supply_id}:${row.inventory_variant_key}`));
         const pending = projected.filter(isInventory).filter(row => row.manual_id)
           .flatMap(row => row.inventory_group.variants.filter(variant =>
@@ -275,6 +309,7 @@
       }
       projected = inventoryCatalog.project(manual, groups, variantMetadata.rows);
       state.items = variations.orderItems(projected);
+      state.bootSyncing = false;
       if (state.selectedId && !active()) { state.selectedId = null; state.selectedVariantId = null; state.detail = null; }
       if (state.selectedVariantId && active() && !selectedVariant(active())) state.selectedVariantId = null;
       render();
@@ -284,7 +319,10 @@
       state.error = /supply_stock_summary|supplies|supply_units/i.test(error.message || '')
         ? 'A estrutura de Suprimentos ainda não está disponível no Supabase. Aplique supabase/058_supplies.sql para ativar o módulo.'
         : error.message || 'Não foi possível carregar Suprimentos.';
-      state.items = []; render();
+      state.bootSyncing = false;
+      if (!state.initialized) state.items = [];
+      render();
+      window.AldeckotModuleStage?.reveal?.();
     }
   };
   const loadDetail = async () => {
@@ -390,6 +428,7 @@
       ${field('Categoria *','category',item?.category || '', 'required maxlength="80"')}
       ${field('Marca','brand',item?.brand || '', 'maxlength="100"')}
       ${field('Modelo','model',item?.model || '', 'maxlength="100"')}
+      ${state.equipmentStatusAvailable ? `<label>Status do equipamento<select name="equipment_status">${['Ativo','Reserva','Manutenção','Troca','Inativo','Defeito','Atenção'].map(status => `<option value="${status}"${status === (item?.equipment_status || 'Ativo') ? ' selected' : ''}>${status}</option>`).join('')}</select></label>` : '<p class="sp-muted">O campo de status ficará disponível após a migração 083.</p>'}
       <label>Tipo de controle<select name="tracking_type"><option value="quantity">Por quantidade</option><option value="unit">Unidades rastreáveis</option></select></label>
       ${field('Estoque mínimo da base sem variação','minimum_stock',item?.base_minimum_stock ?? item?.minimum_stock ?? 0,'type="number" min="0" required')}
       ${field('Local padrão','default_location',item?.default_location || 'Almoxarifado','required maxlength="100"')}
@@ -400,11 +439,14 @@
         && inventoryCatalog.alias(row.name) === inventoryCatalog.alias(data.get('name')))) {
         throw new Error('Este tipo já está vinculado ao Inventário. Abra o item existente em Suprimentos.');
       }
-      const id = await api.saveItem({
+      const payload = {
         p_id: item?.id || null, p_name: data.get('name'), p_category: data.get('category'), p_brand: data.get('brand'),
         p_model: data.get('model'), p_description: data.get('description'), p_tracking_type: data.get('tracking_type'),
         p_minimum_stock: Number(data.get('minimum_stock')), p_default_location: data.get('default_location'), p_notes: data.get('notes')
-      });
+      };
+      const id = state.equipmentStatusAvailable
+        ? await api.saveItemWithStatus({ ...payload, p_equipment_status: data.get('equipment_status') })
+        : await api.saveItem(payload);
       if (item) await saveEditedImage(form, 'supply', id, item.image_path);
       state.selectedId = id; state.activeTab = 'general';
       history.replaceState(null,'',`supplies.html?item=${encodeURIComponent(id)}`);
@@ -1017,16 +1059,18 @@
   const start = async () => {
     try {
       await window.AldeckotAuthReady;
-      await load();
+      state.bootSyncing = true;
+      render();
       window.AldeckotModuleStage?.reveal?.();
-      try { state.equipment = await api.equipment(); }
+      await load();
+      try { state.equipment = await api.equipment(); render(); }
       catch (error) { notify(`Equipamentos temporariamente indisponíveis: ${error.message}`, true); }
       let realtimeTimer;
       api.subscribe(() => {
         clearTimeout(realtimeTimer);
         realtimeTimer = setTimeout(async () => {
           const loadingToken = window.AldeckotLoading?.show?.('Sincronizando Suprimentos…', 160);
-          try { await load(); }
+          try { await load(); state.equipment = await api.equipment(); render(); }
           finally {
             if (loadingToken) window.AldeckotLoading?.hide?.(loadingToken);
             window.dispatchEvent(new CustomEvent('aldeckot:realtime-change', { detail: { table: 'supply_units' } }));

@@ -872,6 +872,7 @@
       tableId: row.table_id,
       terminal: payload.terminal || '',
       equipment: payload.equipment || payload.name || '',
+      imagePath: payload.imagePath || '',
       tag: payload.tag || '', brand: payload.brand || '', model: payload.model || '', serial: payload.serial || '',
       ip: payload.ip || '', gateway: payload.gateway || payload.gatway || '', subnetMask: payload.subnetMask || payload.mask || payload.mascara || '', hostname: payload.hostname || '', operatingSystem: payload.operatingSystem || '', osVersion: payload.osVersion || '',
       processor: payload.processor || '', memory: payload.memory || '', storage: payload.storage || '',
@@ -895,6 +896,7 @@
 
   const managementRecordPayload = (item = {}, activityDescription = '') => ({
     terminal: String(item.terminal || '').trim(), equipment: String(item.equipment || '').trim(), tag: String(item.tag || '').trim(), brand: String(item.brand || '').trim(), model: String(item.model || '').trim(), serial: String(item.serial || '').trim(),
+    imagePath: String(item.imagePath || '').trim(),
     ip: String(item.ip || '').trim(), gateway: String(item.gateway || '').trim(), subnetMask: String(item.subnetMask || '').trim(), hostname: String(item.hostname || '').trim(), operatingSystem: String(item.operatingSystem || '').trim(), osVersion: String(item.osVersion || '').trim(),
     processor: String(item.processor || '').trim(), memory: String(item.memory || '').trim(), storage: String(item.storage || '').trim(),
     type: item.type || 'Escritório', company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
@@ -955,6 +957,39 @@
       }
       const saved = check(result);
       return managementItemFromRow(saved);
+    },
+
+    async setComputerImage(id, file, expected = {}) {
+      await init();
+      if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || !file.size || file.size > 5242880)
+        fail('Escolha um PNG, JPG ou WebP válido de até 5 MB.');
+      const table = await this.ensureTable();
+      const record = check(await client.from('module_records')
+        .select('id,table_id,payload,position,created_at,updated_at').eq('id', id).maybeSingle());
+      if (!record || record.table_id !== table.id || !String(record.payload?.equipment || '').trim())
+        fail('Este terminal não possui um computador válido para receber a imagem.');
+      if (['equipment', 'tag', 'serial'].some(key => String(record.payload?.[key] || '').trim() !== String(expected[key] || '').trim()))
+        fail('O computador deste terminal mudou. Abra as informações novamente antes de enviar a imagem.');
+      if (expected.updatedAt && record.updated_at !== expected.updatedAt)
+        fail('O registro foi atualizado. Abra as informações novamente antes de enviar a imagem.');
+      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const path = `management/${crypto.randomUUID()}.${extension}`;
+      const uploaded = await client.storage.from('supply-images').upload(path, file,
+        { upsert: false, contentType: file.type });
+      if (uploaded.error) throw uploaded.error;
+      const log = { id: crypto.randomUUID(), at: new Date().toISOString(), text: 'Imagem do computador atualizada.' };
+      const updated = await client.from('module_records').update({ payload: {
+        ...record.payload, imagePath: path,
+        logs: [...(Array.isArray(record.payload?.logs) ? record.payload.logs : []), log],
+        lastActivity: log.text
+      } }).eq('id', id).eq('updated_at', record.updated_at)
+        .select('id,table_id,payload,position,created_at,updated_at').maybeSingle();
+      if (updated.error || !updated.data) {
+        await client.storage.from('supply-images').remove([path]).catch(() => {});
+        if (updated.error) throw updated.error;
+        fail('O computador mudou durante o envio. Abra o terminal novamente e tente outra vez.');
+      }
+      return managementItemFromRow(updated.data);
     },
 
     async transfer(sourceId, destinationId) {

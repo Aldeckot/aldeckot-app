@@ -6,12 +6,19 @@
   const imageAttempts = new WeakMap();
   const reloadKey = `aldeckot:ui-resource-reload:${window.location.pathname}`;
   const maxStyleAttempts = 3;
+  const idleRefreshMs = 5 * 60 * 1000;
+  const hiddenRefreshMs = 30 * 1000;
   let retryTimer = 0;
   let imageTimer = 0;
   let scriptTimer = 0;
   let lastResumeRetry = 0;
   let notice = null;
   let userEdited = false;
+  let visualRefreshFailed = false;
+  let refreshInProgress = false;
+  let hiddenAt = 0;
+  let lastInteractionAt = Date.now();
+  let lastStyleRefreshAt = Date.now();
 
   function readReloadCount() {
     try { return Number(window.sessionStorage.getItem(reloadKey)) || 0; }
@@ -54,6 +61,7 @@
       button.style.cssText = 'flex:none;padding:7px 9px;border:1px solid #70cfff;border-radius:7px;background:#126494;color:white;font:700 11px system-ui,sans-serif;cursor:pointer';
       button.addEventListener('click', () => {
         if (failedScripts.size) window.location.reload();
+        else if (visualRefreshFailed) refreshStylesAfterIdle(true);
         else {
           resetStyleAttempts();
           resetImageAttempts();
@@ -71,7 +79,7 @@
   }
 
   function hideNoticeIfRecovered() {
-    if (!failedStyles.size && !failedScripts.size && !failedImages.size) notice?.remove();
+    if (!failedStyles.size && !failedScripts.size && !failedImages.size && !visualRefreshFailed) notice?.remove();
   }
 
   function retryStyles() {
@@ -144,9 +152,56 @@
   function checkStyles() {
     if (document.readyState === 'loading') return;
     document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-      if (!link.disabled && !link.sheet) failedStyles.add(link);
+      if (!link.disabled && !link.dataset?.aldeckotRefreshing && !link.sheet) failedStyles.add(link);
     });
     if (failedStyles.size) scheduleStyles();
+  }
+
+  function refreshStylesAfterIdle(force = false) {
+    if (refreshInProgress || document.readyState === 'loading' || window.navigator.onLine === false) return;
+    const now = Date.now();
+    if (!force && now - lastStyleRefreshAt < idleRefreshMs && (!hiddenAt || now - hiddenAt < hiddenRefreshMs)) return;
+    const links = [...document.querySelectorAll('link[rel="stylesheet"]')].filter(link => {
+      if (link.disabled || link.dataset?.aldeckotRefreshing || !link.isConnected) return false;
+      try { return new URL(link.href, window.location.href).origin === window.location.origin; }
+      catch { return false; }
+    });
+    if (!links.length) return;
+    refreshInProgress = true;
+    lastStyleRefreshAt = now;
+    hiddenAt = 0;
+    Promise.all(links.map(link => new Promise(resolve => {
+      const replacement = link.cloneNode(false);
+      replacement.dataset.aldeckotRefreshing = 'true';
+      const url = new URL(link.href, window.location.href);
+      url.searchParams.set('uiRetry', String(now));
+      replacement.href = url.href;
+      let finished = false;
+      const finish = loaded => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timeout);
+        if (loaded) {
+          delete replacement.dataset.aldeckotRefreshing;
+          link.remove();
+          failedStyles.delete(link);
+          styleAttempts.delete(link);
+        } else {
+          replacement.remove();
+          if (!link.sheet) failedStyles.add(link);
+        }
+        resolve(loaded);
+      };
+      replacement.addEventListener('load', () => finish(Boolean(replacement.sheet)), { once: true });
+      replacement.addEventListener('error', () => finish(false), { once: true });
+      const timeout = window.setTimeout(() => finish(false), 12000);
+      link.after(replacement);
+    }))).then(results => {
+      refreshInProgress = false;
+      visualRefreshFailed = results.some(loaded => !loaded);
+      if (visualRefreshFailed) showNotice();
+      else hideNoticeIfRecovered();
+    });
   }
 
   function recoverScripts() {
@@ -161,9 +216,14 @@
     else showNotice();
   }
 
-  function onResume() {
-    if (document.visibilityState === 'hidden') return;
+  function onResume(event) {
+    if (document.visibilityState === 'hidden') {
+      if (!hiddenAt) hiddenAt = Date.now();
+      return;
+    }
     checkStyles();
+    if (event?.persisted || hiddenAt || Date.now() - lastInteractionAt >= idleRefreshMs) refreshStylesAfterIdle(Boolean(event?.persisted));
+    if (!refreshInProgress) hiddenAt = 0;
     if (failedStyles.size && Date.now() - lastResumeRetry > 15000) {
       lastResumeRetry = Date.now();
       resetStyleAttempts();
@@ -181,7 +241,7 @@
 
   document.addEventListener('error', event => {
     const resource = event.target;
-    if (resource?.tagName === 'LINK' && resource.rel === 'stylesheet') {
+    if (resource?.tagName === 'LINK' && resource.rel === 'stylesheet' && !resource.dataset?.aldeckotRefreshing) {
       failedStyles.add(resource);
       scheduleStyles();
     } else if (resource?.tagName === 'SCRIPT' && resource.src) {
@@ -195,6 +255,9 @@
 
   document.addEventListener('input', () => { userEdited = true; }, true);
   document.addEventListener('change', () => { userEdited = true; }, true);
+  for (const name of ['pointerdown', 'keydown', 'touchstart', 'scroll']) {
+    document.addEventListener(name, () => { lastInteractionAt = Date.now(); }, { capture: true, passive: true });
+  }
 
   document.addEventListener('load', event => {
     const resource = event.target;
@@ -223,6 +286,12 @@
   window.addEventListener('focus', onResume);
   window.addEventListener('online', onResume);
   document.addEventListener('visibilitychange', onResume);
+  window.setInterval(() => {
+    if (document.visibilityState !== 'hidden' && Date.now() - lastInteractionAt >= idleRefreshMs) {
+      checkStyles();
+      refreshStylesAfterIdle();
+    }
+  }, 30000);
 
   window.AldeckotResourceRecovery = { check: checkStyles };
 })();

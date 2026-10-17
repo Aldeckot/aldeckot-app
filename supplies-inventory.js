@@ -29,7 +29,7 @@
       if (!groups.has(key)) groups.set(key, { key, name, units: [], variants: [], tableIds: new Set() });
       const group = groups.get(key);
       group.tableIds.add(table.id);
-      group.units.push({ ...item, status: item.status === 'Troca' ? 'Inativo' : item.status, source: 'inventory', code: item.tag || item.serial || item.equipment,
+      group.units.push({ ...item, source: 'inventory', code: item.tag || item.serial || item.equipment,
         serial_number: item.serial || '', physical_location: item.location || item.sector || '', table_id: table.id });
     }
     for (const group of groups.values()) {
@@ -44,13 +44,13 @@
       }
       group.variants = [...variants.values()].map(variant => ({ ...variant, units: variant.units.sort(recentFirst), total: variant.units.length,
         active: countStatus(variant.units, 'Ativo'), reserve: countStatus(variant.units, 'Reserva'),
-        maintenance: countStatus(variant.units, 'Manutenção'), inactive: countStatus(variant.units, 'Inativo'),
+        maintenance: countStatus(variant.units, 'Manutenção'), inactive: countStatus(variant.units, 'Inativo') + countStatus(variant.units, 'Troca'),
         defect: countStatus(variant.units, 'Defeito') })).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
       group.total = group.units.length;
       group.active = countStatus(group.units, 'Ativo');
       group.reserve = countStatus(group.units, 'Reserva');
       group.maintenance = countStatus(group.units, 'Manutenção');
-      group.inactive = countStatus(group.units, 'Inativo');
+      group.inactive = countStatus(group.units, 'Inativo') + countStatus(group.units, 'Troca');
       group.defect = countStatus(group.units, 'Defeito');
       group.units.sort(recentFirst);
     }

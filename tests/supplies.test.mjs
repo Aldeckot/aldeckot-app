@@ -113,10 +113,10 @@ test('composição visual preserva painel, variações e formulário sem dados f
   assert.match(read('supplies.html'), /scrollbars\.css/);
 });
 
-test('tabela principal mantém sete colunas sem confundir agregados com marca ou modelo', () => {
+test('tabela principal distingue status do estoque e dos equipamentos sem confundir marca ou modelo', () => {
   const headers = ui.match(/<table class="sp-table"><thead><tr>(.*?)<\/tr>/)?.[1];
-  assert.equal(headers, '<th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status</th>');
-  assert.match(ui, /<td colspan="7" class="sp-empty">/);
+  assert.equal(headers, '<th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status do estoque</th><th>Status do equipamento</th>');
+  assert.match(ui, /<td colspan="8" class="sp-empty">/);
   assert.ok(ui.includes('<td>${Number(row.active_count || 0)}</td>'));
   assert.match(css, /@media\(max-width:700px\)\{\.sp-table\{min-width:620px/);
   assert.doesNotMatch(css, /\.sp-table (?:th|td):nth-child\(3\)[^{]*\{[^}]*display:none/s);

@@ -17,7 +17,8 @@ test('categoria aparece nos detalhes do equipamento, mas não nas tabelas', () =
   assert.ok(row);
   assert.doesNotMatch(row, /inventory-category-name|inventory-branch-name/);
   assert.match(view, /field\('Categoria', table\?\.name\)/);
-  assert.match(view, /colspan="11" class="inventory-empty-row">Nenhum equipamento nesta categoria/);
+  assert.match(view, /colspan="10" class="inventory-empty-row">Nenhum equipamento nesta categoria/);
+  assert.doesNotMatch(row, /inventory-image-cell|data-inv-image-key/);
 });
 
 test('um equipamento compartilhado usa o mesmo ID e estado nas duas ramificações', () => {
@@ -54,7 +55,7 @@ test('entrada global consulta no servidor, mostra cinco recentes e pagina sem ca
   assert.match(view, /moduleApi\(\)\.globalPage\(globalFilters\(\)\)/);
   assert.match(view, /data-inv-global-search/);
   assert.match(view, /setTimeout\(\(\) => \{ void refreshGlobalPage\(\); \}, 260\)/);
-  assert.match(view, /data-inv-global-view/);
+  assert.doesNotMatch(view, /data-inv-global-view/);
   assert.match(view, /data-inv-global-page/);
   assert.match(view, /globalState\.pageSize: 25|pageSize: 25/);
   assert.match(view, /shareDialog\(item\)/);
@@ -62,11 +63,12 @@ test('entrada global consulta no servidor, mostra cinco recentes e pagina sem ca
   assert.match(sql, /limit v_size offset \(v_page - 1\) \* v_size/i);
 });
 
-test('entrada global não exibe quadro redundante de recentes e mantém acesso a todos', () => {
+test('entrada global não exibe quadro redundante nem botão Ver todos', () => {
   const markup = view.split('function globalMarkup() {')[1]?.split('function ')[0];
   assert.ok(markup);
   assert.doesNotMatch(markup, /inventory-global-heading/);
-  assert.match(markup, /inventory-global-search[^`]*data-inv-global-view/);
+  assert.match(markup, /inventory-global-search[^`]*data-inv-global-search/);
+  assert.doesNotMatch(markup, /inventory-global-view-button|Ver todos/);
   assert.match(globalStyles, /\.inventory-global-search\{display:flex;align-items:center;justify-content:center/);
 });
 

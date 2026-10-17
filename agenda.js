@@ -214,6 +214,7 @@
     dialog.innerHTML = `<div class="agenda-dialog" role="dialog" aria-modal="true" aria-label="Detalhes do agendamento"><div class="agenda-dialog-head"><h2>${safe(item.title)}</h2><button class="agenda-close" data-agenda-close aria-label="Fechar">×</button></div><div class="agenda-details"><div><span>Tipo</span><b>${item.kind === 'task' ? 'Tarefa' : 'Evento'}</b></div><div><span>Data e hora</span><b>${date}${item.time ? ` às ${safe(item.time)}` : ''}</b></div><div><span>Alerta</span><b>${reminderNames[item.reminder] || 'No horário'}</b></div><div><span>Nível</span><b>${priorityOf(item).label}</b></div>${item.notes ? `<div class="agenda-details-full"><span>Observações</span><b>${safe(item.notes)}</b></div>` : ''}</div><div class="agenda-actions">${canManageAgenda() ? `<button class="agenda-delete" data-agenda-delete>Excluir</button>` : ''}<button class="agenda-cancel" data-agenda-close>Fechar</button>${canManageAgenda() ? `<button class="agenda-save" data-agenda-edit-open="${item.id}">Editar</button>` : ''}</div></div>`;
     dialog.dataset.editId = item.id;
     document.body.appendChild(dialog);
+    window.AldeckotActionMenus?.enhance(dialog);
   }
 
   function closeModal() {

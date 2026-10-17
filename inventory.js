@@ -56,7 +56,7 @@
   let emptyPresentationCache;
   const branchModel = window.AldeckotInventoryBranches;
   const moduleRoute = new URLSearchParams(window.location.search);
-  let state = { active: moduleRoute.get('table'), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: !controlMode && !fluxMode && !moduleRoute.get('table'), tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  let state = { active: moduleRoute.get('table'), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: !moduleRoute.get('table'), tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
   const globalState = { view: 'recent', query: '', category: '', status: '', situation: '', order: 'recent', page: 1, pageSize: 25, overview: null, result: null, busy: false };
   let globalRequestSequence = 0;
   let globalSearchTimer;
@@ -373,7 +373,7 @@
     // Mantemos a seleção atual em atualizações, mas nunca escolhemos a primeira tabela automaticamente.
     if (state.active && !data.tables.some(table => table.id === state.active)) {
       state.active = null;
-      if (!controlMode && !fluxMode) state.sidebarOpen = true;
+      state.sidebarOpen = true;
     }
     if (state.branchId && !activeTable()?.branches?.some(branch => branch.id === state.branchId)) state.branchId = null;
     initialized = true;
@@ -389,8 +389,8 @@
 
   const activeTable = () => data.tables.find(table => table.id === state.active) || null;
   const imageCatalog = window.AldeckotInventoryImages;
-  const imageKey = imageCatalog.modelKey;
-  let sharedImageCatalog = imageCatalog.build();
+  const imageKey = imageCatalog?.modelKey || (() => '');
+  let sharedImageCatalog = imageCatalog?.build?.() || new Map();
   const signedImageUrls = new Map();
   let sharedImagesLoadedAt = 0;
   let sharedImagesRequest = null;
@@ -405,7 +405,7 @@
     }
   }
   async function applySharedImages() {
-    if (controlMode || fluxMode || !document.querySelector('[data-inv-image-key]')) return;
+    if (controlMode || fluxMode || !imageCatalog || !document.querySelector('[data-inv-image-key]')) return;
     if (sharedImagesRequest) return sharedImagesRequest.then(() => applySharedImages());
     sharedImagesRequest = (async () => {
       if (Date.now() - sharedImagesLoadedAt > 60000) {
@@ -526,28 +526,6 @@
     if (empty) empty.colSpan = Number(empty.colSpan || 7) + 1;
   }
 
-  function applyInventoryImageColumn(table) {
-    if (controlMode || fluxMode || !table) return;
-    const grid = document.querySelector('.inventory-data');
-    if (grid?.dataset.invStandardColumns) return;
-    const header = grid?.querySelector('thead tr');
-    if (!header || header.querySelector('[data-inv-image-column]')) return;
-    const imageHeader = document.createElement('th'); imageHeader.textContent = 'IMAGEM'; imageHeader.dataset.invImageColumn = 'true';
-    header.prepend(imageHeader);
-    const itemById = new Map(table.items.map(item => [item.id, item]));
-    for (const row of grid.querySelectorAll('tbody tr[data-inv-item]')) {
-      const item = itemById.get(row.dataset.invItem);
-      if (!item) continue;
-      const image = document.createElement('td'); image.className = 'inventory-image-cell';
-      const placeholder = document.createElement('span'); placeholder.className = 'inventory-image-placeholder'; placeholder.textContent = '◇';
-      const picture = document.createElement('img'); picture.alt = ''; picture.loading = 'eager'; picture.decoding = 'async'; picture.hidden = true;
-      picture.dataset.invImageKey = imageKey(branchModel.categoryForTable(table), item.brand, item.model);
-      image.append(placeholder, picture); row.prepend(image);
-    }
-    for (const row of grid.querySelectorAll('tbody tr:not([data-inv-item])')) row.cells[0].colSpan = header.cells.length;
-    void applySharedImages();
-  }
-
   function applyInventoryFilters() {
     const table = activeTable();
     if (!table) return;
@@ -557,7 +535,7 @@
       const lastPage = Math.max(1, Math.ceil(total / state.pageSize));
       const body = document.querySelector('.inventory-data tbody');
       if (body) body.innerHTML = shown.length ? shown.map(item => inventoryRowMarkup(table, item)).join('')
-        : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
+        : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
       let footer = document.querySelector('.inventory-pagination');
       if (!footer) {
         footer = document.createElement('footer');
@@ -565,7 +543,6 @@
         document.querySelector('.inventory-workspace')?.appendChild(footer);
       }
       footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, total)} de ${total} itens</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
-      void applySharedImages();
       return;
     }
     const scope = scopedItems(table);
@@ -576,8 +553,7 @@
     const shown = results.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
     if (!controlMode && !fluxMode) {
       const body = document.querySelector('.inventory-data tbody');
-      if (body) body.innerHTML = shown.length ? shown.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
-      void applySharedImages();
+      if (body) body.innerHTML = shown.length ? shown.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento corresponde aos filtros.</td></tr>';
     } else {
       const matchedIds = new Set(shown.map(item => item.id));
       document.querySelectorAll('.inventory-data tbody tr[data-inv-item]').forEach(row => {
@@ -668,7 +644,7 @@
     const table = data.tables.find(entry => entry.id === row.table_id)
       || { name: row.category, branches: [] };
     return inventoryRowMarkup(table, globalItemFromRow(row));
-  }).join('') || '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento encontrado.</td></tr>';
+  }).join('') || '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento encontrado.</td></tr>';
   function globalPaginationMarkup() {
     const total = Number(globalState.result?.total || 0);
     if (!globalListingActive()) return `<span>${(globalState.result?.items || []).length} equipamentos recentes · ${total} no Inventário</span>`;
@@ -680,9 +656,9 @@
     const options = (values, chosen) => values.map(value => `<option value="${escape(value)}" ${chosen === value ? 'selected' : ''}>${escape(value)}</option>`).join('');
     const availableStatuses = [...new Set([...statuses, ...(globalState.overview?.statuses || []).map(row => row.value)])];
     const availableSituations = [...new Set([...situations, ...(globalState.overview?.situations || []).map(row => row.value)])];
-    return `<section class="inventory-panel inventory-global-search"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-global-search value="${escape(globalState.query)}" placeholder="Buscar TAG, série, equipamento, categoria ou ramificação…" aria-label="Buscar em todo o Inventário" autocomplete="off"></div><button type="button" class="inventory-global-view-button" data-inv-global-view="${all ? 'recent' : 'all'}">${all ? 'Ver recentes' : 'Ver todos'}</button></section>
+    return `<section class="inventory-panel inventory-global-search"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-global-search value="${escape(globalState.query)}" placeholder="Buscar TAG, série, equipamento, categoria ou ramificação…" aria-label="Buscar em todo o Inventário" autocomplete="off"></div></section>
       ${all ? `<section class="inventory-panel inventory-global-filters"><select data-inv-global-category aria-label="Filtrar por categoria"><option value="">Todas as categorias</option>${data.tables.map(table => `<option value="${escape(table.id)}" ${globalState.category === table.id ? 'selected' : ''}>${escape(table.name)}</option>`).join('')}</select><select data-inv-global-status aria-label="Filtrar por status"><option value="">Todos os status</option>${options(availableStatuses, globalState.status)}</select><select data-inv-global-situation aria-label="Filtrar por situação"><option value="">Todas as situações</option>${options(availableSituations, globalState.situation)}</select><select data-inv-global-order aria-label="Ordenar equipamentos"><option value="recent" ${globalState.order === 'recent' ? 'selected' : ''}>Mais recentes</option><option value="oldest" ${globalState.order === 'oldest' ? 'selected' : ''}>Mais antigos</option><option value="name" ${globalState.order === 'name' ? 'selected' : ''}>Equipamento A–Z</option><option value="tag" ${globalState.order === 'tag' ? 'selected' : ''}>TAG A–Z</option></select></section>` : ''}
-      <section class="inventory-panel inventory-data-wrap inventory-global-data"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>IMAGEM</th><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${globalRowsMarkup()}</tbody></table></section>
+      <section class="inventory-panel inventory-data-wrap inventory-global-data"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${globalRowsMarkup()}</tbody></table></section>
       <footer class="inventory-panel inventory-pagination inventory-global-pagination">${globalPaginationMarkup()}</footer><span class="inventory-global-loading" role="status" ${globalState.busy ? '' : 'hidden'}>Atualizando consulta…</span>`;
   }
   function renderGlobalTable() {
@@ -693,7 +669,14 @@
     if (footer) footer.innerHTML = globalPaginationMarkup();
     const loading = document.querySelector('.inventory-global-loading');
     if (loading) loading.hidden = !globalState.busy;
-    void applySharedImages();
+  }
+  function renderModuleHomeRows() {
+    if (!(controlMode || fluxMode) || state.active) return;
+    const model = window.AldeckotModuleHome;
+    const body = document.querySelector('.inventory-module-data tbody');
+    if (body) body.innerHTML = model.rowsMarkup(data.tables, globalState, moduleConfig.key);
+    const footer = document.querySelector('.inventory-module-pagination');
+    if (footer) footer.innerHTML = model.paginationMarkup(data.tables, globalState, moduleConfig.name);
   }
   async function refreshGlobalPage() {
     if (state.active) return;
@@ -771,11 +754,12 @@
     const table = activeTable();
     const items = scopedItems(table);
     const globalHome = !controlMode && !fluxMode && !table;
+    const moduleHome = (controlMode || fluxMode) && !table;
     const emptyPresentation = emptyPresentationCache ||= emptyPresentationMarkup();
     $('#app').innerHTML = `<div class="inventory-shell">
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
-      <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-        ${table ? `<main class="inventory-workspace">${branchNavigationMarkup(table)}${controlMode || fluxMode ? tableMarkup(table, items) : inventoryTableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+      <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome || moduleHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
+        ${table ? `<main class="inventory-workspace">${controlMode || fluxMode ? `<nav class="inventory-branch-nav inventory-module-nav" aria-label="Navegação do ${moduleConfig.name}"><button type="button" class="inventory-global-back" data-inv-module-home>← ${moduleConfig.name}</button><span class="inventory-branch-name">${escape(table.name)}</span></nav>` : branchNavigationMarkup(table)}${controlMode || fluxMode ? tableMarkup(table, items) : inventoryTableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts">${chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses)}${chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
     const inventoryHeader = document.querySelector('.inventory-header');
     const previousHeading = inventoryHeader?.querySelector('.inventory-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = moduleHeaderSummaryMarkup();
@@ -840,9 +824,9 @@
     applyHeaderPresentation();
     ensureHeaderBrand();
     applyInventoryCleaningColumn(table);
-    applyInventoryImageColumn(table);
     ensureFilterEmptyRow(table);
     setupInventoryAddMenu(table);
+    window.AldeckotActionMenus?.enhance(document.querySelector('.inventory-shell'));
     if (table) applyInventoryFilters();
     else if (globalHome) void applySharedImages();
     if (table && !controlMode && !fluxMode) {
@@ -897,7 +881,6 @@
     workspace.innerHTML = branchNavigationMarkup(table) + inventoryTableMarkup(table, items);
     charts.innerHTML = chart('Status nesta página', items, 'status', statuses) + chart('Situação nesta página', items, 'situation', situations, 'situation-');
     applyInventoryCleaningColumn(table);
-    applyInventoryImageColumn(table);
     ensureFilterEmptyRow(table);
     setupInventoryAddMenu(table);
     applyInventoryFilters();
@@ -978,14 +961,13 @@
   }
 
   function inventoryRowMarkup(table, item) {
-    const image = escape(imageKey(branchModel.categoryForTable(table), item.brand, item.model));
     const changedAt = branchModel.lastChangedAt(item);
-    return `<tr data-inv-item="${escape(item.id)}"><td class="inventory-image-cell"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="" loading="eager" decoding="async" hidden></td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.sector || '—')}</td><td>${escape(item.location || '—')}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-situation ${className(item.cleaning || 'Não realizada')}">${escape(item.cleaning || 'Não realizada')}</span></td><td>${dateTimeValue(changedAt)}</td></tr>`;
+    return `<tr data-inv-item="${escape(item.id)}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.sector || '—')}</td><td>${escape(item.location || '—')}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-situation ${className(item.cleaning || 'Não realizada')}">${escape(item.cleaning || 'Não realizada')}</span></td><td>${dateTimeValue(changedAt)}</td></tr>`;
   }
 
   function inventoryTableMarkup(table, visible) {
     const initial = visible.slice(0, state.pageSize);
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, modelo, marca..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" type="button" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>IMAGEM</th><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${initial.length ? initial.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="11" class="inventory-empty-row">Nenhum equipamento nesta categoria.</td></tr>'}</tbody></table></section>`;
+    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, modelo, marca..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" type="button" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${initial.length ? initial.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento nesta categoria.</td></tr>'}</tbody></table></section>`;
   }
 
   function tableMarkup(table, visible) {
@@ -1008,6 +990,7 @@
     const node = document.createElement('div');
     node.className = 'inv-modal';
     node.innerHTML = `<div class="inv-dialog ${dialogClass}${glowClass}"${glowStyle}>${content}</div>`;
+    window.AldeckotActionMenus?.enhance(node);
     node.addEventListener('click', event => {
       if (event.target !== node) return;
       event.preventDefault();
@@ -1277,6 +1260,7 @@
     const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
+    mountSourcePhoto(node, item);
     applyStatusModalGlow(node, item.status);
   }
 
@@ -1286,6 +1270,7 @@
     const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid flux-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
+    mountSourcePhoto(node, item);
     if (item.situation === 'Aquisição' && canManage()) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -1306,6 +1291,54 @@
       }).catch(error => console.warn('Elegibilidade do estorno indisponível:', error));
     }
     applyStatusModalGlow(node, item.status);
+  }
+
+  function mountSourcePhoto(node, item) {
+    const service = window.AldeckotEquipmentImages;
+    const grid = node.querySelector('.inv-detail-grid');
+    if (!grid) return;
+    node.classList.add('inv-source-detail-dialog');
+    const fields = [...grid.children];
+    const section = (title, entries) => {
+      const wrapper = document.createElement('section');
+      wrapper.className = 'inv-equipment-section';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      const contents = document.createElement('div');
+      contents.className = 'inv-detail-grid';
+      contents.append(...entries);
+      wrapper.append(heading, contents);
+      return wrapper;
+    };
+    const top = document.createElement('div');
+    top.className = 'inv-source-layout';
+    const photo = document.createElement('section');
+    photo.className = 'inv-source-photo';
+    photo.innerHTML = `<div class="inv-source-photo-frame"><span class="inv-source-photo-placeholder" aria-hidden="true">◇</span><img alt="Imagem de ${escape(item.equipment)}" hidden></div><small class="inv-source-photo-caption">Buscando imagem vinculada à origem…</small>`;
+    const summary = section('Identificação', fields.slice(0, 6));
+    top.append(photo, summary);
+    const lower = controlMode
+      ? [section('Datas', fields.slice(6, 8)), section('Estado atual', fields.slice(8, 12)), section('Informações complementares', fields.slice(12))]
+      : [section('Movimentação', fields.slice(6, 14)), section('Estado atual', fields.slice(14, 17)), section('Informações complementares', fields.slice(17))];
+    grid.replaceWith(top, ...lower);
+    const caption = photo.querySelector('.inv-source-photo-caption');
+    if (!service?.sourceOf(item, moduleConfig.key)) {
+      caption.textContent = 'Nenhuma imagem vinculada a este equipamento.';
+      return;
+    }
+    service.urlForItem(item, moduleConfig.key).then(url => {
+      if (!photo.isConnected || node.dataset.itemId !== item.id) return;
+      const image = photo.querySelector('img');
+      const placeholder = photo.querySelector('.inv-source-photo-placeholder');
+      if (!url) { caption.textContent = 'Nenhuma imagem cadastrada na origem deste equipamento.'; return; }
+      image.onload = () => { image.hidden = false; placeholder.hidden = true; caption.hidden = true; };
+      image.onerror = () => { image.hidden = true; placeholder.hidden = false; caption.textContent = 'Não foi possível exibir a imagem agora.'; };
+      image.src = url;
+      if (image.complete && image.naturalWidth) image.onload();
+    }).catch(error => {
+      if (photo.isConnected) caption.textContent = 'Imagem temporariamente indisponível.';
+      console.warn('Imagem de origem indisponível:', error);
+    });
   }
 
   async function fluxReversalWizard(item) {
@@ -1895,15 +1928,16 @@
   document.addEventListener('click', async event => {
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
-    const globalView = event.target.closest('[data-inv-global-view]');
-    if (globalView && !controlMode && !fluxMode) {
-      globalState.view = globalView.dataset.invGlobalView;
-      globalState.query = ''; globalState.category = ''; globalState.status = '';
-      globalState.situation = ''; globalState.order = 'recent'; globalState.page = 1;
-      globalState.result = { items: globalState.overview?.recent || [], total: globalState.overview?.total || 0 };
-      renderInventory();
-      void refreshGlobalPage();
-      return;
+    const moduleHomeButton = event.target.closest('[data-inv-module-home]');
+    if (moduleHomeButton && (controlMode || fluxMode)) {
+      state.active = null; state.sidebarOpen = true; state.query = ''; state.status = ''; state.situation = '';
+      globalState.query = ''; globalState.view = 'recent'; globalState.page = 1;
+      renderInventory(); return;
+    }
+    const modulePage = event.target.closest('[data-inv-module-page]');
+    if (modulePage && !modulePage.disabled && (controlMode || fluxMode)) {
+      globalState.page = Number(modulePage.dataset.invModulePage);
+      renderModuleHomeRows(); return;
     }
     const globalPage = event.target.closest('[data-inv-global-page]');
     if (globalPage && !globalPage.disabled) {
@@ -1990,7 +2024,7 @@
         moduleApi().deleteTable(deleteTable.dataset.invDeleteTable).then(async () => {
           if (state.active === deleteTable.dataset.invDeleteTable) {
             state.active = null;
-            if (!controlMode && !fluxMode) state.sidebarOpen = true;
+            state.sidebarOpen = true;
           }
           await reloadInventory(); closeModal(); renderInventory();
         }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
@@ -2018,7 +2052,7 @@
         if (table && await window.AldeckotMessage.confirm(`Excluir a tabela “${table.name}” e todos os seus itens?`, { title: 'Excluir tabela', confirmText: 'Excluir' })) {
           moduleApi().deleteTable(table.id).then(async () => {
             state.active = null;
-            if (!controlMode && !fluxMode) state.sidebarOpen = true;
+            state.sidebarOpen = true;
             await reloadInventory(); renderInventory();
           }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
         }
@@ -2079,7 +2113,13 @@
     }
     const row = event.target.closest('[data-inv-item]'); if (row) {
       state.itemActionMenu = false;
-      if (!state.active && !controlMode && !fluxMode) {
+      if (!state.active && (controlMode || fluxMode)) {
+        const table = data.tables.find(entry => entry.id === row.dataset.invTableId);
+        const item = table?.items.find(entry => entry.id === row.dataset.invItem);
+        if (!item) return;
+        state.active = table.id; state.sidebarOpen = false;
+        renderInventory(); details(item);
+      } else if (!state.active && !controlMode && !fluxMode) {
         const found = (globalState.result?.items || []).find(item => item.id === row.dataset.invItem);
         if (!found) return;
         state.active = found.table_id;
@@ -2159,6 +2199,12 @@
     }
   }, true);
   document.addEventListener('input', event => {
+    if (event.target.matches('[data-inv-module-search]') && (controlMode || fluxMode)) {
+      globalState.query = event.target.value.slice(0, 100);
+      globalState.page = 1;
+      renderModuleHomeRows();
+      return;
+    }
     if (event.target.matches('[data-inv-global-search]')) {
       globalState.query = event.target.value.slice(0, 100);
       globalState.page = 1;

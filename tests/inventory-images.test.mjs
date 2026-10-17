@@ -64,9 +64,9 @@ test('foto do modal ocupa uma área única sem placeholder sobreposto e campos c
   assert.doesNotMatch(branchStyles, /\.inv-equipment-section \.inv-detail\{[^}]*font-size:/);
 });
 
-test('miniaturas ocultas iniciam o carregamento e o modal não espera URLs em série', () => {
-  assert.match(branchStyles, /\.inventory-image-cell \.inventory-image-placeholder\[hidden\]\{display:none\}/);
-  assert.match(view, /data-inv-image-key="\$\{image\}" alt="" loading="eager" decoding="async" hidden/);
+test('imagem carrega apenas nos detalhes sem esperar URLs em série', () => {
+  assert.match(view, /inv-equipment-image[^`]*data-inv-image-key="\$\{image\}"/);
+  assert.doesNotMatch(view.split('function inventoryRowMarkup(table, item) {')[1]?.split('function inventoryTableMarkup(table, visible) {')[0], /data-inv-image-key/);
   assert.match(view, /await Promise\.all\(\[\.\.\.document\.querySelectorAll\('\[data-inv-image-key\]'\)\]\.map\(async node =>/);
   assert.match(view, /if \(node\.complete && node\.naturalWidth\) node\.onload\(\)/);
   assert.doesNotMatch(view, /sharedImagesLoadedAt = Date\.now\(\);\s*signedImageUrls\.clear\(\)/);
