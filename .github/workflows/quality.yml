@@ -20,7 +20,7 @@ jobs:
       - name: Preparar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Validar código e migrações
         run: npm run verify
@@ -35,4 +35,29 @@ jobs:
             npm run check:version -- --base HEAD^
           fi
       - name: Conferir sequência das migrações
-        run: npm run check:migrations
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            npm run check:migrations -- --base "origin/$BASE_REF"
+          else
+            npm run check:migrations -- --base HEAD^
+          fi
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Testar entrada e proteção dos módulos no navegador
+        run: npm run test:e2e

@@ -80,7 +80,7 @@
     { type: 'Gaveta', pattern: /^GVT[0-9]+$/ },
     { type: 'Pin Pad', pattern: /^PP[0-9]+$/ },
     { type: 'Balança', pattern: /^BAL[0-9]+$/ },
-    { type: 'Monitor', pattern: /^MON[0-9]+$/ },
+    { type: 'Monitor', pattern: /^(?:AJMON|MON)[0-9]+$/ },
     { type: 'Teclado', pattern: /^TEC[0-9]+$/ }
   ];
   const inventoryPeripheralAssignment = item => {
@@ -92,47 +92,8 @@
     if (!location) return { state: 'no-location', type: rule.type, tag };
     return { state: 'ready', type: rule.type, tag, location };
   };
-  const samePeripheralType = (peripheral, type) => normalizedText(peripheral?.type || peripheral?.tipo) === normalizedText(type);
-  const syncDescription = (assignment, action) => action === 'removed'
-    ? `Sincronização do Inventário — ${assignment.type} removido: ${assignment.tag}.`
-    : `Sincronização do Inventário — ${assignment.type} atualizado com a TAG ${assignment.tag}.`;
-  const appendPeripheralSyncLog = (payload, assignment, itemId, action) => {
-    const at = new Date().toISOString();
-    const text = syncDescription(assignment, action);
-    const logs = Array.isArray(payload?.logs) ? payload.logs : [];
-    return {
-      ...payload,
-      logs: [{ id: `inventory-peripheral-${itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at, text, sourceModule: 'inventory', sourceItemId: String(itemId) }, ...logs],
-      lastActivity: text
-    };
-  };
-  const assignManagementPeripheral = (payload, assignment, itemId) => {
-    const current = Array.isArray(payload?.peripherals) ? payload.peripherals : [];
-    let changed = false;
-    let found = false;
-    const peripherals = current.map(peripheral => {
-      if (!samePeripheralType(peripheral, assignment.type)) return peripheral;
-      found = true;
-      const next = { ...peripheral, type: peripheral.type || peripheral.tipo || assignment.type, status: assignment.tag, sourceModule: 'inventory', sourceItemId: String(itemId) };
-      if (String(peripheral.status || '').trim() !== assignment.tag || peripheral.sourceModule !== 'inventory' || String(peripheral.sourceItemId || '') !== String(itemId) || !peripheral.type) changed = true;
-      return next;
-    });
-    if (!found) {
-      peripherals.push({ id: `inventory-peripheral-${itemId}-${normalizedText(assignment.type).replace(/\s+/g, '-')}`, type: assignment.type, status: assignment.tag, sourceModule: 'inventory', sourceItemId: String(itemId) });
-      changed = true;
-    }
-    return changed ? appendPeripheralSyncLog({ ...(payload || {}), peripherals }, assignment, itemId, 'updated') : null;
-  };
-  const clearManagementPeripheral = (payload, assignment, itemId) => {
-    const current = Array.isArray(payload?.peripherals) ? payload.peripherals : [];
-    const peripherals = current.filter(peripheral => {
-      const linkedSource = String(peripheral?.sourceItemId || '') === String(itemId);
-      const matchingTag = String(peripheral?.status || '').trim().toUpperCase() === assignment.tag;
-      return !(samePeripheralType(peripheral, assignment.type) && (linkedSource || matchingTag));
-    });
-    if (peripherals.length === current.length) return null;
-    return appendPeripheralSyncLog({ ...(payload || {}), peripherals }, assignment, itemId, 'removed');
-  };
+  const isPdvLocation = value => /^PDV\s+[0-9]+$/i.test(String(value || '').trim());
+  // A associação patrimonial é feita apenas pelos gatilhos transacionais do banco.
   const dateLabel = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const activityPage = module => ({ inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html', nfe: 'nfe.html' })[module] || '';
   const activityTarget = (module, tableId, itemId, operation) => {
@@ -189,7 +150,7 @@
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.inventory_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message, sourceModule: log.source_module || '', sourceLogId: log.source_log_id || '' }))
+      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message, eventId: log.event_id || '', sourceModule: log.source_module || '', sourceLogId: log.source_log_id || '' }))
   });
 
   async function init() {
@@ -216,6 +177,26 @@
   let inventoryBranchSchema = null;
   let inventorySharingSchema = null;
   const inventory = {
+    async peripheralInstallation(itemId) {
+      await init();
+      const tables = check(await client.from('module_tables').select('id').eq('module', 'management'));
+      if (!tables.length) return null;
+      const records = check(await client.from('module_records')
+        .select('id, payload, management_computer_id')
+        .in('table_id', tables.map(table => table.id)));
+      const matches = records.filter(record => Array.isArray(record.payload?.peripherals)
+        && record.payload.peripherals.some(peripheral => peripheral.sourceModule === 'inventory'
+          && String(peripheral.sourceItemId || '') === String(itemId)));
+      if (matches.length > 1) throw new Error('Este periférico aparece em mais de uma posição da Gestão TI.');
+      if (!matches.length) return null;
+      const record = matches[0];
+      return {
+        positionId: record.id,
+        terminal: String(record.payload?.terminal || '').trim(),
+        computer: record.management_computer_id ? String(record.payload?.equipment || '').trim() : '',
+        computerTag: record.management_computer_id ? String(record.payload?.tag || '').trim() : ''
+      };
+    },
     async replaceEquipment(values) {
       await init();
       return check(await client.rpc('inventory_replace_equipment', values));
@@ -265,7 +246,7 @@
       const itemColumns = `id, equipment, model, brand, serial, tag, sector, location, status, situation, cleaning_type, notes, position, created_at, updated_at${inventoryBranchSchema ? ', branch_id' : ''}`;
       let query = client
         .from('module_tables')
-        .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at, source_module, source_log_id))`)
+        .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at, event_id, source_module, source_log_id))`)
         .eq('module', 'inventory');
       if (tableId) query = query.eq('id', tableId);
       let response = await query
@@ -274,7 +255,7 @@
       if (response.error && /source_module|source_log_id/i.test(response.error.message || '')) {
         let fallback = client
           .from('module_tables')
-          .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at))`)
+          .select(`id, name, icon, position, created_at, inventory_items(${itemColumns}, inventory_item_logs(id, message, created_at, event_id))`)
           .eq('module', 'inventory');
         if (tableId) fallback = fallback.eq('id', tableId);
         response = await fallback
@@ -357,10 +338,10 @@
       if (!ids.length) return { ...page, items: [] };
       const columns = 'id,equipment,model,brand,serial,tag,sector,location,status,situation,cleaning_type,notes,position,created_at,updated_at,branch_id';
       let response = await client.from('inventory_items')
-        .select(`${columns},inventory_item_logs(id,message,created_at,source_module,source_log_id)`).in('id', ids);
+        .select(`${columns},inventory_item_logs(id,message,created_at,event_id,source_module,source_log_id)`).in('id', ids);
       if (response.error && /source_module|source_log_id/i.test(response.error.message || '')) {
         response = await client.from('inventory_items')
-          .select(`${columns},inventory_item_logs(id,message,created_at)`).in('id', ids);
+          .select(`${columns},inventory_item_logs(id,message,created_at,event_id)`).in('id', ids);
       }
       const itemsById = new Map(check(response).map(row => [row.id, row]));
       const memberships = check(await client.from('inventory_branch_memberships')
@@ -402,13 +383,23 @@
       await init();
       return check(await client.rpc('inventory_branch_delete', { p_branch_id: id }));
     },
-    async swapLocations(first, second, operationId, expected) {
+    async swapLocations(first, second, operationId, expected, reason) {
       await init();
-      return check(await client.rpc('inventory_swap_locations', {
+      const args = {
         p_first: first, p_second: second, p_operation_id: operationId,
         p_first_sector: expected.first.sector, p_first_location: expected.first.location,
         p_second_sector: expected.second.sector, p_second_location: expected.second.location
-      }));
+      };
+      const result = await client.rpc('inventory_swap_locations_with_reason', {
+        ...args, p_reason: reason
+      });
+      if (result.error?.code === 'PGRST202') {
+        // A 090 ainda é um rascunho: não remove a função existente na produção.
+        check(await client.rpc('inventory_swap_locations', args));
+        return { legacy: true };
+      }
+      check(result);
+      return { legacy: false };
     },
 
     async updateTable(id, values) {
@@ -440,7 +431,7 @@
       ));
     },
 
-    async saveItem(tableId, values, existingId, logMessage) {
+    async saveItem(tableId, values, existingId, logMessage, movementContext = null) {
       await init();
       const payload = {
         table_id: tableId,
@@ -458,16 +449,40 @@
       if (!existingId || hasOwn(values, 'serial')) payload.serial = values.serial || '';
       if (!existingId || hasOwn(values, 'tag')) payload.tag = values.tag || '';
       if (inventoryBranchSchema && hasOwn(values, 'branchId')) payload.branch_id = values.branchId || null;
-      const result = existingId
-        ? await client.from('inventory_items').update(payload).eq('id', existingId).select().single()
-        : await client.from('inventory_items').insert(payload).select().single();
+      let movementRecorded = false;
+      let result;
+      const peripheralTag = String(values.tag || movementContext?.previousTag || '').trim().toUpperCase();
+      const peripheralMovement = existingId && movementContext
+        && managementPeripheralRules.some(rule => rule.pattern.test(peripheralTag))
+        && (isPdvLocation(movementContext.previousLocation) || isPdvLocation(payload.location));
+      if (peripheralMovement) {
+        result = await client.rpc('inventory_save_pdv_peripheral', {
+          p_item_id: existingId, p_values: payload,
+          p_expected_updated_at: movementContext.expectedUpdatedAt,
+          p_reason: movementContext.reason,
+          p_operation_id: movementContext.operationId
+        });
+        if (result.error?.code === 'PGRST202') {
+          // Compatibilidade até a 090 ser autorizada e aplicada na base.
+          result = await client.from('inventory_items').update(payload).eq('id', existingId).select().single();
+        } else {
+          movementRecorded = !result.error;
+        }
+      } else {
+        result = existingId
+          ? await client.from('inventory_items').update(payload).eq('id', existingId).select().single()
+          : await client.from('inventory_items').insert(payload).select().single();
+      }
       const saved = check(result);
-      check(await client.from('inventory_item_logs').insert({
-        inventory_item_id: saved.id,
-        action: existingId ? 'update' : 'create',
-        message: logMessage || (existingId ? 'Equipamento atualizado.' : 'Equipamento adicionado ao inventário.')
-      }));
-      await this.moveTableToTop(tableId);
+      if (!movementRecorded) {
+        check(await client.from('inventory_item_logs').insert({
+          inventory_item_id: saved.id,
+          action: existingId ? 'update' : 'create',
+          message: logMessage || (existingId ? 'Equipamento atualizado.' : 'Equipamento adicionado ao inventário.')
+        }));
+      }
+      try { await this.moveTableToTop(tableId); }
+      catch (error) { console.warn('Equipamento salvo; não foi possível reordenar a categoria.', error); }
       await recordItemActivity({
         module: 'inventory',
         itemId: saved.id,
@@ -477,37 +492,13 @@
       return saved;
     },
 
-    async syncManagementPeripheral(item, previous = null) {
+    async syncManagementPeripheral(item) {
       await init();
       const nextAssignment = inventoryPeripheralAssignment(item);
-      const previousAssignment = previous ? inventoryPeripheralAssignment(previous) : null;
-      const shouldClearPrevious = previousAssignment?.state === 'ready' && (
-        nextAssignment.state !== 'ready' ||
-        normalizedText(previousAssignment.location) !== normalizedText(nextAssignment.location) ||
-        previousAssignment.type !== nextAssignment.type
-      );
-      if (nextAssignment.state !== 'ready' && !shouldClearPrevious) return nextAssignment;
-
-      const managementTables = check(await client.from('module_tables').select('id').eq('module', 'management'));
-      if (!managementTables.length) return { ...nextAssignment, state: 'target-not-found', matched: 0, updated: 0 };
-      const records = check(await client.from('module_records').select('id, payload').in('table_id', managementTables.map(table => table.id)));
-      let matched = 0;
-      let updated = 0;
-      for (const record of records) {
-        const computerName = String(record.payload?.equipment || '').trim();
-        const matchesPrevious = shouldClearPrevious && normalizedText(computerName) === normalizedText(previousAssignment.location);
-        const matchesNext = nextAssignment.state === 'ready' && normalizedText(computerName) === normalizedText(nextAssignment.location);
-        if (!matchesPrevious && !matchesNext) continue;
-        matched += 1;
-        let nextPayload = record.payload || {};
-        if (matchesPrevious) nextPayload = clearManagementPeripheral(nextPayload, previousAssignment, item.id) || nextPayload;
-        if (matchesNext) nextPayload = assignManagementPeripheral(nextPayload, nextAssignment, item.id) || nextPayload;
-        if (nextPayload === record.payload) continue;
-        check(await client.from('module_records').update({ payload: nextPayload }).eq('id', record.id).select('id'));
-        updated += 1;
-      }
-      if (nextAssignment.state !== 'ready') return { ...nextAssignment, state: shouldClearPrevious ? 'cleared' : nextAssignment.state, matched, updated };
-      return { ...nextAssignment, state: matched ? (updated ? 'updated' : 'already-synced') : 'target-not-found', matched, updated };
+      // O gatilho do Inventário grava o vínculo no registro da posição.
+      // Resolver novamente pelo nome do PC após o commit faria o periférico
+      // acompanhá-lo indevidamente em uma transferência.
+      return { ...nextAssignment, state: 'server-managed' };
     },
 
     async addLog(itemId, message) {
@@ -869,6 +860,7 @@
     const metrics = payload.monitoring && typeof payload.monitoring === 'object' ? payload.monitoring : {};
     return {
       id: row.id,
+      computerId: row.management_computer_id || '',
       tableId: row.table_id,
       terminal: payload.terminal || '',
       equipment: payload.equipment || payload.name || '',
@@ -876,7 +868,7 @@
       tag: payload.tag || '', brand: payload.brand || '', model: payload.model || '', serial: payload.serial || '',
       ip: payload.ip || '', gateway: payload.gateway || payload.gatway || '', subnetMask: payload.subnetMask || payload.mask || payload.mascara || '', hostname: payload.hostname || '', operatingSystem: payload.operatingSystem || '', osVersion: payload.osVersion || '',
       processor: payload.processor || '', memory: payload.memory || '', storage: payload.storage || '',
-      type: payload.type || 'Escritório', company: payload.company || '', sector: payload.sector || '', location: payload.location || '',
+      type: payload.type || 'Escritório', category: payload.category || (payload.equipment ? 'Computador' : ''), company: payload.company || '', sector: payload.sector || '', location: payload.location || '',
       responsible: payload.responsible || '', user: payload.user || '', notes: payload.notes || '', status: payload.status || 'Ativo', priority: payload.priority || 'Estável',
       situation: payload.situation || 'Em Uso', cleaning: payload.cleaning || 'Preventiva', area: payload.area || 'Escritório',
       isFixed: Boolean(payload.isFixed), peripherals, monitoring: {
@@ -888,6 +880,7 @@
         id: log.id || `${row.id}-${index}`,
         at: log.at || log.createdAt || log.timestamp || row.updated_at || row.created_at,
         text: log.text || log.action || 'Registro atualizado.',
+        eventId: log.eventId || '',
         sourceModule: log.sourceModule || (log.controlLogId ? 'control' : ''),
         sourceLogId: log.sourceLogId || log.controlLogId || ''
       })).sort((first, second) => String(second.at).localeCompare(String(first.at)))
@@ -899,7 +892,7 @@
     imagePath: String(item.imagePath || '').trim(),
     ip: String(item.ip || '').trim(), gateway: String(item.gateway || '').trim(), subnetMask: String(item.subnetMask || '').trim(), hostname: String(item.hostname || '').trim(), operatingSystem: String(item.operatingSystem || '').trim(), osVersion: String(item.osVersion || '').trim(),
     processor: String(item.processor || '').trim(), memory: String(item.memory || '').trim(), storage: String(item.storage || '').trim(),
-    type: item.type || 'Escritório', company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
+    type: item.type || 'Escritório', category: String(item.category || '').trim(), company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
     responsible: String(item.responsible || '').trim(), user: String(item.user || '').trim(), notes: String(item.notes || '').trim(), status: item.status || 'Ativo', priority: item.priority || 'Estável',
     situation: item.situation || 'Em Uso', cleaning: item.cleaning || 'Preventiva', area: item.area || 'Escritório', isFixed: Boolean(item.isFixed),
     peripherals: Array.isArray(item.peripherals) ? item.peripherals : [], monitoring: item.monitoring || {}, registeredAt: item.registeredAt || new Date().toISOString().slice(0, 10),
@@ -920,7 +913,7 @@
 
     async load() {
       const table = await this.ensureTable();
-      const rows = check(await client.from('module_records').select('id, table_id, payload, position, created_at, updated_at').eq('table_id', table.id).order('position', { ascending: true }).order('updated_at', { ascending: false }));
+      const rows = check(await client.from('module_records').select('*').eq('table_id', table.id).order('position', { ascending: true }).order('updated_at', { ascending: false }));
       return {
         table,
         items: withoutDuplicateItems(
@@ -949,11 +942,11 @@
       let result;
       if (existingId) {
         // Um terminal fixo nunca muda de posição ao receber manutenção ou uma edição.
-        result = await client.from('module_records').update({ payload }).eq('id', existingId).select('id, table_id, payload, position, created_at, updated_at').single();
+        result = await client.from('module_records').update({ payload }).eq('id', existingId).select('*').single();
       } else {
         const rows = check(await client.from('module_records').select('position').eq('table_id', table.id).order('position', { ascending: false }).limit(1));
         const position = Number(rows[0]?.position || 0) + 1;
-        result = await client.from('module_records').insert({ table_id: table.id, payload, position }).select('id, table_id, payload, position, created_at, updated_at').single();
+        result = await client.from('module_records').insert({ table_id: table.id, payload, position }).select('*').single();
       }
       const saved = check(result);
       return managementItemFromRow(saved);
@@ -965,7 +958,7 @@
         fail('Escolha um PNG, JPG ou WebP válido de até 5 MB.');
       const table = await this.ensureTable();
       const record = check(await client.from('module_records')
-        .select('id,table_id,payload,position,created_at,updated_at').eq('id', id).maybeSingle());
+        .select('*').eq('id', id).maybeSingle());
       if (!record || record.table_id !== table.id || !String(record.payload?.equipment || '').trim())
         fail('Este terminal não possui um computador válido para receber a imagem.');
       if (['equipment', 'tag', 'serial'].some(key => String(record.payload?.[key] || '').trim() !== String(expected[key] || '').trim()))
@@ -983,7 +976,7 @@
         logs: [...(Array.isArray(record.payload?.logs) ? record.payload.logs : []), log],
         lastActivity: log.text
       } }).eq('id', id).eq('updated_at', record.updated_at)
-        .select('id,table_id,payload,position,created_at,updated_at').maybeSingle();
+        .select('*').maybeSingle();
       if (updated.error || !updated.data) {
         await client.storage.from('supply-images').remove([path]).catch(() => {});
         if (updated.error) throw updated.error;
@@ -992,28 +985,36 @@
       return managementItemFromRow(updated.data);
     },
 
-    async transfer(sourceId, destinationId) {
+    async moveComputer(operationId, plan) {
       await init();
-      if (!sourceId || !destinationId || sourceId === destinationId) fail('Selecione um terminal de destino diferente.');
-      check(await client.rpc('management_transfer_terminal', {
-        p_source_id: sourceId,
-        p_destination_id: destinationId
+      if (!operationId || !plan || typeof plan !== 'object')
+        fail('A movimentação precisa de identificação e confirmação completas.');
+      const result = check(await client.rpc('management_move_computer', {
+        p_operation_id: operationId,
+        p_plan: plan
       }));
-      return this.load();
+      return { result, ...(await this.load()) };
+    },
+
+    async movementHistory({ computerId = null, positionId = null } = {}) {
+      await init();
+      if (!computerId && !positionId) return [];
+      return check(await client.rpc('management_movement_history', {
+        p_computer_id: computerId,
+        p_position_id: positionId
+      }));
+    },
+
+    async transfer() {
+      fail('Transferência antiga desativada. Use a nova movimentação confirmada de computadores.');
     },
 
     async replaceAll(items) {
-      const table = await this.ensureTable();
-      const current = check(await client.from('module_records').select('id').eq('table_id', table.id));
-      if (current.length) check(await client.from('module_records').delete().in('id', current.map(row => row.id)));
-      const normalized = (Array.isArray(items) ? items : []).map((item, position) => ({
-        table_id: table.id,
-        position,
-        payload: managementRecordPayload(item, 'Equipamento restaurado a partir de backup da Gestão TI.')
-      }));
-      if (normalized.length) check(await client.from('module_records').insert(normalized));
-      await events.record('management', 'restore', { tableId: table.id, tableName: table.name, description: 'Backup da Gestão TI restaurado.' });
-      return this.load();
+      // A migração 087 dá identidade própria aos PCs. O método antigo apaga
+      // posições, periféricos e vínculos antes de recriá-los em outra chamada.
+      // Só uma RPC transacional, validada contra o backup, pode substituí-lo.
+      void items;
+      fail('Restauração da Gestão TI temporariamente indisponível. O backup foi preservado; nenhuma informação foi alterada.');
     },
 
     async remove(id) {

@@ -1,0 +1,531 @@
+.management-transfer-dialog {
+  width: min(680px, 100%);
+}
+
+.management-transfer-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.management-transfer-modes,
+.management-transfer-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.management-transfer-modes button,
+.management-transfer-fields label,
+.management-transfer-reason,
+.management-transfer-review,
+.management-transfer-confirm {
+  border: 1px solid #5e90ae88;
+  border-radius: 10px;
+  background: #0a2237cf;
+  color: #e8f7ff;
+}
+
+.management-transfer-modes button {
+  min-height: 46px;
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.management-transfer-modes button:not(:disabled):hover,
+.management-transfer-modes button:not(:disabled):focus-visible {
+  border-color: #55e7cb;
+  background: #124a55;
+  outline: none;
+}
+
+.management-transfer-fields h3 {
+  margin: 5px 0 0;
+  color: #eefaff;
+  font-size: 13px;
+}
+
+.management-transfer-fields label,
+.management-transfer-reason {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.management-transfer-fields input,
+.management-transfer-fields select,
+.management-transfer-reason textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #72a2be99;
+  border-radius: 7px;
+  background: #061827;
+  color: #f4fbff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.management-transfer-reason textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.management-transfer-review {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.management-transfer-review p {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 11px;
+}
+
+.management-transfer-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.management-transfer-confirm input {
+  margin-top: 2px;
+  accent-color: #45dfb7;
+}
+
+.theme-light .management-transfer-modes button,
+.theme-light .management-transfer-fields label,
+.theme-light .management-transfer-reason,
+.theme-light .management-transfer-review,
+.theme-light .management-transfer-confirm {
+  border-color: #89adc4;
+  background: #eef8fc;
+  color: #173b57;
+}
+
+.theme-light .management-transfer-fields input,
+.theme-light .management-transfer-fields select,
+.theme-light .management-transfer-reason textarea {
+  border-color: #91b5c9;
+  background: #fff;
+  color: #173b57;
+}
+
+.theme-light .management-transfer-fields h3 { color: #173b57; }
+
+/* Assistente de movimentação: cartões amplos e seleção visual, sem alterar a RPC. */
+body.management-open .management-transfer-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, calc(100vw - 28px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid #078dff !important;
+  border-radius: 24px;
+  background: radial-gradient(circle at 50% 0%, #0c3972 0, #071d40 30%, #06152d 74%) !important;
+  box-shadow: 0 0 28px #007eff59, 0 28px 70px #000d !important;
+  color: #f1f8ff;
+}
+body.management-open .management-transfer-step-2 {
+  width: min(1450px, calc(100vw - 24px));
+  height: min(830px, calc(100dvh - 24px));
+}
+body.management-open .management-transfer-dialog::before { display: none; }
+.management-transfer-dialog svg:not(.management-asset-workstation-art) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.management-transfer-dialog .management-asset-workstation-art .art-shadow { fill: #0215298f; stroke: none; }
+.management-transfer-dialog .management-asset-workstation-art .art-tower { fill: url(#managementArtTower); stroke: #7bc8ff; stroke-width: 1.2; }
+.management-transfer-dialog .management-asset-workstation-art .art-tower-line { fill: none; stroke: #abdfff; stroke-width: 1.5; }
+.management-transfer-dialog .management-asset-workstation-art .art-led { fill: #4ce3b3; stroke: #ccfff0; stroke-width: .8; }
+.management-transfer-dialog .management-asset-workstation-art .art-monitor-frame { fill: url(#managementArtFrame); stroke: #c3edff; stroke-width: 1.2; }
+.management-transfer-dialog .management-asset-workstation-art .art-screen { fill: url(#managementArtScreen); stroke: #0b315f; stroke-width: 1; }
+.management-transfer-dialog .management-asset-workstation-art .art-screen-glint { fill: #d9faff24; stroke: none; }
+.management-transfer-dialog .management-asset-workstation-art .art-window { fill: #d8f5ff; stroke: #e8ffff; stroke-width: .4; }
+.management-transfer-dialog .management-asset-workstation-art .art-neck,
+.management-transfer-dialog .management-asset-workstation-art .art-base { fill: #8cc9eb; stroke: #c3edff; stroke-width: .8; }
+.management-transfer-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  flex: 0 0 auto;
+  min-height: 148px;
+  padding: 26px 78px 21px 36px;
+  border-bottom: 1px solid #1a5da56b;
+  background: linear-gradient(100deg, #082758a3, #04142b4d);
+}
+.management-transfer-header-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 100px;
+  height: 82px;
+  color: #67d9ff;
+  filter: drop-shadow(0 0 12px #009dff9c);
+}
+.management-transfer-glyph { display: flex; align-items: center; gap: 0; }
+.management-transfer-glyph svg:nth-child(2) { margin: -18px -3px 0; color: #00baff; }
+.management-transfer-glyph svg:last-child { margin-top: 21px; color: #95c6ff; }
+.management-transfer-header-copy { position: relative; z-index: 1; min-width: 0; }
+.management-transfer-step-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #4bb7ff;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.management-transfer-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(25px, 3vw, 42px);
+  font-weight: 850;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+  text-shadow: 0 2px 14px #0008;
+}
+.management-transfer-header p {
+  margin: 11px 0 0;
+  color: #b6d9ff;
+  font-size: clamp(14px, 1.65vw, 21px);
+  line-height: 1.35;
+}
+.management-transfer-header small {
+  display: block;
+  margin-top: 8px;
+  color: #95bddf;
+  font-size: clamp(12px, 1.15vw, 15px);
+  line-height: 1.4;
+}
+.management-transfer-header-art {
+  position: absolute;
+  right: 103px;
+  bottom: 4px;
+  width: 150px;
+  opacity: .78;
+  filter: drop-shadow(0 0 24px #007aff9e);
+  pointer-events: none;
+}
+.management-transfer-header-art svg { width: 100%; height: auto; }
+.management-transfer-close.management-modal-action {
+  position: absolute;
+  top: 23px;
+  right: 26px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #3479be;
+  border-radius: 12px;
+  background: #0a2a52;
+  color: #8fbcf8;
+}
+.management-transfer-close.management-modal-action:hover,
+.management-transfer-close.management-modal-action:focus-visible { border-color: #39baff; color: #fff; }
+.management-transfer-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  margin: 0;
+}
+.management-transfer-modes {
+  gap: 14px;
+  padding: 25px 30px 30px;
+  overflow-y: auto;
+}
+.management-transfer-modes button {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 20px;
+  min-height: 104px;
+  padding: 16px 22px;
+  border: 2px solid #285487;
+  border-radius: 17px;
+  background: linear-gradient(110deg, #0c2b57, #071e42);
+  box-shadow: inset 0 1px #ffffff10;
+  color: #f5faff;
+  transition: border-color .16s, box-shadow .16s, transform .16s;
+}
+.management-transfer-modes button:not(:disabled):hover,
+.management-transfer-modes button:not(:disabled):focus-visible {
+  border-color: #049aff;
+  background: linear-gradient(110deg, #0a3670, #08234c);
+  box-shadow: inset 0 0 22px #007eff29, 0 0 15px #007eff50;
+  transform: translateY(-1px);
+}
+.management-transfer-modes button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.management-transfer-mode-icon {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 25%, #187ee8, #0c367e);
+  color: #d7f2ff;
+  box-shadow: 0 0 20px #0078ff55;
+}
+.management-transfer-mode-icon.be-replaced { background: radial-gradient(circle at 35% 25%, #20558b, #15375e); }
+.management-transfer-mode-icon.direct { background: radial-gradient(circle at 35% 25%, #6247af, #29206c); color: #c29cff; }
+.management-transfer-mode-copy { display: grid; gap: 7px; }
+.management-transfer-mode-copy b { color: #fff; font-size: clamp(17px, 2vw, 23px); line-height: 1.18; }
+.management-transfer-mode-copy small { max-width: 700px; color: #bad4f5; font-size: clamp(12px, 1.35vw, 16px); font-weight: 500; line-height: 1.4; }
+.management-transfer-mode-indicator {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid #517da9;
+  border-radius: 50%;
+  color: #6fc6ff;
+}
+.management-transfer-mode-indicator svg { transform: rotate(-90deg); }
+.management-transfer-footer.management-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  min-height: 72px;
+  margin: 0;
+  padding: 12px 30px;
+  border-top: 1px solid #1c4d83;
+  background: #071a34d9;
+}
+.management-transfer-footer-actions { display: flex; justify-content: flex-end; gap: 10px; margin-left: auto; }
+.management-transfer-footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 19px;
+  border-radius: 11px;
+  font-size: 13px;
+}
+.management-transfer-footer .management-form-save { background: linear-gradient(120deg, #006ce8, #178eff); border-color: #259cff; }
+.management-transfer-footer .management-form-save:disabled { opacity: .48; cursor: not-allowed; filter: grayscale(.3); }
+.management-transfer-result-count { color: #8ac7f3; font-size: 13px; }
+.management-transfer-flow-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  margin: 0 28px 16px;
+  padding: 12px 18px;
+  border: 1px solid #0965b4;
+  border-radius: 14px;
+  background: #05244db8;
+}
+.management-transfer-flow-summary > div { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.management-transfer-flow-summary > div:last-child { padding-left: 16px; border-left: 1px solid #2771b4; }
+.management-transfer-flow-summary > div > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.management-transfer-flow-summary small { color: #85ceff; font-size: 12px; font-weight: 750; }
+.management-transfer-flow-summary strong { overflow: hidden; color: #eaf7ff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.management-transfer-flow-summary em { color: #9cbedc; font-size: 11px; font-style: normal; }
+.management-transfer-summary-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: #0751a7;
+  color: #83d8ff;
+}
+.management-transfer-summary-arrow { color: #3cbcff; font-size: 27px; }
+.management-transfer-browser {
+  display: grid;
+  grid-template-columns: 245px minmax(0, 1fr);
+  gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 28px 14px;
+}
+.management-transfer-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 13px;
+  border: 1px solid #154f8f;
+  border-radius: 14px;
+  background: #041731bd;
+}
+.management-transfer-search { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 1px solid #1572c4; border-radius: 9px; color: #71c9ff; }
+.management-transfer-search:focus-within { border-color: #35bfff; box-shadow: 0 0 0 3px #068fff28; }
+.management-transfer-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #e9f7ff; font: inherit; font-size: 12px; }
+.management-transfer-search input::placeholder { color: #84a9c9; }
+.management-transfer-filters { display: grid; gap: 4px; margin-top: 15px; }
+.management-transfer-filters button {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 37px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8d6ff;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.management-transfer-filters button b { min-width: 25px; padding: 3px 6px; border-radius: 99px; background: #07396b; color: #acdfff; text-align: center; font-size: 11px; }
+.management-transfer-filters button:hover,
+.management-transfer-filters button:focus-visible,
+.management-transfer-filters button[aria-pressed="true"] { border-color: #0a89ff; background: #063d83; color: #fff; outline: 0; }
+.management-transfer-filters button[aria-pressed="true"] b { background: #087cff; color: #fff; }
+.management-transfer-extra-filters { display: grid; gap: 10px; margin: 18px 4px 0; padding: 17px 0 0; border: 0; border-top: 1px solid #155489; }
+.management-transfer-extra-filters legend { color: #dceeff; font-size: 13px; font-weight: 800; }
+.management-transfer-extra-filters label { display: flex; align-items: center; gap: 8px; color: #abd4f6; font-size: 11px; }
+.management-transfer-extra-filters input { width: 18px; height: 18px; accent-color: #008dff; }
+.management-transfer-results { min-width: 0; min-height: 0; overflow-y: auto; padding: 2px 6px 2px 2px; }
+.management-transfer-results .management-transfer-destination-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: none; overflow: visible; padding: 0; }
+.management-transfer-results .management-transfer-destination {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  min-height: 132px;
+  padding: 10px;
+  border: 1px solid #1260aa;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #072b58, #051b3a);
+  color: #d9eeff;
+}
+.management-transfer-results .management-transfer-destination:hover,
+.management-transfer-results .management-transfer-destination:focus-visible { border-color: #00a8ff; background: #073b72; }
+.management-transfer-results .management-transfer-destination.selected {
+  border: 2px solid #12c8ff;
+  background: linear-gradient(145deg, #0b498b, #052e63);
+  box-shadow: inset 0 0 13px #1eaeff4b, 0 0 14px #008bffc2;
+}
+.management-transfer-results .management-transfer-destination[hidden] { display: none; }
+.management-transfer-card-art { display: grid; place-items: center; min-width: 0; color: #38b4ff; }
+.management-transfer-card-art svg { max-width: 72px; height: 70px; filter: drop-shadow(0 5px 8px #0008); }
+.management-transfer-card-copy { display: grid; gap: 3px; min-width: 0; }
+.management-transfer-card-copy b { overflow: hidden; color: #f0f9ff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.management-transfer-card-copy .management-badge { justify-self: start; min-height: 19px; padding: 2px 6px; font-size: 10px; }
+.management-transfer-card-copy small { overflow: hidden; color: #a2c9e8; font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.management-transfer-card-copy .management-transfer-card-specs { color: #74bcf4; }
+.management-transfer-card-chevron { color: #5fb9ff; }
+.management-transfer-card-chevron svg { transform: rotate(-90deg); }
+.management-transfer-destination.selected .management-transfer-card-chevron { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #008dff; color: #fff; }
+.management-transfer-destination.selected .management-transfer-card-chevron svg { width: 17px; transform: none; }
+.management-transfer-empty { margin: 20px; color: #a9cce8; font-size: 14px; text-align: center; }
+.management-transfer-empty[hidden] { display: none; }
+.management-transfer-step-2 .management-transfer-header { min-height: 140px; }
+.management-transfer-step-2 .management-transfer-header-copy { max-width: calc(100% - 170px); }
+.management-transfer-step-2 .management-transfer-flow-summary { margin-top: 14px; }
+.management-transfer-step-3,.management-transfer-step-4,.management-transfer-step-5 { width: min(760px, calc(100vw - 28px)) !important; }
+.management-transfer-step-3 .management-transfer-header,.management-transfer-step-4 .management-transfer-header,.management-transfer-step-5 .management-transfer-header { min-height: 108px; padding-block: 17px; }
+.management-transfer-step-3 .management-transfer-header h2,.management-transfer-step-4 .management-transfer-header h2,.management-transfer-step-5 .management-transfer-header h2 { font-size: 26px; }
+.management-transfer-step-3 .management-transfer-form > :first-child,.management-transfer-step-4 .management-transfer-form > :first-child,.management-transfer-step-5 .management-transfer-form > :first-child { margin: 22px; overflow-y: auto; }
+.management-transfer-step-3 .management-transfer-fields,.management-transfer-step-4 .management-transfer-reason,.management-transfer-step-5 .management-transfer-review { max-height: calc(100dvh - 240px); }
+body.theme-light.management-open .management-transfer-dialog { background: linear-gradient(145deg, #edf8ff, #d9ecfa) !important; color: #183b5b; }
+.theme-light .management-transfer-header { background: #e9f5ff; }
+.theme-light .management-transfer-header h2,.theme-light .management-transfer-mode-copy b { color: #153956; }
+.theme-light .management-transfer-header p,.theme-light .management-transfer-header small,.theme-light .management-transfer-mode-copy small { color: #3d688d; }
+.theme-light .management-transfer-modes button,.theme-light .management-transfer-results .management-transfer-destination { background: #e9f5ff; border-color: #83b9dc; color: #153956; }
+.theme-light .management-transfer-card-copy b,.theme-light .management-transfer-flow-summary strong { color: #183b5b; }
+.theme-light .management-transfer-card-copy small { color: #4a7290; }
+.theme-light .management-transfer-flow-summary,.theme-light .management-transfer-sidebar,.theme-light .management-transfer-footer.management-form-footer { background: #dfeefa; border-color: #9ac5e5; }
+.theme-light .management-transfer-filters button,.theme-light .management-transfer-extra-filters label { color: #26587f; }
+.theme-light .management-transfer-search input { color: #173e61; }
+@media (max-width: 1050px) {
+  .management-transfer-results .management-transfer-destination-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .management-transfer-header-art { display: none; }
+  .management-transfer-step-2 .management-transfer-header-copy { max-width: none; }
+}
+@media (max-width: 700px) {
+  .management-transfer-header { min-height: 105px; gap: 10px; padding: 17px 56px 15px 14px; }
+  .management-transfer-header-icon { flex-basis: 42px; height: 50px; }
+  .management-transfer-glyph svg { width: 24px; }
+  .management-transfer-glyph svg:nth-child(2) { width: 18px; margin: -10px -2px 0; }
+  .management-transfer-close.management-modal-action { top: 13px; right: 11px; width: 34px; height: 34px; }
+  .management-transfer-header h2 { font-size: 22px; }
+  .management-transfer-header p { margin-top: 6px; font-size: 13px; }
+  .management-transfer-header small { font-size: 11px; }
+  .management-transfer-modes { padding: 14px; }
+  .management-transfer-modes button { grid-template-columns: 48px minmax(0, 1fr) 20px; gap: 10px; min-height: 89px; padding: 10px; }
+  .management-transfer-mode-icon { width: 45px; height: 45px; }
+  .management-transfer-mode-icon svg { width: 27px; }
+  .management-transfer-mode-copy b { font-size: 14px; }
+  .management-transfer-mode-copy small { font-size: 11px; }
+  .management-transfer-mode-indicator { width: 19px; height: 19px; }
+  .management-transfer-footer.management-form-footer { padding: 10px 14px; }
+  .management-transfer-footer button { min-height: 36px; padding: 0 9px; font-size: 11px; }
+  .management-transfer-flow-summary { grid-template-columns: 1fr 18px 1fr; gap: 6px; margin: 0 12px 9px; padding: 7px; }
+  .management-transfer-flow-summary > div:last-child { display: none; }
+  .management-transfer-summary-icon { flex-basis: 27px; height: 27px; }
+  .management-transfer-summary-icon svg { width: 17px; }
+  .management-transfer-flow-summary small { font-size: 9px; }
+  .management-transfer-flow-summary strong { font-size: 11px; }
+  .management-transfer-browser { grid-template-columns: 1fr; gap: 8px; padding: 0 12px 10px; overflow-y: auto; }
+  .management-transfer-sidebar { padding: 8px; }
+  .management-transfer-filters { display: flex; gap: 5px; overflow-x: auto; margin-top: 8px; }
+  .management-transfer-filters button { flex: 0 0 auto; min-height: 30px; font-size: 10px; }
+  .management-transfer-extra-filters { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 7px 0 0; padding: 7px 0 0; }
+  .management-transfer-extra-filters legend { font-size: 10px; }
+  .management-transfer-results { overflow: visible; }
+  .management-transfer-results .management-transfer-destination-grid { grid-template-columns: 1fr; }
+  .management-transfer-results .management-transfer-destination { min-height: 92px; }
+  .management-transfer-result-count { font-size: 10px; }
+}
+
+.management-movement-history { display: grid; gap: 12px; margin: 12px 0 20px; }
+.management-movement-history-group { padding: 12px; border: 1px solid #5686a06e; border-radius: 9px; background: #082038a6; }
+.management-movement-history-group h4 { margin: 0 0 9px; color: #eaf8ff; font-size: 12px; }
+.management-movement-events { display: grid; gap: 8px; }
+.management-movement-event { display: grid; gap: 4px; padding: 10px; border: 1px solid #4e789267; border-radius: 8px; background: #071b2cad; }
+.management-movement-event time, .management-movement-event small { color: #9fbcd0; font-size: 10px; overflow-wrap: anywhere; }
+.management-movement-event strong { color: #e8f8ff; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.management-movement-event span { color: #c5dfed; font-size: 11px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.theme-light .management-movement-history-group, .theme-light .management-movement-event { border-color: #9ac0d3; background: #f1f8fbdc; }
+.theme-light .management-movement-history-group h4, .theme-light .management-movement-event strong { color: #183d5a; }
+.theme-light .management-movement-event span { color: #315b79; }
+.theme-light .management-movement-event time, .theme-light .management-movement-event small { color: #587b95; }
+
+.management-transfer-panels { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
+.management-transfer-panel { display: grid; gap: 10px; min-width: 0; padding: 16px; border: 1px solid #3776a8; border-radius: 12px; background: #092039d6; }
+.management-transfer-panel h3 { margin: 0; color: #91d8ff; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.management-transfer-panel strong { color: #fff; font-size: 17px; overflow-wrap: anywhere; }
+.management-transfer-panel p { margin: 0; color: #b6d5e9; font-size: 12px; line-height: 1.5; }
+.management-transfer-panel p b { color: #e7f7ff; }
+.management-transfer-panel label { padding: 0; border: 0; background: transparent; font-size: 12px; }
+.management-transfer-panel textarea { width: 100%; min-height: 72px; padding: 9px 10px; border: 1px solid #72a2be99; border-radius: 7px; background: #061827; color: #f4fbff; font: inherit; resize: vertical; }
+.management-transfer-panels > .management-transfer-note { grid-column: 1 / -1; margin: 0; }
+.management-transfer-step-4 .management-transfer-review { margin: 22px; }
+.management-transfer-step-5 .management-transfer-confirm { margin: 0 22px 16px; }
+.management-transfer-footer [data-management-final-confirm]:disabled { cursor: not-allowed; opacity: .48; }
+.theme-light .management-transfer-panel { border-color: #91b5c9; background: #edf8ff; }
+.theme-light .management-transfer-panel h3,.theme-light .management-transfer-panel strong,.theme-light .management-transfer-panel p b { color: #183b5b; }
+.theme-light .management-transfer-panel p { color: #466d88; }
+.theme-light .management-transfer-panel textarea { border-color: #91b5c9; background: #fff; color: #173b57; }
+@media (max-width: 700px) {
+  .management-transfer-panels { grid-template-columns: 1fr; }
+  .management-transfer-panel { padding: 12px; }
+}

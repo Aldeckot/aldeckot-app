@@ -11,6 +11,18 @@ const ui = read('inventory.js');
 const api = read('supabase-client.js');
 const rpc = sql.split('create or replace function public.complete_control_maintenance(')[1];
 
+test('088 preserva a rotina da 073 com diretiva local, sem configurar parametro de superusuario', () => {
+  const movementSql = read('supabase/088_management_movements.sql');
+  const functionPattern = /create or replace function public\.complete_control_maintenance\([\s\S]*?^end; \$\$;/m;
+  const original = sql.match(functionPattern)?.[0];
+  const revised = movementSql.match(functionPattern)?.[0];
+  assert.ok(original);
+  assert.ok(revised);
+  assert.match(revised, /as \$\$\r?\n#variable_conflict use_variable\r?\ndeclare/);
+  assert.equal(revised.replace(/^#variable_conflict use_variable\r?\n/m, ''), original);
+  assert.doesNotMatch(movementSql, /alter function[^;]*set\s+plpgsql\.variable_conflict/i);
+});
+
 test('Controle TI exige escolha explícita e cancelar não salva', () => {
   const choice = ui.split('function chooseMaintenanceResult(item)')[1]
     .split('async function saveItem(form)')[0];

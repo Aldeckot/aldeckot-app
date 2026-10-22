@@ -11,6 +11,24 @@ npm run check:migrations
 
 Esses comandos validam a sintaxe, a presença dos recursos essenciais, os testes locais e a sequência das migrações. A mesma validação é executada automaticamente para alterações enviadas à `main` pelo GitHub Actions.
 
+O verificador de migrações também bloqueia alterações ou remoções de SQL que já existia na referência Git comparada. Antes de publicar, confira qual foi a última migração **realmente aplicada** no banco e gere um plano local, por exemplo:
+
+```powershell
+npm run check:migrations -- --pending-after 083
+```
+
+O plano mostra os próximos arquivos em ordem e seus SHA-256 para conferência. Ele não consulta o banco e **não comprova** que a versão informada foi aplicada; essa confirmação continua sendo responsabilidade de quem administra o ambiente. Teste as migrações pendentes em homologação e mantenha a publicação da interface suspensa até a validação do banco.
+
+Os testes de navegador sem dados reais podem ser executados com:
+
+```powershell
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+Eles verificam a tela de entrada, a recuperação de uma falha de CSS, a proteção de todos os módulos sem sessão e a abertura inicial de Inventário, Controle TI e Flux com dados vazios simulados. Chamadas externas e de API são bloqueadas ou simuladas; esses testes não substituem a validação autenticada em homologação nem o teste de integração `verify:supabase`.
+
 Para verificar a comunicação completa com o Supabase em um ambiente de teste, utilize `npm run verify:supabase`. Esse teste cria e remove dados temporários; não o execute em produção sem uma janela de manutenção e confirmação da equipe responsável.
 
 ## Saúde e monitoramento

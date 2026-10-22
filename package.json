@@ -1,6 +1,6 @@
 {
   "name": "aldeckot-app",
-  "version": "2.1.15",
+  "version": "2.1.49",
   "private": true,
   "description": "ALDECKOT — Sistema corporativo de gestão de equipamentos e operações.",
   "engines": {
@@ -13,9 +13,13 @@
     "check:project": "node scripts/check-project.mjs",
     "check:version": "node scripts/check-version.mjs",
     "test": "node --test",
+    "test:e2e": "playwright test",
     "verify": "npm run check:version && npm run check:project && npm test",
     "verify:rls": "node scripts/verify-rls.mjs",
     "verify:backups": "node scripts/verify-backups.mjs",
     "verify:supabase": "node scripts/verify-supabase.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

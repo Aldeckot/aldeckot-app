@@ -82,6 +82,67 @@ A migração `073_control_maintenance_completion.sql` corrige a conclusão bidir
 
 A migração `082_inventory_monitors_visoraj.sql` permite que o Modelo fique vazio apenas nos itens do Inventário e cadastra `VISORAJ` na categoria `MONITORES` com as TAGs `MON001` a `MON033`. Execute-a depois da `081`, após uma cópia de segurança. Ela exige uma única tabela MONITORES, ignora TAGs já usadas em qualquer categoria e registra histórico somente para os itens novos. Não altera equipamentos existentes. Confira o aviso de quantidade inserida e os registros da tabela após a execução.
 
+A migração `083_supply_equipment_status.sql` adiciona o estado dos equipamentos próprios de Suprimentos e preserva o status de origem dos equipamentos compartilhados. Aplique-a após a `082`, primeiro em homologação; confira os estados exibidos em Suprimentos antes de publicar a interface correspondente.
+
+A migração `084_control_management_identity_repair.sql` foi revisada após a tentativa anterior falhar sem alterar dados: havia três chamados vinculados, o do Caixa 05 não existia mais e dois históricos concluídos não tinham TAG/série verificável. A versão revisada corrige **somente** o chamado ativo do Caixa 10, cujo TAG e série identificam unicamente o computador correto. Preserva os dois históricos ambíguos, instala travas para novos vínculos e impede que a edição ordinária do chamado substitua o status do PC; a conclusão transacional continua explícita. O usuário informou sua aplicação e trouxe o pós-teste esperado: três vinculados, um reparado, zero divergências ativas, dois históricos não verificáveis e as duas travas instaladas. Não alterou TAG, série, status, local, posição ou histórico dos registros atuais.
+
+A migração `085_management_pdv_peripheral_identity.sql` preenche os IDs de origem dos 59 periféricos já instalados nos PDVs da Gestão TI, usando correspondência única de TAG no Inventário. O usuário confirmou a lista física por PDV, aplicou a migração e informou o resultado da consulta posterior: 78 periféricos de PDV vinculados por ID, nenhum ID ausente ou duplicado, nenhuma TAG ou origem divergente. Os 78 locais no Inventário ainda têm o nome do computador, não o PDV; a 085 não muda localização, status, computador nem os dois monitores em ESTOQUE 01 e RES 01. Esta etapa ainda não altera a sincronização legada pelo nome do computador nem habilita o novo fluxo de transferência.
+
+A migração `086_inventory_pdv_location_sync.sql` foi aplicada após auditoria somente leitura: 78 periféricos em 14 PDVs, todos com identidade única e localização patrimonial anteriormente pelo nome do PC. Ela corrigiu somente o campo `location` desses 78 itens para o PDV confirmado, registrou a correção no histórico, passou a sincronizar por ID/posição e instalou a trava de integridade. O pós-teste enviado pelo usuário confirmou 78 localizações por PDV, nenhuma pelo nome do PC, nenhum ID/TAG/tipo divergente e ambas as travas ativas. O periférico fora dos PDVs permaneceu inalterado.
+
+A migração `087_management_computer_identity.sql` foi informada como aplicada pelo usuário; o ambiente (principal ou homologação) ainda precisa ser confirmado. A auditoria anterior encontrou 33 posições, 20 PCs e somente três chamados externos, sem divergência identificável; Suprimentos e Flux não apontavam para esses registros no estado auditado. O pós-teste enviado confirmou 20 IDs de PC distintos, nenhuma divergência de ocupação, nenhum ID fora da Gestão TI e ambas as travas ativas. A 087 não criou equipamentos no Inventário, moveu PCs ou reatribuiu chamados. A transferência antiga de dois argumentos e a restauração que apaga/reinsere posições ficam bloqueadas nessa base. **Não execute esses comandos antigos.** A restauração transacional, a nova transferência e o modal continuam pendentes.
+
+Para a restauração, o usuário confirmou que ocupação, periféricos e históricos atuais permanecem intactos; somente os dados técnicos dos PCs poderão ser recuperados. A interface bloqueia preventivamente o método antigo antes da chamada ao banco. O novo procedimento deve usar `management_computer_id` e abortar backups sem identidade verificável, sem associação por nome ou terminal presumido.
+Backups criados a partir desta versão incluem `computerId` para cada PC. Cópias antigas sem esse campo continuam guardadas, mas ainda não podem ser restauradas automaticamente.
+
+A migração `089_management_movement_pdv_guard.sql` mantém a implementação transacional da 088 como função
+interna sem permissão de execução direta e acrescenta à RPC pública a validação
+de substituto já instalado em outro PDV, disponibilidade do status de origem
+e status final Ativo para instalação em PDV. Reenvios com o mesmo ID seguem
+para a idempotência da 088. Foi testada com dados fictícios em PostgreSQL
+descartável. O usuário informou sua aplicação no Supabase principal em
+21/10/2026; a auditoria estrutural posterior confirmou sua instalação.
+**Não reaplicar.**
+
+A migração `090_inventory_pdv_movement_history.sql` acrescenta eventos correlacionados aos movimentos
+físicos de periféricos nos PDVs e exige motivo explícito nas alterações de Local
+que envolvam um PDV. A consulta estrutural enviada pelo usuário em 21/10/2026
+mostrou as dependências presentes antes da aplicação. O usuário informou a
+aplicação da 090 e enviou pós-teste estrutural com RPCs e gatilho ativos.
+**Não reaplicar.** Para as validações de dados ainda pendentes, use
+[`docs/ALDECKOT_089_090_ENTREGA.md`](../docs/ALDECKOT_089_090_ENTREGA.md).
+Possíveis consumidores da RPC antiga de permuta devem ser monitorados: chamadas
+diretas envolvendo PDV agora são recusadas até adotarem a RPC com motivo.
+
+A migração `091_management_monitor_ajmon_assignment.sql` foi **aplicada pelo
+usuário, conforme informado e auditado; não reaplicar**. Reconhece TAGs `AJMON` sem invalidar
+`MON` antigas, mantém o vínculo pelo ID da posição física ao mudar a TAG e
+reconcilia monitores existentes dentro de uma única transação. O nome do
+terminal ou do PC pode localizar a posição na instalação, mas o periférico
+não acompanha uma futura transferência do PC. O campo exibido no detalhe do
+Inventário consulta o ocupante atual; o `location` armazenado continua sendo
+o local físico, não a descrição composta. O relatório enviado em 22/10/2026
+às 00:39 UTC mostra 17 dos 25 monitores vinculados, sem divergências de PDV.
+Dos oito restantes, três estão intencionalmente na Sala CPD e cinco têm
+destinos ainda não resolvidos.
+
+A `092_inventory_cpd_unassigned.sql` foi **aplicada pelo usuário e confirmada
+pela auditoria de 22/10/2026; não reaplicar**. Torna explícito que Sala CPD não permite associação
+a computadores/terminais, para qualquer equipamento. Não corrige vínculos
+preexistentes por suposição: aborta caso encontre conflito. Executar primeiro
+a consulta somente leitura `docs/aldeckot-092-cpd-assignment-audit.sql` e
+revisar `assignment_report`. Instruções e limites em
+[`docs/CPD_ASSIGNMENT_092.md`](../docs/CPD_ASSIGNMENT_092.md).
+
+A `093_inventory_installation_location_aliases.sql` teve suas regras e os
+vínculos confirmados pelo relatório recebido em 22/10/2026; **não reaplicar**. Amplia a regra para Matriz, aceita
+ESTOQUE02/03 com ou sem espaço e reconcilia os monitores AJMON020/021 com
+suas posições físicas, sob validações transacionais. Não cria computadores
+nem altera a 092 já aplicada. Veja
+[`docs/MONITOR_RELATION_093.md`](../docs/MONITOR_RELATION_093.md).
+
+Para conferir os arquivos ainda pendentes em um ambiente, use `npm run check:migrations -- --pending-after NNN` com o último número aplicado que você confirmou nesse banco. O comando fornece a sequência e os SHA-256 dos arquivos locais, mas não consulta nem modifica o Supabase. A verificação automática também recusa edições em migrações antigas; correções devem usar um novo arquivo numerado.
+
 ## Permissões
 
 As migrações `015_authentication_and_permissions.sql` e `018_fiscal_nfe.sql` aplicam as políticas de acesso por usuário e função. Depois de publicar alterações de segurança, valide o bloqueio anônimo com:

@@ -73,11 +73,16 @@ test('Inventário sincroniza as TAGs de periféricos compatíveis com a Gestão 
   const migration = readFileSync(resolve(root, 'supabase/038_inventory_management_peripheral_sync.sql'), 'utf8');
   const correction = readFileSync(resolve(root, 'supabase/039_fix_inventory_management_peripheral_sync_owner.sql'), 'utf8');
   const reconciliation = readFileSync(resolve(root, 'supabase/040_reconcile_inventory_management_peripherals.sql'), 'utf8');
+  const monitorMigration = readFileSync(resolve(root, 'supabase/091_management_monitor_ajmon_assignment.sql'), 'utf8');
   for (const [type, prefix] of [['Impressora', 'IMPR'], ['Leitor', 'EAN'], ['Gaveta', 'GVT'], ['Pin Pad', 'PP'], ['Balança', 'BAL'], ['Monitor', 'MON'], ['Teclado', 'TEC']]) {
+    if (type === 'Monitor') continue;
     assert.match(management, new RegExp(type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(management, new RegExp(`/\\^${prefix}\\[0-9\\]\\+\\$/`));
     assert.match(migration, new RegExp(`\\^${prefix}\\[0-9\\]\\+\\$`));
   }
+  assert.match(management, /AJMON\|MON/);
+  assert.match(client, /AJMON\|MON/);
+  assert.match(monitorMigration, /\^\(MON\|AJMON\)\[0-9\]\+\$/);
   assert.match(client, /syncManagementPeripheral/);
   assert.match(client, /sourceItemId/);
   assert.match(migration, /inventory_peripheral_management_sync/);
@@ -230,8 +235,8 @@ test('Gestão TI identifica a TAG e o status diretamente nos cartões dos PCs', 
   assert.match(computers, /management-alert-glitch/);
   assert.match(computers, /management-service-sweep/);
   assert.match(computers, /mini-computer\.is-fixed-terminal/);
-  assert.match(page, /management-computers\.css\?v=20260925-info-layer1/);
   const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+  assert.ok(page.includes(`management-computers.css?v=${version}`));
   assert.ok(page.includes(`management.js?v=${version}`));
   assert.match(computers, /font-size: 11px !important/);
   assert.match(computers, /width: 34px !important/);

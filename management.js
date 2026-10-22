@@ -5,7 +5,7 @@
   const restoreInput = document.getElementById('managementRestoreInput');
   const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const route = new URLSearchParams(window.location.search);
-  const statuses = ['Ativo', 'Reserva', 'Defeito', 'Manutenção', 'Desativado'];
+  const statuses = ['Ativo', 'Reserva', 'Defeito', 'Manutenção', 'Inativo'];
   const situations = ['Em Sala', 'Em Uso', 'Estoque', 'Em Manutenção'];
   const cleanings = ['Preventiva', 'Completa', 'Não Realizada'];
   const priorities = ['Alta', 'Média', 'Estável'];
@@ -17,7 +17,7 @@
     Gaveta: { pattern: /^GVT[0-9]+$/, source: 'GVT[0-9]+', example: 'GVT000' },
     'Pin Pad': { pattern: /^PP[0-9]+$/, source: 'PP[0-9]+', example: 'PP000' },
     Balança: { pattern: /^BAL[0-9]+$/, source: 'BAL[0-9]+', example: 'BAL000' },
-    Monitor: { pattern: /^MON[0-9]+$/, source: 'MON[0-9]+', example: 'MON000' },
+    Monitor: { pattern: /^(?:AJMON|MON)[0-9]+$/, source: '(AJMON|MON)[0-9]+', example: 'AJMON007' },
     Teclado: { pattern: /^TEC[0-9]+$/, source: 'TEC[0-9]+', example: 'TEC000' }
   };
   const areaColors = { 'Escritório': '#4ea8ff', Estoque: '#f6bd55', 'Frente de Loja': '#47dd9b' };
@@ -26,6 +26,7 @@
     Reserva: { color: '#f6bd55', icon: 'reserve' },
     Defeito: { color: '#ff5b6e', icon: 'warning' },
     Manutenção: { color: '#ff9d00', icon: 'wrench' },
+    Inativo: { color: '#718096', icon: 'offline' },
     Desativado: { color: '#718096', icon: 'offline' }
   };
   const screenReadouts = {
@@ -33,6 +34,7 @@
     Reserva: { code: 'STBY', value: 'LIVRE' },
     Defeito: { code: 'ALTA', value: 'FALHA' },
     Manutenção: { code: 'SERV', value: 'REPARO' },
+    Inativo: { code: 'OFF', value: 'PAUSA' },
     Desativado: { code: 'OFF', value: 'PAUSA' }
   };
   const statusColors = Object.fromEntries(Object.entries(statusPresentation).map(([status, presentation]) => [status, presentation.color]));
@@ -41,11 +43,13 @@
   const priorityColors = { Alta: '#ff6674', 'Média': '#ffce59', 'Estável': '#3de5d3' };
   const areaIcons = { 'Escritório': 'building', Estoque: 'warehouse', 'Frente de Loja': 'store' };
   let payload = { table: null, items: [] };
-  let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'general', syncAt: null, actionMenu: false, transferDestinationId: '', transferQuery: '', backups: [], backupSettings: { automatic: false }, localBackupAt: null };
+  let state = { query: '', status: '', situation: '', operation: route.get('operation') || '', modal: null, tab: 'general', syncAt: null, actionMenu: false, transferDraft: null, transferBusy: false, backups: [], backupSettings: { automatic: false }, localBackupAt: null };
   let toastTimer;
   let imageUploadBusy = false;
   let detailReturnFocus = null;
   let inventoryPeripheralRows = [];
+  let movementHistory = { key: '', loading: false, loaded: false, computer: [], position: [], error: '' };
+  let movementHistoryRequest = 0;
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -120,7 +124,12 @@
     areas.includes(sourceArea) && areas.includes(destinationArea) &&
     (sourceArea === destinationArea || (sharedTransferAreas.has(sourceArea) && sharedTransferAreas.has(destinationArea)));
   const terminalName = item => String(item?.terminal || item?.equipment || 'Terminal não informado').trim();
-  const computerName = item => String(item?.equipment || '').trim() || 'Sem computador atribuído';
+  const hasInstalledComputer = item => Boolean(String(item?.equipment || '').trim());
+  const computerName = item => String(item?.equipment || '').trim() || 'Sem computador instalado';
+  const recordedLocationConflict = item => hasFixedTerminal(item) && hasInstalledComputer(item) &&
+    normalize(item.location) !== normalize(item.terminal);
+  const configuredAreas = () => [...new Set([...areas, ...payload.items.map(item => String(item.area || '').trim()).filter(Boolean)])];
+  const configuredStatuses = () => [...new Set([...statuses, ...payload.items.map(item => String(item.status || '').trim()).filter(Boolean)])];
   const count = (items, key, value) => items.filter(item => item[key] === value).length;
   const activeItem = () => payload.items.find(item => item.id === state.modal?.id);
   const notify = message => {
@@ -130,6 +139,31 @@
     toastTimer = setTimeout(() => toastNode.classList.remove('show'), 3200);
   };
   const uniqueLog = text => ({ id: `management-log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: new Date().toISOString(), text });
+  async function loadMovementHistory(item) {
+    if (!item) return;
+    const key = `${item.id}:${item.computerId || ''}`;
+    if (movementHistory.key === key && (movementHistory.loading || movementHistory.loaded || movementHistory.error)) return;
+    const request = ++movementHistoryRequest;
+    movementHistory = { key, loading: true, loaded: false, computer: [], position: [], error: '' };
+    renderModal();
+    try {
+      const history = window.AldeckotSupabase?.management?.movementHistory;
+      if (typeof history !== 'function') throw new Error('management_movement_history indisponível');
+      const [computer, position] = await Promise.all([
+        item.computerId ? history({ computerId: item.computerId }) : Promise.resolve([]),
+        history({ positionId: item.id })
+      ]);
+      if (request !== movementHistoryRequest) return;
+      movementHistory = { key, loading: false, loaded: true,
+        computer: Array.isArray(computer) ? computer : [], position: Array.isArray(position) ? position : [], error: '' };
+    } catch (error) {
+      if (request !== movementHistoryRequest) return;
+      const unavailable = /management_movement_history|PGRST202/i.test(String(error?.message || ''));
+      movementHistory = { key, loading: false, loaded: false, computer: [], position: [],
+        error: unavailable ? 'Histórico de movimentações ainda não ativado no banco.' : 'Não foi possível consultar as movimentações agora.' };
+    }
+    if (state.modal?.type === 'details' && state.modal.id === item.id && ['history', 'movement'].includes(state.tab)) renderModal();
+  }
   const peripheralFieldName = type => `peripheral-${normalize(type).replace(/\s+/g, '-')}`;
   const peripheralTag = value => String(value || '').trim().toUpperCase();
   const isValidPeripheralTag = (type, value) => {
@@ -146,7 +180,7 @@
     const haystack = [item.terminal, item.equipment, item.tag, item.ip, item.sector, item.model, item.operatingSystem, item.hostname, item.user].map(normalize).join(' ');
     const maintenanceOpen = ['em manutencao', 'manutencao', 'defeito'].includes(normalize(item.status));
     return (!search || haystack.includes(search))
-      && (!state.status || item.status === state.status)
+      && (!state.status || (hasInstalledComputer(item) && item.status === state.status))
       && (!state.situation || item.situation === state.situation)
       && (state.operation !== 'maintenance-open' || maintenanceOpen);
   }
@@ -156,26 +190,28 @@
   }
 
   function computerMarkup(item, compact = false) {
-    const presentation = statusPresentation[item.status] || statusPresentation.Ativo;
-    const readout = screenReadouts[item.status] || screenReadouts.Ativo;
+    const occupied = hasInstalledComputer(item);
+    const presentation = occupied ? statusPresentation[item.status] || statusPresentation.Ativo : { color: '#718096' };
+    const readout = occupied ? screenReadouts[item.status] || screenReadouts.Ativo : screenReadouts.Desativado;
     const color = presentation.color;
+    const situationColor = occupied ? (situationColors[item.situation] || '#718096') : '#718096';
     const areaColor = areaColors[item.area] || areaColors['Escritório'];
     const fixedTerminal = hasFixedTerminal(item);
     const terminal = terminalName(item);
     const computer = computerName(item);
     const tag = String(item.tag || '').trim().toUpperCase() || '—';
-    const tooltip = `<span class="mini-tooltip"><b>${escape(fixedTerminal ? terminal : item.equipment)}</b>${fixedTerminal ? `<span>Computador: ${escape(computer)}</span>` : ''}<span>TAG ${escape(display(item.tag))} · ${escape(display(item.ip))}</span><span>${escape(display(item.operatingSystem))} · ${escape(display(item.model))}</span><span>${escape(display(item.user))} · ${escape(item.status)}</span></span>`;
+    const tooltip = `<span class="mini-tooltip"><b>${escape(fixedTerminal ? terminal : item.equipment)}</b>${fixedTerminal ? `<span>Computador: ${escape(computer)}</span>` : ''}${occupied ? `<span>TAG ${escape(display(item.tag))} · ${escape(display(item.ip))}</span><span>${escape(display(item.operatingSystem))} · ${escape(display(item.model))}</span><span>${escape(display(item.user))} · ${escape(item.status)}</span>` : ''}</span>`;
     const identity = fixedTerminal
-      ? `<b class="mini-computer-label mini-terminal-label">${escape(terminal)}</b><span class="mini-status"><i></i>${escape(item.status)}</span><span class="mini-assigned-computer" title="${escape(computer)}">${escape(computer)}</span>`
+      ? `<b class="mini-computer-label mini-terminal-label">${escape(terminal)}</b><span class="mini-status"><i></i>${occupied ? escape(item.status) : 'Vazio'}</span><span class="mini-assigned-computer" title="${escape(computer)}">${escape(computer)}</span>`
       : `<b class="mini-computer-label">${escape(item.equipment)}</b><span class="mini-status"><i></i>${escape(item.status)}</span>`;
     const ariaLabel = fixedTerminal
-      ? `Terminal ${terminal}. Computador: ${computer}. TAG: ${tag}. Status: ${item.status}. Ativar para ver detalhes.`
+      ? `Terminal ${terminal}. Computador: ${computer}.${occupied ? ` TAG: ${tag}. Status: ${item.status}.` : ''} Ativar para ver detalhes.`
       : `Equipamento ${item.equipment}. TAG: ${tag}. Status: ${item.status}. Ativar para ver detalhes.`;
-    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${escape(item.status)}" style="--status-color:${color};--area-color:${areaColor};--category-color:${color}" aria-label="${escape(ariaLabel)}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(statusIcon(item.status), 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis" title="TAG do PC: ${escape(tag)}"><span class="mini-tag-readout">${escape(tag)}</span></span>${identity}${tooltip}</button>`;
+    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${occupied ? escape(item.status) : 'Vazio'}" style="--status-color:${color};--situation-color:${situationColor};--area-color:${areaColor};--category-color:${color}" aria-label="${escape(ariaLabel)}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(occupied ? statusIcon(item.status) : 'offline', 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis" title="${occupied ? `TAG do PC: ${escape(tag)}` : 'Sem computador instalado'}"><span class="mini-tag-readout">${occupied ? escape(tag) : '—'}</span></span>${identity}${tooltip}</button>`;
   }
 
   function areaMarkup(area, items) {
-    return `<section class="management-area" style="--area-color:${areaColors[area]}"><header class="management-area-head"><span class="management-area-icon" aria-hidden="true">${svg(areaIcons[area] || 'monitor', 15)}</span><h2>${escape(area)}</h2><span class="management-area-count" data-management-area-count="${escape(area)}">${items.length}</span><button class="management-area-add" type="button" data-management-action="add-area" data-management-area="${escape(area)}">${svg('plus', 12)} Adicionar</button><i class="management-area-rule" aria-hidden="true"></i></header><div class="management-computer-grid">${items.map(item => computerMarkup(item)).join('')}</div></section>`;
+    return `<section class="management-area" style="--area-color:${areaColors[area] || areaColors.Escritório}"><header class="management-area-head"><span class="management-area-icon" aria-hidden="true">${svg(areaIcons[area] || 'monitor', 15)}</span><h2>${escape(area)}</h2><span class="management-area-count" data-management-area-count="${escape(area)}">${items.length}</span><button class="management-area-add" type="button" data-management-action="add-area" data-management-area="${escape(area)}">${svg('plus', 12)} Adicionar</button><i class="management-area-rule" aria-hidden="true"></i></header><div class="management-computer-grid">${items.map(item => computerMarkup(item)).join('')}</div></section>`;
   }
 
   function chartMarkup(title, items, key, labels, colors) {
@@ -186,7 +222,7 @@
 
   function toolbarMarkup() {
     const clearVisible = state.query || state.status || state.situation || state.operation;
-    return `<section class="management-toolbar" aria-label="Filtros da Gestão TI"><label class="management-search">${svg('search', 16)}<input data-management-query placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}" autocomplete="off"></label><span class="management-filter-wrap" data-management-filter-wrap="status" style="--filter-color:${state.status ? statusColors[state.status] : '#607990'}"><select class="management-filter" data-management-status aria-label="Filtrar por status"><option value="">Status</option>${statuses.map(status => `<option value="${escape(status)}" ${state.status === status ? 'selected' : ''}>${escape(status)}</option>`).join('')}</select></span><span class="management-filter-wrap" data-management-filter-wrap="situation" style="--filter-color:${state.situation ? situationColors[state.situation] : '#607990'}"><select class="management-filter" data-management-situation aria-label="Filtrar por situação"><option value="">Situação</option>${situations.map(value => `<option value="${escape(value)}" ${state.situation === value ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select></span><button class="management-clear" type="button" data-management-action="clear-filters" ${clearVisible ? '' : 'hidden'}>Limpar filtros</button></section>`;
+    return `<section class="management-toolbar" aria-label="Filtros da Gestão TI"><label class="management-search">${svg('search', 16)}<input data-management-query placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}" autocomplete="off"></label><span class="management-filter-wrap" data-management-filter-wrap="status" style="--filter-color:${state.status ? statusColors[state.status] : '#607990'}"><select class="management-filter" data-management-status aria-label="Filtrar por status"><option value="">Status</option>${configuredStatuses().map(status => `<option value="${escape(status)}" ${state.status === status ? 'selected' : ''}>${escape(status)}</option>`).join('')}</select></span><span class="management-filter-wrap" data-management-filter-wrap="situation" style="--filter-color:${state.situation ? situationColors[state.situation] : '#607990'}"><select class="management-filter" data-management-situation aria-label="Filtrar por situação"><option value="">Situação</option>${situations.map(value => `<option value="${escape(value)}" ${state.situation === value ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select></span><button class="management-clear" type="button" data-management-action="clear-filters" ${clearVisible ? '' : 'hidden'}>Limpar filtros</button></section>`;
   }
 
   const managementHeaderSummaryMarkup = () => `<div class="management-heading module-header-summary module-header-summary-management"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">Gestão TI</h1><p class="module-header-summary-description">Monitoramento de PCs ativos em tempo real.</p><div class="module-header-summary-tags"><span>Monitoramento</span><span>Status</span><span>Desempenho</span></div></div><span class="module-header-summary-art management" aria-hidden="true"></span></div>`;
@@ -196,7 +232,7 @@
   }
 
   function applyManagementFilters() {
-    const visibleByArea = Object.fromEntries(areas.map(area => [area, 0]));
+    const visibleByArea = Object.fromEntries(configuredAreas().map(area => [area, 0]));
     const itemsById = new Map(payload.items.map(item => [String(item.id), item]));
     app.querySelectorAll('[data-management-open]').forEach(card => {
       const item = itemsById.get(card.dataset.managementOpen);
@@ -204,7 +240,7 @@
       card.hidden = !visible;
       if (visible && item) visibleByArea[item.area] = (visibleByArea[item.area] || 0) + 1;
     });
-    areas.forEach(area => {
+    configuredAreas().forEach(area => {
       const countNode = app.querySelector(`[data-management-area-count="${area}"]`);
       if (countNode) countNode.textContent = String(visibleByArea[area] || 0);
     });
@@ -223,8 +259,9 @@
   }
 
   function render() {
-    const grouped = areas.map(area => [area, payload.items.filter(item => item.area === area)]);
-    app.innerHTML = `${headerMarkup()}${toolbarMarkup()}<div class="management-layout"><section class="management-areas">${grouped.map(([area, items]) => areaMarkup(area, items)).join('')}</section><aside class="management-charts" aria-label="Gráficos da Gestão TI">${chartMarkup('Distribuição por Status', payload.items, 'status', statuses, statusColors)}${chartMarkup('Distribuição por Situação', payload.items, 'situation', situations, situationColors)}${chartMarkup('Distribuição por Limpeza', payload.items, 'cleaning', cleanings, cleaningColors)}</aside></div>`;
+    const grouped = configuredAreas().map(area => [area, payload.items.filter(item => item.area === area)]);
+    const computers = payload.items.filter(hasInstalledComputer);
+    app.innerHTML = `${headerMarkup()}${toolbarMarkup()}<div class="management-layout"><section class="management-areas">${grouped.map(([area, items]) => areaMarkup(area, items)).join('')}</section><aside class="management-charts" aria-label="Gráficos da Gestão TI">${chartMarkup('Distribuição por Status', computers, 'status', configuredStatuses(), statusColors)}${chartMarkup('Distribuição por Situação', computers, 'situation', situations, situationColors)}${chartMarkup('Distribuição por Limpeza', computers, 'cleaning', cleanings, cleaningColors)}</aside></div>`;
     const managementHeader = app.querySelector('.management-header');
     const previousHeading = managementHeader?.querySelector('.management-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = managementHeaderSummaryMarkup();
@@ -246,9 +283,9 @@
   }
 
   const detail = (label, value, full = false) => `<div class="management-detail${full ? ' full' : ''}"><span>${escape(label)}</span><b>${escape(display(value))}</b></div>`;
-  const statusBadge = item => `<span class="management-badge" style="--badge-color:${statusColors[item.status] || statusColors.Ativo}"><i></i>${escape(item.status)}</span>`;
+  const statusBadge = item => `<span class="management-badge" style="--badge-color:${hasInstalledComputer(item) ? statusColors[item.status] || statusColors.Ativo : '#718096'}"><i></i>${hasInstalledComputer(item) ? escape(item.status) : 'Sem computador instalado'}</span>`;
 
-  const detailTabs = [['general', 'Geral', 'display'], ['hardware', 'Hardware', 'cpu'], ['network', 'Rede', 'network'], ['location', 'Localização', 'pin'], ['operational', 'Status Operacional', 'pulse'], ['history', 'Histórico', 'history'], ['peripherals', 'Periféricos', 'cube']];
+  const detailTabs = [['general', 'Geral', 'display'], ['hardware', 'Hardware', 'cpu'], ['network', 'Rede', 'network'], ['location', 'Localização', 'pin'], ['operational', 'Status Operacional', 'pulse'], ['history', 'Histórico', 'history'], ['movement', 'Movimentação', 'transfer'], ['peripherals', 'Periféricos', 'cube']];
   const hasDetailValue = value => value !== null && value !== undefined && String(value).trim() !== '';
   const sectionTitle = (icon, title, action = '') => `<div class="management-asset-section-head"><h3><span class="management-asset-heading-icon icon-${icon}">${svg(icon, 20)}</span>${escape(title)}</h3>${action}</div>`;
   const workstationArt = () => `<svg class="management-asset-workstation-art" viewBox="0 0 72 72" width="68" height="68" aria-hidden="true"><defs><linearGradient id="managementArtFrame" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#c4e9ff"/><stop offset="1" stop-color="#296cac"/></linearGradient><linearGradient id="managementArtScreen" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#46c7ff"/><stop offset=".55" stop-color="#1477cf"/><stop offset="1" stop-color="#072e73"/></linearGradient><linearGradient id="managementArtTower" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#4f9bcf"/><stop offset="1" stop-color="#0d345e"/></linearGradient></defs><ellipse class="art-shadow" cx="36" cy="62" rx="31" ry="5"/><path class="art-tower" d="M52 16h11a3 3 0 0 1 3 3v35a3 3 0 0 1-3 3H52a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3Z"/><path class="art-tower-line" d="M54 22h7m-7 4h7"/><circle class="art-led" cx="58" cy="49" r="2"/><rect class="art-monitor-frame" x="4" y="12" width="47" height="38" rx="4"/><rect class="art-screen" x="8" y="16" width="39" height="30" rx="2"/><path class="art-screen-glint" d="M9 33 31 16h15L9 44Z"/><path class="art-window" d="m20 24 8-1v8h-8v-7Zm10-1 8-1v9h-8v-8Zm-10 10h8v8l-8-1v-7Zm10 0h8v9l-8-1v-8Z"/><path class="art-neck" d="M24 50h8v7h-8z"/><path class="art-base" d="M17 58h22l3 4H14l3-4Z"/></svg>`;
@@ -329,8 +366,51 @@
     return logs.length ? `<div class="management-asset-recent-list">${logs.map(log => `<article><time>${escape(dateTime(log.at))}</time><span>${escape(log.text)}</span></article>`).join('')}</div>` : '<p class="management-asset-empty">Nenhuma atividade registrada.</p>';
   }
   function generalDashboard(item) {
-    const specs = hardwareCards(item);
-    return `<div class="management-asset-dashboard"><div class="management-asset-primary"><section class="management-asset-section">${sectionTitle('info', 'Informações Gerais', sectionLink('hardware', 'Ver hardware'))}${specs ? `<div class="management-asset-data-grid">${specs}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}</section><section class="management-asset-section">${sectionTitle('cube', 'Periféricos', sectionLink('peripherals', 'Ver todos'))}${peripheralCards(item)}</section></div><aside class="management-asset-secondary"><section class="management-asset-section">${sectionTitle('notes', 'Descrição')}${hasDetailValue(item.description) ? `<p class="management-asset-copy">${escape(item.description)}</p>` : '<p class="management-asset-empty">Sem descrição cadastrada.</p>'}${hasDetailValue(item.notes) ? `<div class="management-asset-note"><strong>Observações</strong><p>${escape(item.notes)}</p></div>` : ''}</section><section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede', sectionLink('network', 'Ver rede'))}${networkRows(item)}</section><section class="management-asset-section">${sectionTitle('history', 'Histórico recente', sectionLink('history', 'Ver todos'))}${recentLogs(item)}</section></aside></div>`;
+    const specs = `${hasDetailValue(item.category) ? assetCard('cube', 'Categoria', item.category) : ''}${hardwareCards(item)}`;
+    return `<div class="management-asset-dashboard"><div class="management-asset-primary"><section class="management-asset-section">${sectionTitle('info', 'Informações Gerais', sectionLink('hardware', 'Ver hardware'))}${specs ? `<div class="management-asset-data-grid">${specs}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}</section><section class="management-asset-section">${sectionTitle('cube', 'Periféricos', sectionLink('peripherals', 'Ver todos'))}${peripheralCards(item)}</section></div><aside class="management-asset-secondary"><section class="management-asset-section">${sectionTitle('notes', 'Descrição')}${hasDetailValue(item.description) ? `<p class="management-asset-copy">${escape(item.description)}</p>` : '<p class="management-asset-empty">Sem descrição cadastrada.</p>'}${hasDetailValue(item.notes) ? `<div class="management-asset-note"><strong>Observações</strong><p>${escape(item.notes)}</p></div>` : ''}</section><section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede', sectionLink('network', 'Ver rede'))}${networkRows(item)}</section><section class="management-asset-section">${sectionTitle('history', 'Registros recentes da posição', sectionLink('history', 'Ver históricos'))}${recentLogs(item)}</section></aside></div>`;
+  }
+  function locationPanel(item) {
+    const position = hasFixedTerminal(item) ? terminalName(item) : item.location;
+    const fields = [
+      hasFixedTerminal(item) ? detail('Posição física', position) : '',
+      hasDetailValue(item.area) ? detail('Ramificação', item.area) : '',
+      hasDetailValue(item.sector) ? detail('Setor', item.sector) : '',
+      !hasFixedTerminal(item) && hasDetailValue(item.location) ? detail('Local', item.location) : '',
+      recordedLocationConflict(item) ? detail('Local registrado (divergente)', item.location || 'Não informado') : ''
+    ].join('');
+    const warning = recordedLocationConflict(item)
+      ? '<p class="management-asset-disclaimer" role="alert">A posição física é a referência confirmada. O campo Local deste PC diverge do terminal e precisa ser reconciliado antes da próxima movimentação.</p>'
+      : '';
+    return `<section class="management-asset-section">${sectionTitle('pin', 'Localização')}${fields ? `<div class="management-detail-grid">${fields}</div>` : '<p class="management-asset-empty">Localização não cadastrada.</p>'}${warning}</section>`;
+  }
+  function movementHistoryMarkup(item, kind) {
+    const key = `${item.id}:${item.computerId || ''}`;
+    const history = movementHistory.key === key ? movementHistory : { loading: true, computer: [], position: [], error: '' };
+    const nameOf = computerId => payload.items.find(candidate => candidate.computerId === computerId)?.equipment || 'Computador';
+    const eventLegs = event => [event.metadata?.incoming, event.metadata?.outgoing]
+      .filter(leg => leg && typeof leg === 'object');
+    const eventCard = (event, kind) => {
+      const peripheral = event.metadata?.peripheral;
+      if (kind === 'position' && peripheral && typeof peripheral === 'object') {
+        const label = peripheral.equipment || peripheral.type || 'Periférico';
+        const identity = (peripheral.tag ? ' · TAG ' + peripheral.tag : '')
+          + (peripheral.serial ? ' · Série ' + peripheral.serial : '');
+        const direction = peripheral.fromPositionId === item.id ? 'Saída' : 'Entrada';
+        const route = `${peripheral.fromLocation || 'Local não informado'} → ${peripheral.toLocation || 'Local não informado'}`;
+        return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(`${direction} de ${label}${identity} · ${route}`)}</strong><span>${escape(event.reason || 'Movimentação registrada no Inventário')}</span><small>Evento ${escape(event.event_id)}</small></article>`;
+      }
+      const lines = eventLegs(event).flatMap(leg => {
+        const before = leg.before || {};
+        const after = leg.after || {};
+        const change = `${before.location || 'Local não informado'} → ${after.location || 'Local não informado'} · ${before.status || 'Status não informado'} → ${after.status || 'Status não informado'}`;
+        if (kind === 'computer') return leg.id === item.computerId ? [change] : [];
+        return [leg.from === item.id ? `Saída de ${nameOf(leg.id)} · ${change}` : '',
+          leg.to === item.id ? `Entrada de ${nameOf(leg.id)} · ${change}` : ''].filter(Boolean);
+      });
+      return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(lines.join(' | ') || 'Movimentação registrada')}</strong><span>${escape(event.reason || 'Motivo não informado')}</span><small>Evento ${escape(event.event_id)}</small></article>`;
+    };
+    const group = (title, kind, rows, empty) => `<section class="management-movement-history-group"><h4>${escape(title)}</h4>${history.loading ? '<p class="management-asset-empty">Carregando movimentações…</p>' : history.error ? '<p class="management-asset-empty">Consulta indisponível.</p>' : rows.length ? `<div class="management-movement-events">${rows.map(event => eventCard(event, kind)).join('')}</div>` : `<p class="management-asset-empty">${escape(empty)}</p>`}</section>`;
+    return `<div class="management-movement-history">${history.error ? `<p class="management-asset-disclaimer" role="status">${escape(history.error)}</p>` : ''}${kind === 'computer' ? group('Computador atual', 'computer', history.computer, item.computerId ? 'Nenhuma movimentação registrada para este PC.' : 'Nenhum computador instalado.') : group('Posição física', 'position', history.position, 'Nenhuma movimentação registrada para esta posição.')}</div>`;
   }
   function detailContent(item) {
     const tab = state.tab;
@@ -338,18 +418,20 @@
     if (tab === 'hardware') return `<section class="management-asset-section">${sectionTitle('cpu', 'Hardware')}${hardwareCards(item) ? `<div class="management-asset-data-grid">${hardwareCards(item)}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}${[item.brand, item.model, item.serial].some(hasDetailValue) ? `<div class="management-detail-grid">${hasDetailValue(item.brand) ? detail('Marca', item.brand) : ''}${hasDetailValue(item.model) ? detail('Modelo', item.model) : ''}${hasDetailValue(item.serial) ? detail('Nº de série', item.serial) : ''}</div>` : ''}</section>`;
     if (tab === 'peripherals') return `<section class="management-asset-section">${sectionTitle('cube', 'Periféricos vinculados')}${peripheralCards(item)}</section>`;
     if (tab === 'network') return `<section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede')}${networkRows(item)}<p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
-    if (tab === 'location') return `<section class="management-asset-section">${sectionTitle('pin', 'Localização')}${[item.area, item.sector, item.location].some(hasDetailValue) ? `<div class="management-detail-grid">${hasDetailValue(item.area) ? detail('Área', item.area) : ''}${hasDetailValue(item.sector) ? detail('Setor', item.sector) : ''}${hasDetailValue(item.location) ? detail('Local', item.location) : ''}</div>` : '<p class="management-asset-empty">Localização não cadastrada.</p>'}</section>`;
+    if (tab === 'location') return locationPanel(item);
+    if (tab === 'operational' && !hasInstalledComputer(item)) return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<p class="management-asset-empty">Sem computador instalado nesta posição.</p></section>`;
     if (tab === 'operational') return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article>${hasDetailValue(item.priority) ? `<article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority)}</b></article>` : ''}${hasDetailValue(item.situation) ? `<article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article>` : ''}${hasDetailValue(item.cleaning) ? `<article class="management-operational-card" style="--operational-color:${cleaningColors[item.cleaning] || cleaningColors.Preventiva}"><i>Limpeza</i><b>${escape(item.cleaning)}</b></article>` : ''}</div><p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
-    return `<section class="management-asset-section">${sectionTitle('history', 'Histórico')}<div class="management-log-head"><p>Registros automáticos e manuais do equipamento.</p><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p><span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span></article>`).join('') : '<p class="management-asset-empty">Nenhum log registrado para este equipamento.</p>'}</div></section>`;
+    if (tab === 'history') return `<section class="management-asset-section">${sectionTitle('history', 'Histórico do computador')}${movementHistoryMarkup(item, 'computer')}</section>`;
+    return `<section class="management-asset-section">${sectionTitle('history', 'Movimentação da posição física')}${movementHistoryMarkup(item, 'position')}<div class="management-log-head"><p>Registros desta posição, separados do histórico imutável do PC e do PDV.</p><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p>${log.eventId ? '' : `<span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span>`}</article>`).join('') : '<p class="management-asset-empty">Nenhum registro nesta posição.</p>'}</div></section>`;
   }
 
   function detailsModal(item) {
     const actionMenu = state.actionMenu ? `<div class="management-action-menu" role="menu"><button type="button" data-management-action="edit" role="menuitem">${svg('edit', 14)} Editar</button>${isProtectedTerminal(item) ? '' : `<button class="danger" type="button" data-management-action="delete" role="menuitem">${svg('trash', 14)} Excluir</button>`}</div>` : '';
     const fixedTerminal = hasFixedTerminal(item);
-    const transferButton = fixedTerminal ? `<button class="management-modal-action management-transfer-action" type="button" data-management-action="transfer" ${canManage() ? '' : 'disabled'} title="${canManage() ? 'Transferir computador para outro terminal' : 'Somente administradores podem transferir computadores'}">${svg('transfer', 17)} Transferir</button>` : '';
+    const transferButton = hasInstalledComputer(item) ? `<button class="management-modal-action management-transfer-action" type="button" data-management-action="transfer" ${canManage() ? '' : 'disabled'} title="${canManage() ? 'Movimentar este computador' : 'Somente administradores podem movimentar computadores'}">${svg('transfer', 17)} Movimentar</button>` : '';
     const title = fixedTerminal ? terminalName(item) : item.equipment;
     const subtitle = fixedTerminal ? computerName(item) : [item.brand, item.model].filter(hasDetailValue).join(' ') || 'Computador';
-    const facts = [['tag', 'Tag/ID', item.tag], ['network', 'IP', item.ip], ['pin', 'Localização', item.location || item.area], ['building', 'Setor', item.sector]].filter(([, , value]) => hasDetailValue(value));
+    const facts = [['tag', 'Tag/ID', item.tag], ['network', 'IP', item.ip], ['pin', 'Posição física', hasFixedTerminal(item) ? terminalName(item) : item.location || item.area], ['building', 'Setor', item.sector], ...(recordedLocationConflict(item) ? [['warning', 'Local registrado divergente', item.location || 'Não informado']] : [])].filter(([, , value]) => hasDetailValue(value));
     return `<section class="management-modal-dialog management-asset-detail" data-supply-host-source="management" data-supply-host-id="${escape(item.id)}" role="dialog" aria-modal="true" aria-labelledby="managementDetailTitle"><header class="management-modal-head management-asset-head"><div class="management-modal-identity"><span class="management-asset-hero-icon">${workstationArt()}</span><div><div class="management-asset-status">${statusBadge(item)}</div><h2 id="managementDetailTitle">${escape(title)}</h2><p>${escape(subtitle)}</p></div></div><div class="management-modal-actions">${transferButton}<span class="management-action-menu-wrap"><button class="management-modal-action action" type="button" data-management-action="toggle-actions" aria-expanded="${state.actionMenu}" ${canManage() ? '' : 'disabled'}>Ações ${svg('chevron', 14)}</button>${actionMenu}</span><button class="management-modal-action management-asset-close" type="button" data-management-action="close" aria-label="Fechar detalhes">${svg('close', 18)}</button></div></header><div class="management-asset-overview"><div class="management-asset-facts">${facts.length ? facts.map(([icon, label, value]) => `<div class="management-asset-fact"><span class="management-asset-fact-icon">${svg(icon, 20)}</span><span><small>${escape(label)}</small><strong>${escape(value)}</strong></span></div>`).join('') : '<p class="management-asset-empty">Identificação complementar não cadastrada.</p>'}</div><div class="management-asset-connectivity"><span class="management-asset-connectivity-icon">${svg('wifi', 24)}</span><span><strong>Conectividade não monitorada</strong><small>Sem leitura em tempo real</small></span></div></div><div class="management-asset-body"><nav class="management-tabs management-asset-nav" aria-label="Seções do equipamento">${detailTabs.map(([key, label, icon]) => `<button class="management-tab ${state.tab === key ? 'active' : ''}" type="button" data-management-tab="${key}" aria-current="${state.tab === key ? 'page' : 'false'}">${svg(icon, 20)}<span>${label}</span></button>`).join('')}</nav><div class="management-asset-panel" id="managementDetailPanel">${detailContent(item)}</div></div><footer class="management-asset-footer"><div>${hasDetailValue(item.registeredAt) ? `<span>${svg('calendar', 16)} Criado em: ${escape(dateTime(item.registeredAt))}</span>` : ''}${hasDetailValue(item.updatedAt) ? `<span>${svg('sync', 16)} Última atualização: ${escape(dateTime(item.updatedAt))}</span>` : ''}</div><button class="management-modal-action" type="button" data-management-action="edit" ${canManage() ? '' : 'disabled'}>${svg('edit', 16)} Editar</button></footer></section>`;
   }
 
@@ -388,21 +470,103 @@
     }).catch(error => console.warn('Imagem do computador indisponível:', error));
   }
 
+  const isOperationalPdv = item => /^PDV\s+[0-9]+$/i.test(terminalName(item));
+
+  function transferContext(item) {
+    const draft = state.transferDraft || { step: 1 };
+    const incoming = draft.mode === 'be-replaced'
+      ? payload.items.find(candidate => candidate.id === draft.incomingSourceId) : item;
+    const target = draft.mode === 'be-replaced' ? item
+      : payload.items.find(candidate => candidate.id === draft.targetId);
+    const outgoing = target && hasInstalledComputer(target) ? target : null;
+    return { draft, incoming, target, outgoing };
+  }
+
+  function transferPhysicalLocation(item) {
+    const terminal = terminalName(item);
+    return /^PDV\s+[0-9]+$/i.test(terminal)
+      ? terminal : String(item?.location || '').trim() || terminal;
+  }
+
+  function transferPhysicalLocations() {
+    return [...new Set(['Sala CPD', 'Matriz', ...payload.items.map(item => String(item.location || '').trim())])]
+      .filter(location => location && !/^PDV\s+[0-9]+$/i.test(location));
+  }
+
+  function transferReasonPrompt(status) {
+    return ({
+      Reserva: 'Por que este computador ficará como Reserva?',
+      Manutenção: 'Por que este computador será encaminhado para manutenção?',
+      Defeito: 'Qual defeito foi identificado neste computador?',
+      Inativo: 'Por que este computador será inativado?',
+      Ativo: 'Por que este computador permanecerá Ativo?'
+    })[status] || 'Por que este computador será movimentado?';
+  }
+
   function transferModal(item) {
-    const transferScope = sharedTransferAreas.has(item.area) ? 'Escritório e Estoque' : item.area;
-    const targets = payload.items
-      .filter(candidate => candidate.id !== item.id && hasFixedTerminal(candidate) && canTransferBetweenAreas(item.area, candidate.area))
-      .sort((first, second) => first.area.localeCompare(second.area, 'pt-BR') || terminalName(first).localeCompare(terminalName(second), 'pt-BR'));
-    const search = normalize(state.transferQuery);
-    const destinationCards = targets.length
-      ? targets.map(candidate => {
-        const selected = state.transferDestinationId === candidate.id;
-        const terms = [terminalName(candidate), computerName(candidate), candidate.tag, candidate.area].map(normalize).join(' ');
-        return `<button class="management-transfer-destination${selected ? ' selected' : ''}" type="button" data-management-action="select-transfer-destination" data-management-destination-id="${escape(candidate.id)}" data-management-transfer-search="${escape(terms)}" aria-pressed="${selected}" ${search && !terms.includes(search) ? 'hidden' : ''}><span class="management-transfer-destination-head"><b>${escape(terminalName(candidate))}</b><i style="--destination-status:${statusColors[candidate.status] || statusColors.Ativo}"></i></span><span>${escape(computerName(candidate))}</span><small>${escape(candidate.area)} · ${candidate.tag ? `TAG ${escape(candidate.tag)}` : 'Sem TAG'}</small></button>`;
-      }).join('') + `<p class="management-transfer-empty" data-management-transfer-empty ${targets.some(candidate => [terminalName(candidate), computerName(candidate), candidate.tag, candidate.area].map(normalize).join(' ').includes(search)) ? 'hidden' : ''}>Nenhum terminal permitido corresponde à pesquisa.</p>`
-      : '<p class="management-transfer-empty">Nenhum terminal permitido corresponde à pesquisa.</p>';
-    const selected = targets.find(candidate => candidate.id === state.transferDestinationId);
-    return `<section class="management-modal-dialog management-transfer-dialog" role="dialog" aria-modal="true" aria-labelledby="managementTransferTitle"><header class="management-modal-head"><div><h2 id="managementTransferTitle">Transferir computador — ${escape(terminalName(item))}</h2><p class="management-last-sync">Destinos disponíveis em ${escape(transferScope)}.</p></div><button class="management-modal-action" type="button" data-management-action="details" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-transfer-form" data-management-transfer-form><label class="management-transfer-search">${svg('search', 16)}<input data-management-transfer-query placeholder="Pesquisar computador ou terminal de destino..." value="${escape(state.transferQuery)}" autocomplete="off"></label><section class="management-transfer-origin"><span>Equipamento de origem</span><div><i style="--origin-status:${statusColors[item.status] || statusColors.Ativo}"></i><b>${escape(terminalName(item))}</b><small>${escape(computerName(item))}${item.tag ? ` · TAG ${escape(item.tag)}` : ''}</small></div></section><section class="management-transfer-picker"><div><h3>Selecionar destino</h3><p>${escape(transferScope)} · ${targets.length} terminais disponíveis</p></div><div class="management-transfer-destination-grid">${destinationCards}</div></section><input type="hidden" name="destinationId" value="${escape(selected?.id || '')}"><p class="management-transfer-note">${selected ? `Destino selecionado: ${terminalName(selected)}.` : 'Selecione um terminal de destino para continuar.'} Se o destino estiver ocupado, os computadores serão trocados sem perda de dados.</p><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="details">Cancelar</button><button class="management-form-save" type="submit" ${selected ? '' : 'disabled'}>${svg('transfer', 14)} Transferir</button></footer></form></section>`;
+    const { draft, incoming, target, outgoing } = transferContext(item);
+    const step = draft.step || 1;
+    const statusSelect = (name, selected) => `<select name="${name}" required><option value="">Selecione...</option>${statuses.map(value => `<option value="${escape(value)}" ${selected === value ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select>`;
+    const modeLabels = { 'replace-other': 'Substituir outro computador', 'be-replaced': 'Ser substituído por outro computador', direct: 'Transferir sem substituição' };
+    const modeDescriptions = {
+      'replace-other': 'Levar este computador a uma posição ocupada e definir o destino do computador retirado.',
+      'be-replaced': 'Trazer outro computador para esta posição e definir o destino do computador atual.',
+      direct: 'Mover este computador para uma posição vazia ou somente para um local físico.'
+    };
+    let content = '';
+    if (step === 1) {
+      const modeIcons = { 'replace-other': 'workstation', 'be-replaced': 'monitor', direct: 'transfer' };
+      content = `<div class="management-transfer-modes">${Object.entries(modeLabels).map(([mode, label]) => `<button type="button" data-management-action="select-transfer-mode" data-management-transfer-mode="${mode}" ${mode === 'replace-other' && isOperationalPdv(item) ? 'disabled title="Este computador já ocupa um PDV"' : ''}><span class="management-transfer-mode-icon ${mode}">${svg(modeIcons[mode], 39)}</span><span class="management-transfer-mode-copy"><b>${escape(label)}</b><small>${escape(mode === 'replace-other' && isOperationalPdv(item) ? 'Este computador já ocupa um PDV. Selecione um computador disponível para substituí-lo.' : modeDescriptions[mode])}</small></span><span class="management-transfer-mode-indicator" aria-hidden="true">${svg('chevron', 25)}</span></button>`).join('')}</div>`;
+    } else if (step === 2) {
+      const candidates = payload.items.filter(candidate => candidate.id !== item.id &&
+        canTransferBetweenAreas(item.area, candidate.area) && (
+        draft.mode === 'be-replaced' ? hasInstalledComputer(candidate) && !isOperationalPdv(candidate) &&
+          ['Ativo', 'Reserva'].includes(candidate.status)
+          : draft.mode === 'direct' ? !hasInstalledComputer(candidate) && hasFixedTerminal(candidate)
+            : hasInstalledComputer(candidate) && hasFixedTerminal(candidate)))
+        .sort((first, second) => terminalName(first).localeCompare(terminalName(second), 'pt-BR'));
+      const extra = draft.mode === 'direct' ? 1 : 0;
+      const occupiedCandidate = candidate => draft.mode === 'be-replaced'
+        ? isOperationalPdv(candidate) : hasInstalledComputer(candidate);
+      const count = key => key === 'all' ? candidates.length + extra
+        : key === 'boxes' ? candidates.filter(candidate => /^caixa\b/i.test(computerName(candidate))).length
+          : key === 'pdv' ? candidates.filter(candidate => /^pdv\b/i.test(terminalName(candidate))).length
+            : key === 'sectors' ? candidates.filter(candidate => !/^pdv\b/i.test(terminalName(candidate))).length + extra
+              : key === 'occupied' ? candidates.filter(occupiedCandidate).length
+                : candidates.filter(candidate => !occupiedCandidate(candidate)).length + extra;
+      const filters = [['all', 'Todos', 'cube'], ['boxes', 'Caixas', 'workstation'],
+        ['pdv', 'PDV', 'display'], ['sectors', 'Setores', 'building'],
+        ['occupied', 'Em uso', 'wifi'], ['available', 'Disponíveis', 'check']];
+      const cards = candidates.map(candidate => {
+        const selected = draft.destinationChoiceId === candidate.id;
+        const details = [candidate.processor, candidate.memory, candidate.storage].filter(Boolean).join(' | ');
+        return `<button class="management-transfer-destination ${selected ? 'selected' : ''}" type="button" data-management-action="preview-transfer-destination" data-management-destination-id="${escape(candidate.id)}" data-management-transfer-search="${escape(normalize([terminalName(candidate), computerName(candidate), candidate.tag, candidate.area, candidate.sector, details].join(' ')))}" data-transfer-box="${/^caixa\b/i.test(computerName(candidate))}" data-transfer-pdv="${/^pdv\b/i.test(terminalName(candidate))}" data-transfer-occupied="${occupiedCandidate(candidate)}" data-transfer-area="${escape(normalize(candidate.area))}" data-transfer-sector="${escape(normalize(candidate.sector))}" aria-pressed="${selected}"><span class="management-transfer-card-art">${workstationArt()}</span><span class="management-transfer-card-copy"><b>${escape(terminalName(candidate))}</b>${statusBadge(candidate)}<small>${escape(computerName(candidate))}</small><small>${escape(candidate.tag || 'TAG não informada')}</small>${details ? `<small class="management-transfer-card-specs">${escape(details)}</small>` : ''}</span><span class="management-transfer-card-chevron" aria-hidden="true">${svg('chevron', 20)}</span></button>`;
+      }).join('');
+      const noTerminal = extra ? `<button class="management-transfer-destination ${draft.destinationChoiceId === '__unassigned__' ? 'selected' : ''}" type="button" data-management-action="preview-transfer-destination" data-management-destination-id="__unassigned__" data-management-transfer-search="sem terminal local fisico" data-transfer-box="false" data-transfer-pdv="false" data-transfer-occupied="false" data-transfer-area="${escape(normalize(item.area))}" data-transfer-sector="${escape(normalize(item.sector))}" aria-pressed="${draft.destinationChoiceId === '__unassigned__'}"><span class="management-transfer-card-art">${svg('pin', 58)}</span><span class="management-transfer-card-copy"><b>Sem terminal</b><small>Definir apenas o local físico</small></span><span class="management-transfer-card-chevron" aria-hidden="true">${svg('chevron', 20)}</span></button>` : '';
+      const chosen = payload.items.find(candidate => candidate.id === draft.destinationChoiceId);
+      content = `<div class="management-transfer-flow-summary"><div><span class="management-transfer-summary-icon">${svg('workstation', 27)}</span><span><small>PC selecionado</small><strong>${escape(computerName(item))}</strong><em>${escape(terminalName(item))}</em></span></div><span class="management-transfer-summary-arrow" aria-hidden="true">→</span><div><span class="management-transfer-summary-icon">${svg('pin', 27)}</span><span><small>${draft.mode === 'be-replaced' ? 'Origem do substituto' : 'Destino'}</small><strong data-management-selected-destination-label>${escape(chosen ? terminalName(chosen) : draft.destinationChoiceId === '__unassigned__' ? 'Sem terminal' : 'Escolha uma posição')}</strong></span></div><div><span class="management-transfer-summary-icon">${svg('notes', 27)}</span><span><small>Tipo de movimentação</small><strong>${escape(modeLabels[draft.mode])}</strong></span></div></div><div class="management-transfer-browser"><aside class="management-transfer-sidebar"><label class="management-transfer-search">${svg('search', 20)}<input type="search" data-management-transfer-query autocomplete="off" placeholder="Buscar por caixa, TAG ou nome..." aria-label="Buscar destino" value="${escape(state.transferQuery || '')}"></label><nav class="management-transfer-filters" aria-label="Filtrar destinos">${filters.map(([key, label, icon]) => `<button type="button" data-management-action="filter-transfer-destinations" data-management-transfer-filter="${key}" aria-pressed="${(state.transferFilter || 'all') === key}">${svg(icon, 21)}<span>${label}</span><b>${count(key)}</b></button>`).join('')}</nav><fieldset class="management-transfer-extra-filters"><legend>Filtros</legend><label><input type="checkbox" data-management-transfer-only-available ${state.transferOnlyAvailable ? 'checked' : ''}> Apenas disponíveis</label><label><input type="checkbox" data-management-transfer-same-sector ${state.transferSameSector ? 'checked' : ''}> Mesmo setor</label></fieldset></aside><div class="management-transfer-results"><div class="management-transfer-destination-grid">${cards}${noTerminal}</div><p class="management-transfer-empty" data-management-transfer-empty hidden>Nenhuma posição encontrada com esses filtros.</p></div></div>`;
+    } else if (step === 3) {
+      const vacant = payload.items.filter(candidate =>
+        (candidate.id === incoming?.id ||
+          (!hasInstalledComputer(candidate) && candidate.id !== target?.id)) &&
+        canTransferBetweenAreas(target?.area, candidate.area));
+      const pdvReplacement = Boolean(outgoing && /^PDV\s+[0-9]+$/i.test(terminalName(target)));
+      const outgoingChoices = `<option value="">Selecione o destino físico...</option>${transferPhysicalLocations().map(location => `<option value="__unassigned__" data-location="${escape(location)}" ${draft.outgoingDestinationId === '__unassigned__' && draft.outgoingLocation === location ? 'selected' : ''}>${escape(location)} (sem terminal)</option>`).join('')}${vacant.map(candidate => `<option value="${escape(candidate.id)}" data-location="${escape(transferPhysicalLocation(candidate))}" ${draft.outgoingDestinationId === candidate.id ? 'selected' : ''}>${escape(terminalName(candidate))} — ${escape(transferPhysicalLocation(candidate))}${candidate.id === incoming?.id ? ' (será desocupado)' : ''}</option>`).join('')}`;
+      const incomingLocation = target ? transferPhysicalLocation(target) : draft.incomingLocation || '';
+      const localChoices = `<option value="">Selecione o local físico...</option>${transferPhysicalLocations().map(location => `<option value="${escape(location)}" ${incomingLocation === location ? 'selected' : ''}>${escape(location)}</option>`).join('')}`;
+      const incomingPanel = `<section class="management-transfer-panel"><h3>${outgoing ? 'Computador substituto' : 'Computador movimentado'}</h3><strong>${escape(computerName(incoming))}</strong><p>Local atual: ${escape(incoming?.location || terminalName(incoming))} · Status atual: ${escape(incoming?.status)}</p>${target ? `<p>Destino físico: <b>${escape(incomingLocation)}</b></p>` : `<label>Destino físico <select name="incomingPhysicalLocation" required>${localChoices}</select></label>`}${pdvReplacement ? '<p>Status final: <b>Ativo (automático)</b></p>' : `<label>Status final ${statusSelect('incomingStatus', draft.incomingStatus || '')}</label>`}</section>`;
+      const outgoingPanel = outgoing ? `<section class="management-transfer-panel"><h3>Computador retirado</h3><strong>${escape(computerName(outgoing))}</strong><p>Local atual: ${escape(outgoing.location || terminalName(outgoing))} · Status atual: ${escape(outgoing.status)}</p><label>Destino físico <select name="outgoingDestinationId" required>${outgoingChoices}</select></label><label>Status final ${statusSelect('outgoingStatus', draft.outgoingStatus || '')}</label><label><span data-management-reason-label>${escape(transferReasonPrompt(draft.outgoingStatus))}</span><textarea name="reason" required>${escape(draft.reason || '')}</textarea></label></section>` : '';
+      content = `<div class="management-transfer-fields management-transfer-panels">${outgoing ? outgoingPanel + incomingPanel : incomingPanel + `<section class="management-transfer-panel"><label>Justificativa da movimentação <textarea name="reason" required>${escape(draft.reason || '')}</textarea></label></section>`}<p class="management-transfer-note">O destino escolhido define o local gravado. Os periféricos permanecem vinculados à posição física.</p></div>`;
+    } else if (step === 4) {
+      content = `<div class="management-transfer-review"><h3>Revisão preventiva</h3><p>${escape(computerName(incoming))}: ${escape(incoming.location || terminalName(incoming))} → ${escape(draft.incomingLocation)} · ${escape(draft.incomingStatus)}.</p>${outgoing ? `<p>${escape(computerName(outgoing))}: ${escape(outgoing.location || terminalName(outgoing))} → ${escape(draft.outgoingLocation)} · ${escape(draft.outgoingStatus)}.</p>` : ''}<p>Justificativa: ${escape(draft.reason)}</p><p class="management-transfer-note">Confira os dados antes da confirmação final. Nenhuma alteração foi gravada ainda.</p></div>`;
+    } else {
+      content = `<div class="management-transfer-review"><h3>Resumo da ${outgoing ? 'substituição' : 'transferência'}</h3>${outgoing ? `<p><b>PDV ou posição envolvida:</b> ${escape(terminalName(target))}</p><p><b>Computador retirado:</b> ${escape(computerName(outgoing))} · TAG ${escape(outgoing.tag || 'não informada')}</p><p>${escape(outgoing.location || terminalName(outgoing))} → ${escape(draft.outgoingLocation)} · ${escape(outgoing.status)} → ${escape(draft.outgoingStatus)}</p>` : ''}<p><b>${outgoing ? 'Computador substituto' : 'Computador movimentado'}:</b> ${escape(computerName(incoming))} · TAG ${escape(incoming.tag || 'não informada')}</p><p>${escape(incoming.location || terminalName(incoming))} → ${escape(draft.incomingLocation)} · ${escape(incoming.status)} → ${escape(draft.incomingStatus)}${outgoing && /^PDV\s+[0-9]+$/i.test(terminalName(target)) ? ' (automático)' : ''}</p><p><b>Justificativa:</b> ${escape(draft.reason)}</p><p>${escape(computerName(incoming))} será instalado em ${escape(draft.incomingLocation)}${outgoing ? `; ${escape(computerName(outgoing))} será encaminhado para ${escape(draft.outgoingLocation)}.` : '.'}</p></div><label class="management-transfer-confirm"><input type="checkbox" name="confirmedLocations" required> Confirmo os locais físicos e os status finais de cada computador.</label>`;
+    }
+    const instruction = step === 1 ? `Selecione o tipo de movimentação para ${computerName(item)}.`
+      : step === 2 ? draft.mode === 'be-replaced' ? 'Selecione o computador que entrará nesta posição.' : 'Selecione a posição para onde o computador irá.'
+        : `Etapa ${step} de 5 · ${modeLabels[draft.mode]}`;
+    const headerIcon = `<span class="management-transfer-glyph" aria-hidden="true">${svg('display', 42)}${svg('transfer', 26)}${svg('display', 42)}</span>`;
+    return `<section class="management-modal-dialog management-transfer-dialog management-transfer-step-${step}" role="dialog" aria-modal="true" aria-labelledby="managementTransferTitle"><header class="management-transfer-header"><span class="management-transfer-header-icon">${headerIcon}</span><div class="management-transfer-header-copy"><span class="management-transfer-step-label">Etapa ${step} de 5 · ${escape(modeLabels[draft.mode] || 'Escolher modalidade')}</span><h2 id="managementTransferTitle">Movimentar computador</h2><p>${escape(instruction)}</p><small>${step === 1 ? 'Nenhuma alteração ocorrerá antes da confirmação final.' : step === 2 ? 'Escolha o destino; os dados só serão alterados na última etapa.' : 'Revise cada informação antes da confirmação final.'}</small></div>${step === 2 ? `<span class="management-transfer-header-art" aria-hidden="true">${workstationArt()}</span>` : ''}<button class="management-modal-action management-transfer-close" type="button" data-management-action="details" aria-label="Fechar">${svg('close', 24)}</button></header><form class="management-transfer-form" data-management-transfer-form>${content}<footer class="management-form-footer management-transfer-footer">${step === 2 ? '<span class="management-transfer-result-count" data-management-transfer-count></span>' : ''}<span class="management-transfer-footer-actions">${step > 1 ? '<button class="management-form-cancel" type="button" data-management-action="transfer-back">Voltar</button>' : ''}<button class="management-form-cancel" type="button" data-management-action="details">Cancelar</button>${step === 2 ? `<button class="management-form-save" type="button" data-management-action="confirm-transfer-destination" ${draft.destinationChoiceId ? '' : 'disabled'}>Confirmar destino ${svg('transfer', 18)}</button>` : step >= 3 ? `<button class="management-form-save" type="submit" ${step === 5 ? 'data-management-final-confirm disabled' : ''}>${step === 5 ? 'Confirmar movimentação' : 'Continuar'}</button>` : ''}</span></footer></form></section>`;
   }
 
   const optionList = (values, selected) => values.map(value => `<option value="${escape(value)}" ${selected === value ? 'selected' : ''}>${escape(value)}</option>`).join('');
@@ -427,6 +591,37 @@
     };
     const peripheralFields = peripheralTypes.map(type => peripheralField(type, peripheralValue(type))).join('');
     return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar terminal' : 'Adicionar terminal'}</h2><p class="management-last-sync">${formHint}</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Terminal e computador</h3>${terminalField}${field('equipment', 'Nome do computador instalado', current.equipment)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('sector', 'Setor', current.sector)}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${field('cleaning', 'Limpeza', current.cleaning, cleanings)}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar terminal'}</button></footer></form></section>`;
+  }
+
+  function mountClassificationFields() {
+    const form = modalNode.querySelector('[data-management-form]');
+    if (!form) return;
+    const current = activeItem();
+    const equipmentField = form.querySelector('[name="equipment"]')?.closest('label');
+    if (equipmentField) {
+      const categoryField = document.createElement('label');
+      categoryField.className = 'management-field';
+      const label = document.createElement('span');
+      label.textContent = 'Categoria';
+      const input = document.createElement('input');
+      input.name = 'category';
+      input.value = current?.category || (current?.equipment ? 'Computador' : '');
+      input.placeholder = 'Ex.: Computador';
+      categoryField.append(label, input);
+      equipmentField.after(categoryField);
+    }
+    const area = form.querySelector('[name="area"]');
+    const areaLabel = area?.closest('label')?.querySelector('span');
+    if (areaLabel) areaLabel.textContent = 'Ramificação';
+    configuredAreas().forEach(value => {
+      if (![...area.options].some(option => option.value === value)) area.add(new Option(value, value));
+    });
+    if (current?.area) area.value = current.area;
+    const status = form.querySelector('[name="status"]');
+    configuredStatuses().forEach(value => {
+      if (![...status.options].some(option => option.value === value)) status.add(new Option(value, value));
+    });
+    if (current?.status) status.value = current.status;
   }
 
   function deleteModal(item) {
@@ -633,8 +828,10 @@
       else modalNode.innerHTML = detailsModal(item);
     }
     applyStatusModalGlow();
+    if (state.modal?.type === 'edit' || state.modal?.type === 'add') mountClassificationFields();
     if (state.modal?.type === 'details') mountComputerPhoto(activeItem());
     if (state.modal?.type === 'edit') mountComputerImageEditor(activeItem());
+    if (state.modal?.type === 'transfer' && state.transferDraft?.step === 2) applyTransferSearch();
     window.AldeckotActionMenus?.enhance(modalNode);
   }
 
@@ -643,7 +840,8 @@
     const dialog = modalNode.querySelector('.management-modal-dialog');
     if (!item || !dialog) return;
     const presentation = statusPresentation[item.status] || statusPresentation.Ativo;
-    if (!dialog.classList.contains('management-asset-detail')) dialog.classList.add('management-status-glow');
+    if (!dialog.classList.contains('management-asset-detail') && state.modal?.type !== 'transfer')
+      dialog.classList.add('management-status-glow');
     dialog.style.setProperty('--management-modal-status-color', presentation.color);
   }
 
@@ -678,7 +876,7 @@
     return {
       ...(current || {}), terminal: current ? current.terminal : String(values.terminal || '').trim(), equipment: String(values.equipment || '').trim(), tag: String(values.tag || '').trim(), brand: String(values.brand || '').trim(), model: String(values.model || '').trim(), serial: String(values.serial || '').trim(),
       ip: String(values.ip || '').trim(), gateway: String(values.gateway || '').trim(), subnetMask: String(values.subnetMask || '').trim(), hostname: current?.hostname || '', operatingSystem: String(values.operatingSystem || '').trim(), osVersion: String(values.osVersion || '').trim(),
-      processor: String(values.processor || '').trim(), memory: String(values.memory || '').trim(), storage: String(values.storage || '').trim(), type: current?.type || values.area || '', company: current?.company || '', sector: String(values.sector || '').trim(),
+      processor: String(values.processor || '').trim(), memory: String(values.memory || '').trim(), storage: String(values.storage || '').trim(), type: current?.type || values.area || '', category: String(values.category || (values.equipment ? 'Computador' : '')).trim(), company: current?.company || '', sector: String(values.sector || '').trim(),
       location: String(values.location || '').trim(), responsible: current?.responsible || '', user: current?.user || '', notes: String(values.notes || '').trim(), status: values.status, priority: priorities.includes(values.priority) ? values.priority : 'Estável',
       situation: values.situation, cleaning: values.cleaning, area: values.area, isFixed: current ? Boolean(current.isFixed) : false, peripherals,
       monitoring: current?.monitoring || {},
@@ -688,7 +886,7 @@
 
   function logDescription(previous, next) {
     if (!previous) return `${next.equipment}: equipamento cadastrado no sistema.`;
-    const tracked = [['status', 'status'], ['priority', 'prioridade'], ['ip', 'IP'], ['sector', 'setor'], ['situation', 'situação'], ['cleaning', 'limpeza']];
+    const tracked = [['category', 'categoria'], ['area', 'ramificação'], ['location', 'local'], ['status', 'status'], ['priority', 'prioridade'], ['ip', 'IP'], ['sector', 'setor'], ['situation', 'situação'], ['cleaning', 'limpeza']];
     const changes = tracked.filter(([key]) => String(previous[key] || '') !== String(next[key] || '')).map(([key, label]) => `${label}: “${previous[key] || 'Não informado'}” → “${next[key] || 'Não informado'}”`);
     return changes.length ? `Alterações na Gestão TI — ${changes.join('; ')}.` : 'Dados técnicos revisados na Gestão TI.';
   }
@@ -739,44 +937,169 @@
   }
 
   async function transferActive(form) {
-    const source = activeItem();
-    const destinationId = String(new FormData(form).get('destinationId') || '');
-    const destination = payload.items.find(item => item.id === destinationId);
-    if (!source || !hasFixedTerminal(source) || !destination || !hasFixedTerminal(destination) || !canTransferBetweenAreas(source.area, destination.area)) {
-      notify('Selecione um terminal de destino válido.');
+    if (state.transferBusy) return;
+    const { draft, incoming, target, outgoing } = transferContext(activeItem());
+    if (outgoing && isOperationalPdv(incoming)) {
+      notify('O substituto já está instalado em outro PDV. Escolha um computador disponível.');
       return;
     }
+    if (!incoming?.computerId || (target && !target.id) ||
+      (outgoing && !outgoing.computerId) || !draft?.confirmedLocations) {
+      notify('Revise os computadores e confirme os locais físicos antes de continuar.');
+      return;
+    }
+    const outgoingDestination = payload.items.find(item => item.id === draft.outgoingDestinationId);
+    const operationId = draft.operationId || crypto.randomUUID();
+    draft.operationId = operationId;
+    const plan = {
+      mode: draft.mode,
+      sourceId: incoming.id, sourceUpdatedAt: incoming.updatedAt,
+      incomingComputerId: incoming.computerId,
+      targetId: target?.id || null, targetUpdatedAt: target?.updatedAt || null,
+      targetUnassigned: draft.targetId === '__unassigned__',
+      incomingStatus: draft.incomingStatus, incomingLocation: draft.incomingLocation,
+      outgoingComputerId: outgoing?.computerId || null,
+      outgoingDestinationId: outgoingDestination?.id || null,
+      outgoingDestinationUpdatedAt: outgoingDestination?.updatedAt || null,
+      outgoingUnassigned: Boolean(outgoing && draft.outgoingDestinationId === '__unassigned__'),
+      outgoingStatus: outgoing ? draft.outgoingStatus : null,
+      outgoingLocation: outgoing ? draft.outgoingLocation : null,
+      reason: draft.reason, confirmedLocations: true
+    };
     const submit = form.querySelector('[type="submit"]');
+    state.transferBusy = true;
     submit.disabled = true;
-    submit.textContent = 'Transferindo…';
+    submit.textContent = 'Movimentando…';
     try {
-      payload = await window.AldeckotSupabase.management.transfer(source.id, destination.id);
+      const response = await window.AldeckotSupabase.management.moveComputer(operationId, plan);
+      payload = { table: response.table, items: response.items };
+      movementHistoryRequest += 1;
+      movementHistory = { key: '', loading: false, loaded: false, computer: [], position: [], error: '' };
       state.syncAt = new Date().toISOString();
-      state.modal = { type: 'details', id: source.id };
+      state.modal = { type: 'details', id: response.result.incomingDestinationId };
+      state.transferDraft = null;
       state.tab = 'general';
       state.actionMenu = false;
       render();
       renderModal();
-      notify(`Computador transferido de ${terminalName(source)} para ${terminalName(destination)}.`);
+      notify(`Movimentação concluída. Evento ${response.result.eventId}.`);
     } catch (error) {
-      console.error('Falha ao transferir computador entre terminais:', error);
+      console.error('Falha na movimentação de computadores:', error);
       submit.disabled = false;
-      submit.textContent = 'Confirmar transferência';
-      notify(error?.message || 'Não foi possível concluir a transferência. Verifique as migrações da Gestão TI no Supabase.');
+      submit.textContent = 'Confirmar movimentação';
+      const unavailable = /management_move_computer|PGRST202/i.test(String(error?.message || ''));
+      notify(unavailable
+        ? 'A nova movimentação ainda não foi ativada no banco. Nenhum dado foi alterado.'
+        : (error?.message || 'A movimentação não foi concluída. Nenhuma troca foi confirmada.'));
+    } finally {
+      state.transferBusy = false;
     }
+  }
+
+  function selectTransferDestination(id) {
+    const draft = state.transferDraft;
+    const candidate = payload.items.find(item => item.id === id);
+    if (state.modal?.type !== 'transfer' || state.transferBusy || draft?.step !== 2 ||
+      (!candidate && id !== '__unassigned__')) return;
+    if (draft.mode === 'be-replaced') {
+      if (!candidate || !hasInstalledComputer(candidate) || isOperationalPdv(candidate) ||
+        !['Ativo', 'Reserva'].includes(candidate.status) ||
+        candidate.id === activeItem()?.id ||
+        !canTransferBetweenAreas(candidate.area, activeItem()?.area)) return;
+      draft.incomingSourceId = id;
+    } else if (draft.mode === 'replace-other') {
+      if (!candidate || !hasInstalledComputer(candidate) || isOperationalPdv(activeItem()) ||
+        candidate.id === activeItem()?.id ||
+        !canTransferBetweenAreas(activeItem()?.area, candidate.area)) return;
+      draft.targetId = id;
+    } else {
+      if (candidate && (hasInstalledComputer(candidate) || !hasFixedTerminal(candidate) ||
+        !canTransferBetweenAreas(activeItem()?.area, candidate.area))) return;
+      draft.targetId = id;
+    }
+    draft.step = 3;
+    draft.operationId = null;
+    renderModal();
+  }
+
+  function transferAdvance(form) {
+    const draft = state.transferDraft;
+    if (!draft || state.transferBusy) return;
+    const values = Object.fromEntries(new FormData(form));
+    if (draft.step === 3) {
+      const { incoming, target, outgoing } = transferContext(activeItem());
+      if (outgoing && isOperationalPdv(incoming)) {
+        notify('O substituto já está instalado em outro PDV. Escolha um computador disponível.');
+        return;
+      }
+      const targetIsPdv = Boolean(target && /^PDV\s+[0-9]+$/i.test(terminalName(target)));
+      const selectedOutgoing = form.elements.outgoingDestinationId?.selectedOptions?.[0];
+      draft.incomingStatus = outgoing && targetIsPdv ? 'Ativo' : String(values.incomingStatus || '').trim();
+      draft.incomingLocation = target ? transferPhysicalLocation(target) : String(values.incomingPhysicalLocation || '').trim();
+      draft.outgoingDestinationId = outgoing ? String(values.outgoingDestinationId || '').trim() : '';
+      draft.outgoingStatus = outgoing ? String(values.outgoingStatus || '').trim() : '';
+      draft.outgoingLocation = outgoing ? String(selectedOutgoing?.dataset.location || '').trim() : '';
+      draft.reason = String(values.reason || '').trim();
+      const outgoingIsPdv = /^PDV\s+[0-9]+$/i.test(draft.outgoingLocation);
+      if (outgoing && targetIsPdv && !['Ativo', 'Reserva'].includes(incoming.status)) {
+        notify('Este computador não está disponível para ativação automática. Regularize o status antes da substituição.');
+        return;
+      }
+      if (!statuses.includes(draft.incomingStatus) || !draft.incomingLocation ||
+        (targetIsPdv && draft.incomingStatus !== 'Ativo') ||
+        (!targetIsPdv && draft.incomingStatus === 'Ativo') ||
+        (outgoing && (!draft.outgoingDestinationId || !statuses.includes(draft.outgoingStatus) ||
+          !draft.outgoingLocation || (outgoingIsPdv ? draft.outgoingStatus !== 'Ativo' : draft.outgoingStatus === 'Ativo')))) {
+        notify('Revise a compatibilidade entre destino físico e status final de cada computador.');
+        return;
+      }
+      if (!draft.reason) { notify('Informe a justificativa da movimentação.'); return; }
+      draft.step = 4;
+    } else if (draft.step === 4) {
+      draft.step = 5;
+    } else if (draft.step === 5) {
+      if (!values.confirmedLocations) { notify('Confirme os locais físicos e os status finais.'); return; }
+      draft.confirmedLocations = true;
+      transferActive(form);
+      return;
+    }
+    draft.operationId = null;
+    renderModal();
   }
 
   function applyTransferSearch() {
     const query = normalize(state.transferQuery);
     const cards = [...modalNode.querySelectorAll('[data-management-transfer-search]')];
+    const category = state.transferFilter || 'all';
+    const sector = normalize(activeItem()?.sector);
     let visible = 0;
     cards.forEach(card => {
-      const matches = !query || String(card.dataset.managementTransferSearch || '').includes(query);
+      const categoryMatches = category === 'all'
+        || (category === 'boxes' && card.dataset.transferBox === 'true')
+        || (category === 'pdv' && card.dataset.transferPdv === 'true')
+        || (category === 'sectors' && card.dataset.transferPdv !== 'true')
+        || (category === 'occupied' && card.dataset.transferOccupied === 'true')
+        || (category === 'available' && card.dataset.transferOccupied !== 'true');
+      const matches = (!query || String(card.dataset.managementTransferSearch || '').includes(query))
+        && categoryMatches
+        && (!state.transferOnlyAvailable || card.dataset.transferOccupied !== 'true')
+        && (!state.transferSameSector || (sector && card.dataset.transferSector === sector));
       card.hidden = !matches;
       if (matches) visible += 1;
     });
     const empty = modalNode.querySelector('[data-management-transfer-empty]');
     if (empty) empty.hidden = visible > 0;
+    const count = modalNode.querySelector('[data-management-transfer-count]');
+    if (count) count.textContent = `${visible} ${visible === 1 ? 'destino encontrado' : 'destinos encontrados'}`;
+    const selected = cards.find(card => card.dataset.managementDestinationId === state.transferDraft?.destinationChoiceId && !card.hidden);
+    if (!selected && state.transferDraft?.destinationChoiceId) {
+      state.transferDraft.destinationChoiceId = '';
+      cards.forEach(card => { card.classList.remove('selected'); card.setAttribute('aria-pressed', 'false'); });
+      const label = modalNode.querySelector('[data-management-selected-destination-label]');
+      if (label) label.textContent = 'Escolha uma posição';
+      const confirm = modalNode.querySelector('[data-management-action="confirm-transfer-destination"]');
+      if (confirm) confirm.disabled = true;
+    }
   }
 
   async function saveLogFromForm(form) {
@@ -786,6 +1109,7 @@
     const text = String(values.text || '').trim();
     if (!text) { notify('Informe a descrição do log.'); return; }
     const editingLog = (item.logs || []).find(log => log.id === state.modal?.logId);
+    if (editingLog?.eventId) { notify('Uma movimentação registrada não pode ser editada.'); return; }
     const nextLog = editingLog ? { ...editingLog, text } : uniqueLog(text);
     const logs = editingLog
       ? (item.logs || []).map(log => log.id === editingLog.id ? nextLog : log)
@@ -812,6 +1136,7 @@
     const targetId = state.modal?.logId;
     const removed = (item?.logs || []).find(log => log.id === targetId);
     if (!item || !removed) return;
+    if (removed.eventId) { notify('Uma movimentação registrada não pode ser excluída.'); return; }
     try {
       const saved = await window.AldeckotSupabase.management.save({ ...item, logs: item.logs.filter(log => log.id !== targetId) }, item.id, 'Log removido da Gestão TI.');
       if (removed.sourceModule === 'control' && removed.sourceLogId) {
@@ -975,20 +1300,21 @@
     const open = event.target.closest('[data-management-open]');
     if (open) { openDetails(open.dataset.managementOpen); return; }
     const tab = event.target.closest('[data-management-tab]');
-    if (tab) { state.tab = tab.dataset.managementTab; renderModal(); modalNode.querySelector(`[data-management-tab="${state.tab}"]`)?.focus({ preventScroll: true }); return; }
+    if (tab) { state.tab = tab.dataset.managementTab; renderModal(); if (['history', 'movement'].includes(state.tab)) void loadMovementHistory(activeItem()); modalNode.querySelector(`[data-management-tab="${state.tab}"]`)?.focus({ preventScroll: true }); return; }
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
     if (!action) return;
-    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-destination', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-mode', 'select-transfer-destination', 'transfer-back', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
+    if (state.transferBusy && state.modal?.type === 'transfer' && (action === 'close' || action === 'details')) return;
     if (action === 'close') {
       const closingDetails = state.modal?.type === 'details';
       state.modal = null; state.actionMenu = false; renderModal();
       if (closingDetails && detailReturnFocus?.isConnected) detailReturnFocus.focus({ preventScroll: true });
       if (closingDetails) detailReturnFocus = null;
     }
-    if (action === 'details' && activeItem()) { state.modal = { type: 'details', id: activeItem().id }; state.tab = actionNode.dataset.managementReturnTab || 'general'; state.actionMenu = false; renderModal(); }
+    if (action === 'details' && activeItem()) { state.modal = { type: 'details', id: activeItem().id }; state.tab = actionNode.dataset.managementReturnTab || 'general'; state.actionMenu = false; renderModal(); if (['history', 'movement'].includes(state.tab)) void loadMovementHistory(activeItem()); }
     if (action === 'copy-network' && activeItem()) {
       const field = actionNode.dataset.managementNetworkField;
       if (!['ip', 'subnetMask', 'gateway', 'dns'].includes(field) || !hasDetailValue(activeItem()[field])) return;
@@ -998,14 +1324,48 @@
     }
     if (action === 'toggle-actions' && activeItem()) { state.actionMenu = !state.actionMenu; renderModal(); }
     if (action === 'choose-computer-image' && activeItem() && !imageUploadBusy) modalNode.querySelector('[data-management-computer-image]')?.click();
-    if (action === 'transfer' && activeItem() && hasFixedTerminal(activeItem())) { state.modal = { type: 'transfer', id: activeItem().id }; state.transferDestinationId = ''; state.transferQuery = ''; state.actionMenu = false; renderModal(); }
-    if (action === 'select-transfer-destination' && activeItem() && state.modal?.type === 'transfer') { state.transferDestinationId = actionNode.dataset.managementDestinationId || ''; renderModal(); }
+    if (action === 'transfer' && activeItem() && hasInstalledComputer(activeItem())) { state.modal = { type: 'transfer', id: activeItem().id }; state.transferDraft = { step: 1, operationId: null }; state.transferQuery = ''; state.transferFilter = 'all'; state.transferOnlyAvailable = false; state.transferSameSector = false; state.actionMenu = false; renderModal(); }
+    if (action === 'select-transfer-mode' && state.modal?.type === 'transfer' && !state.transferBusy) {
+      const mode = actionNode.dataset.managementTransferMode;
+      if (mode === 'replace-other' && isOperationalPdv(activeItem())) {
+        notify('Este computador já ocupa um PDV. Escolha um substituto disponível ou transfira-o para uma posição vazia.');
+        return;
+      }
+      if (['replace-other', 'be-replaced', 'direct'].includes(mode)) { state.transferDraft = { step: 2, mode, destinationChoiceId: '', operationId: null }; renderModal(); }
+    }
+    if (action === 'preview-transfer-destination' && state.modal?.type === 'transfer' && state.transferDraft?.step === 2 && !state.transferBusy) {
+      const id = actionNode.dataset.managementDestinationId || '';
+      state.transferDraft.destinationChoiceId = id;
+      modalNode.querySelectorAll('[data-management-destination-id]').forEach(card => {
+        const selected = card.dataset.managementDestinationId === id;
+        card.classList.toggle('selected', selected);
+        card.setAttribute('aria-pressed', String(selected));
+      });
+      const label = modalNode.querySelector('[data-management-selected-destination-label]');
+      if (label) label.textContent = id === '__unassigned__' ? 'Sem terminal' : terminalName(payload.items.find(item => item.id === id));
+      const confirm = modalNode.querySelector('[data-management-action="confirm-transfer-destination"]');
+      if (confirm) confirm.disabled = false;
+    }
+    if (action === 'confirm-transfer-destination') selectTransferDestination(state.transferDraft?.destinationChoiceId || '');
+    if (action === 'filter-transfer-destinations' && state.modal?.type === 'transfer' && state.transferDraft?.step === 2) {
+      state.transferFilter = actionNode.dataset.managementTransferFilter || 'all';
+      modalNode.querySelectorAll('[data-management-transfer-filter]').forEach(button =>
+        button.setAttribute('aria-pressed', String(button.dataset.managementTransferFilter === state.transferFilter)));
+      applyTransferSearch();
+    }
+    if (action === 'select-transfer-destination') selectTransferDestination(actionNode.dataset.managementDestinationId || '');
+    if (action === 'transfer-back' && state.modal?.type === 'transfer' && !state.transferBusy) {
+      state.transferDraft.step = Math.max(1, state.transferDraft.step - 1);
+      state.transferDraft.operationId = null;
+      state.transferDraft.confirmedLocations = false;
+      renderModal();
+    }
     if (action === 'edit' && activeItem()) { state.modal = { type: 'edit', id: activeItem().id }; state.actionMenu = false; renderModal(); }
     if (action === 'delete' && activeItem() && !isProtectedTerminal(activeItem())) { state.modal = { type: 'delete', id: activeItem().id }; state.actionMenu = false; renderModal(); }
     if (action === 'confirm-delete' && activeItem() && !isProtectedTerminal(activeItem())) removeActive();
     if (action === 'add-log' && activeItem()) { state.modal = { type: 'log', id: activeItem().id }; renderModal(); }
-    if (action === 'edit-log' && activeItem()) { state.modal = { type: 'log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
-    if (action === 'delete-log' && activeItem()) { state.modal = { type: 'delete-log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
+    if (action === 'edit-log' && activeItem() && !(activeItem().logs || []).find(log => log.id === actionNode.dataset.managementLogId)?.eventId) { state.modal = { type: 'log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
+    if (action === 'delete-log' && activeItem() && !(activeItem().logs || []).find(log => log.id === actionNode.dataset.managementLogId)?.eventId) { state.modal = { type: 'delete-log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'confirm-delete-log') deleteLog();
     if (action === 'clear-filters') { state.query = ''; state.status = ''; state.situation = ''; state.operation = ''; applyManagementFilters(); }
     if (action === 'retry') { app.innerHTML = '<section class="management-loading"><i></i><p>Conectando à Gestão TI…</p></section>'; load(); }
@@ -1090,6 +1450,20 @@
     if (event.target.matches('[data-management-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('change', event => {
+    if (event.target.matches('[name="outgoingStatus"]')) {
+      const label = event.target.closest('form')?.querySelector('[data-management-reason-label]');
+      if (label) label.textContent = transferReasonPrompt(event.target.value);
+    }
+    if (event.target.matches('[name="confirmedLocations"]')) {
+      const confirm = event.target.closest('form')?.querySelector('[data-management-final-confirm]');
+      if (confirm) confirm.disabled = !event.target.checked;
+    }
+    if (event.target.matches('[data-management-transfer-only-available]')) {
+      state.transferOnlyAvailable = event.target.checked; applyTransferSearch();
+    }
+    if (event.target.matches('[data-management-transfer-same-sector]')) {
+      state.transferSameSector = event.target.checked; applyTransferSearch();
+    }
     if (event.target.matches('[data-management-status]')) { state.status = event.target.value; state.operation = ''; applyManagementFilters(); }
     if (event.target.matches('[data-management-situation]')) { state.situation = event.target.value; state.operation = ''; applyManagementFilters(); }
     if (event.target.matches('[data-management-priority-choice]')) {
@@ -1100,7 +1474,7 @@
     if (!canManage() && event.target.matches('[data-management-form], [data-management-log-form], [data-management-transfer-form]')) { event.preventDefault(); return; }
     if (event.target.matches('[data-management-form]')) { event.preventDefault(); saveFromForm(event.target); }
     if (event.target.matches('[data-management-log-form]')) { event.preventDefault(); saveLogFromForm(event.target); }
-    if (event.target.matches('[data-management-transfer-form]')) { event.preventDefault(); transferActive(event.target); }
+    if (event.target.matches('[data-management-transfer-form]')) { event.preventDefault(); transferAdvance(event.target); }
   });
   restoreInput?.addEventListener('change', async event => {
     const file = event.target.files?.[0];

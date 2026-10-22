@@ -17,7 +17,7 @@ test('RES 03 é acrescentado como terminal fixo na Frente de Loja sem substituir
   assert.doesNotMatch(sql, /\b(?:delete|truncate|update)\s+(?:from\s+)?public\.module_records\b/i);
 });
 
-test('reservas gerais e transferências entre Escritório e Estoque respeitam os setores', () => {
+test('reservas gerais e nova movimentação preservam a regra de setores', () => {
   const sql = readFileSync(resolve(root, 'supabase/056_management_shared_office_stock_transfers.sql'), 'utf8');
   const management = readFileSync(resolve(root, 'management.js'), 'utf8');
 
@@ -33,5 +33,7 @@ test('reservas gerais e transferências entre Escritório e Estoque respeitam os
   assert.match(sql, /perform app\.sync_management_record_to_control\(destination_row\.id, destination_next\)/);
   assert.match(management, /const sharedTransferAreas = new Set\(\['Escritório', 'Estoque'\]\)/);
   assert.match(management, /canTransferBetweenAreas\(item\.area, candidate\.area\)/);
-  assert.match(management, /canTransferBetweenAreas\(source\.area, destination\.area\)/);
+  assert.match(management, /canTransferBetweenAreas\(candidate\.area, activeItem\(\)\?\.area\)/);
+  const movement = readFileSync(resolve(root, 'supabase/088_management_movements.sql'), 'utf8');
+  assert.match(movement, /Movimentacao entre estes setores nao e permitida/);
 });

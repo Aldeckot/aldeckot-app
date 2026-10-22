@@ -701,6 +701,14 @@ body.management-open .mini-chassis {
   height: 30px !important;
   padding: 0 8px !important;
   justify-content: center !important;
+  border-color: color-mix(in srgb, var(--situation-color) 78%, #a1c2da) !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--situation-color) 22%, #122b3d), #071017 70%) !important;
+  box-shadow: inset 0 1px #ffffff26, inset 0 -5px 8px #0007, 0 4px 9px #0008, 0 0 9px color-mix(in srgb, var(--situation-color) 45%, transparent) !important;
+}
+
+.theme-light.management-open .mini-chassis {
+  border-color: color-mix(in srgb, var(--situation-color) 76%, #527591) !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--situation-color) 20%, #f7fcff), #dcebf4) !important;
 }
 
 body.management-open .mini-tag-readout {

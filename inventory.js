@@ -1024,6 +1024,26 @@
     const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo</span><input name="model" value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Local</span><input name="location" value="${escape(value.location)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${statuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="situation" data-tone="${choiceTone('situation', situation)}"><span>Situação</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-situation-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
     const cleaning = cleanings.includes(value.cleaning) ? value.cleaning : 'Não realizada';
     const notesField = node.querySelector('textarea[name="notes"]')?.closest('label');
+    if (entry) {
+      const locationInput = node.querySelector('input[name="location"]');
+      const reasonField = document.createElement('label');
+      reasonField.className = 'inv-full';
+      reasonField.innerHTML = '<span>Motivo da mudança de Local *</span><textarea name="movementReason" minlength="5" maxlength="300" placeholder="Explique a movimentação física do equipamento."></textarea>';
+      notesField?.before(reasonField);
+      const reasonInput = reasonField.querySelector('textarea');
+      const usesPdv = location => /^PDV\s+[0-9]+$/i.test(String(location || '').trim());
+      const updateReason = () => {
+        const moving = String(locationInput?.value || '').trim() !== String(value.location || '').trim()
+          && (usesPdv(locationInput?.value) || usesPdv(value.location));
+        reasonField.hidden = !moving;
+        reasonField.style.display = moving ? '' : 'none';
+        reasonInput.required = moving;
+        if (!moving) reasonInput.value = '';
+      };
+      locationInput?.addEventListener('input', updateReason);
+      updateReason();
+      node.dataset.movementOperationId = crypto.randomUUID();
+    }
     if (notesField) {
       const field = document.createElement('label');
       field.className = 'inv-choice-field';
@@ -1046,7 +1066,7 @@
   function transferForm(item) {
     const table = activeTable();
     if (!table || table.items.length < 2) { window.AldeckotMessage.show('É necessário outro equipamento na categoria para realizar a permuta.'); return; }
-    const node = modal(`<div class="inv-dialog-head"><h2>Transferência · Permuta</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Somente Setor e Local serão trocados. TAG, ramificação, status e histórico permanecem vinculados a cada equipamento.</p><form data-inv-transfer-form><div class="inv-fields equipment-fields">${table.branches?.length ? `<label><span>Ramificação do segundo equipamento</span><select name="branch"><option value="">Todas as ramificações</option>${table.branches.map(branch => `<option value="${branch.id}">${escape(branch.name)}</option>`).join('')}</select></label>` : ''}<label><span>Segundo equipamento *</span><select name="other" required><option value="">Selecione o equipamento</option></select></label></div><div class="inventory-transfer-preview" aria-live="polite"></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Confirmar permuta</button></div></form>`, 'equipment-dialog');
+    const node = modal(`<div class="inv-dialog-head"><h2>Transferência · Permuta</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Somente Setor e Local serão trocados. TAG, ramificação, status e histórico permanecem vinculados a cada equipamento.</p><form data-inv-transfer-form><div class="inv-fields equipment-fields">${table.branches?.length ? `<label><span>Ramificação do segundo equipamento</span><select name="branch"><option value="">Todas as ramificações</option>${table.branches.map(branch => `<option value="${branch.id}">${escape(branch.name)}</option>`).join('')}</select></label>` : ''}<label><span>Segundo equipamento *</span><select name="other" required><option value="">Selecione o equipamento</option></select></label><label class="inv-full"><span>Motivo da permuta *</span><textarea name="reason" required minlength="5" maxlength="500" placeholder="Explique a troca de posições físicas."></textarea></label></div><div class="inventory-transfer-preview" aria-live="polite"></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Confirmar permuta</button></div></form>`, 'equipment-dialog');
     node.dataset.itemId = item.id;
     node.dataset.operationId = crypto.randomUUID();
     node.dataset.firstSector = item.sector || '';
@@ -1223,6 +1243,25 @@
     return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button>${!controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo' ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : ''}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
   }
 
+  async function refreshInstallationDetail(node) {
+    if (!node?.isConnected || !backend().inventory?.peripheralInstallation) return;
+    const field = [...node.querySelectorAll('.inv-detail')]
+      .find(detail => detail.querySelector('span')?.textContent === 'Local de instalação');
+    const value = field?.querySelector('b');
+    if (!value) return;
+    const itemId = node.dataset.itemId;
+    try {
+      const assignment = await backend().inventory.peripheralInstallation(itemId);
+      if (!node.isConnected || node.dataset.itemId !== itemId) return;
+      const physicalLocation = assignment?.terminal || node.dataset.inventoryLocation || '—';
+      value.textContent = assignment?.computer || assignment?.computerTag
+        ? `${physicalLocation} — PC ${assignment.computerTag || 'sem TAG'} (${assignment.computer || 'nome não informado'})`
+        : assignment ? `${physicalLocation} — sem PC instalado` : physicalLocation;
+    } catch (error) {
+      console.warn('Não foi possível consultar o PC atual da posição:', error);
+    }
+  }
+
   function details(item) {
     if (controlMode) { controlDetails(item); return; }
     if (fluxMode) { fluxDetails(item); return; }
@@ -1233,9 +1272,11 @@
     const section = (title, fields) => `<section class="inv-equipment-section"><h3>${title}</h3><div class="inv-detail-grid">${fields.join('')}</div></section>`;
     const image = escape(imageKey(branchModel.categoryForTable(table), item.brand, item.model));
     const latest = branchModel.lastChangedAt(item);
-    const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
+    const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><div><small class="inv-equipment-eyebrow">INVENTÁRIO / ${escape(table?.name || '—')}</small><h2>${escape(item.equipment)}</h2><p class="inv-equipment-subtitle">${escape(item.tag || 'TAG não informada')} · ${escape(item.model || 'Modelo não informado')}</p></div><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close aria-label="Fechar detalhes">×</button></div></div><div class="inv-equipment-top"><div class="inv-equipment-image"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="Imagem de ${escape(item.equipment)}" decoding="async" hidden></div><div class="inv-equipment-summary">${section('Identificação', [field('Equipamento', item.equipment), field('TAG', item.tag), field('Nº de série', item.serial), field('Categoria', table?.name), ...(branches.length ? [field('Ramificações', branches.map(entry => entry.name).join(' · '))] : []), field('Marca', item.brand), field('Modelo', item.model)])}</div></div>${section('Localização', [field('Setor', item.sector), field('Local de instalação', item.location)])}${section('Estado atual', [field('Status', item.status, `inv-priority-detail priority-${choiceTone('status', item.status)}`), field('Situação', item.situation), field('Tipo de limpeza', item.cleaning), field('Prioridade', item.priority || 'Estável')])}${section('Informações complementares', [field('Data de cadastro', dateTimeValue(item.createdAt)), field('Última alteração', dateTimeValue(latest)), field('Observações', item.notes)])}<div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`, 'inv-equipment-detail-dialog');
     node.dataset.itemId = item.id;
+    node.dataset.inventoryLocation = item.location || '';
+    void refreshInstallationDetail(node);
     if (canManage()) node.querySelector('.inv-actions')?.insertAdjacentHTML('afterbegin', `<button type="button" class="inv-primary" data-inv-transfer-item="${item.id}">Transferência</button>${table?.branches?.length ? `<button type="button" class="inv-ghost" data-inv-manage-shares="${item.id}">Ramificações</button>` : ''}`);
     applyStatusModalGlow(node, item.status);
     void applySharedImages();
@@ -1257,7 +1298,7 @@
   function controlDetails(item) {
     const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['sector', 'Setor'], ['entryDate', 'Data de Entrada'], ['exitDate', 'Data de Saída'], ['status', 'Status'], ['priority', 'Prioridade'], ['situation', 'Tipo de Limpeza'], ['date', 'Atualizado'], ['notes', 'Observações']];
     const display = (key, value) => key === 'entryDate' || key === 'exitDate' ? dateValue(value) : (value || '—');
-    const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
+    const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
     mountSourcePhoto(node, item);
@@ -1267,7 +1308,7 @@
   function fluxDetails(item) {
     const labels = [['movement', 'Movimentação'], ['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['tag', 'TAG'], ['serial', 'Nº de série'], ['senderCompany', 'Empresa Remetente'], ['destinationCompany', 'Empresa Destino'], ['senderResponsible', 'Responsável Envio'], ['receiverResponsible', 'Responsável Recebimento'], ['sendDate', 'Data de Envio'], ['receivedDate', 'Data de Recebimento'], ['shippingType', 'Tipo de Envio'], ['situation', 'Motivo'], ['status', 'Status'], ['priority', 'Prioridade'], ['date', 'Atualizado'], ['notes', 'Observações']];
     const display = (key, value) => key === 'sendDate' || key === 'receivedDate' ? dateValue(value) : (value || '—');
-    const logActions = entry => entry.id ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
+    const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
     const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid flux-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
     mountSourcePhoto(node, item);
@@ -1532,6 +1573,16 @@
   async function saveItem(form) {
     if (fluxMode && form.dataset.fluxBusy === 'true') return;
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    const usesPdv = location => /^PDV\s+[0-9]+$/i.test(String(location || '').trim());
+    const pdvMovement = !controlMode && !fluxMode && old
+      && String(old.location || '').trim() !== String(item.location || '').trim()
+      && (usesPdv(old.location) || usesPdv(item.location));
+    const movementReason = String(values.movementReason || '').trim();
+    if (pdvMovement && movementReason.length < 5) {
+      window.AldeckotMessage.show('Explique o motivo da mudança de Local antes de salvar.');
+      form.querySelector('[name="movementReason"]')?.focus();
+      return;
+    }
     if (!controlMode && !fluxMode && values.branchId) {
       const suggested = branchModel.proposalForTable(table, { equipment: values.equipment });
       const chosen = table.branches.find(branch => branch.id === values.branchId);
@@ -1597,9 +1648,18 @@
         const after = table.branches.find(branch => branch.id === values.branchId)?.name || 'Sem ramificação';
         if (before !== after) message = `Ramificação: ${before} → ${after}. ${message}`;
       }
+      if (pdvMovement) message = `Motivo da movimentação: ${movementReason}. ${message}`;
+      const movementContext = pdvMovement ? {
+        operationId: modalNode.dataset.movementOperationId,
+        expectedUpdatedAt: old.updatedAt,
+        reason: movementReason,
+        previousLocation: old.location,
+        previousTag: old.tag
+      } : null;
       const saved = maintenanceStatus
         ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
-        : await moduleApi().saveItem(table.id, valuesToSave, id || null, message.slice(0, 490), fluxReview);
+        : await moduleApi().saveItem(table.id, valuesToSave, id || null, message.slice(0, 490),
+          fluxMode ? fluxReview : movementContext);
       savedCommitted = true;
       let peripheralSync;
       try { peripheralSync = await moduleApi().syncManagementPeripheral?.(saved, old); }
@@ -1885,6 +1945,11 @@
       ? ['module_tables', 'flux_items', 'flux_item_logs', 'flux_backups', 'flux_backup_settings']
       : ['module_tables', 'inventory_items', 'inventory_item_logs', 'inventory_branches', 'inventory_backups', 'inventory_backup_settings'];
   window.addEventListener('aldeckot:realtime-change', event => {
+    if (!controlMode && !fluxMode && event.detail?.table === 'module_records') {
+      void refreshInstallationDetail(
+        document.querySelector('.inv-equipment-detail-dialog')?.closest('.inv-modal'));
+      return;
+    }
     if (!controlMode && !fluxMode && ['supplies', 'supply_variants'].includes(event.detail?.table)) {
       sharedImagesLoadedAt = 0;
       signedImageUrls.clear();
@@ -2068,6 +2133,7 @@
       if (type === 'edit-log') {
         const item = activeTable()?.items.find(entry => entry.id === action.dataset.invLogItem);
         const logEntry = item?.logs?.find(entry => entry.id === action.dataset.invLogId);
+        if (logEntry?.eventId) { window.AldeckotMessage.show('Registros automáticos de movimentação não podem ser editados.'); return; }
         if (item && logEntry) { closeModal(); logForm(item, logEntry); }
       }
       if (type === 'delete-log') {
@@ -2075,6 +2141,7 @@
         const item = activeTable()?.items.find(entry => entry.id === itemId);
         const logEntry = item?.logs?.find(entry => entry.id === action.dataset.invLogId);
         if (!logEntry) return;
+        if (logEntry.eventId) { window.AldeckotMessage.show('Registros automáticos de movimentação não podem ser excluídos.'); return; }
         if (await window.AldeckotMessage.confirm('Excluir este registro do histórico?', { title: 'Excluir registro', confirmText: 'Excluir' })) {
           (async () => {
             await moduleApi().deleteLog(logEntry.id);
@@ -2399,17 +2466,26 @@
     if (event.target.matches('[data-inv-transfer-form]')) {
       event.preventDefault();
       const form = event.target; const node = form.closest('.inv-modal');
-      const first = node?.dataset.itemId; const second = String(new FormData(form).get('other') || '');
+      const values = new FormData(form);
+      const first = node?.dataset.itemId; const second = String(values.get('other') || '');
+      const reason = String(values.get('reason') || '').trim();
       if (!first || !second || first === second || form.dataset.busy) return;
+      if (reason.length < 5) {
+        window.AldeckotMessage.show('Informe o motivo da permuta com pelo menos 5 caracteres.');
+        form.querySelector('[name="reason"]')?.focus();
+        return;
+      }
       form.dataset.busy = 'true';
       const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
       const expected = { first: { sector: node.dataset.firstSector, location: node.dataset.firstLocation },
         second: { sector: node.dataset.secondSector, location: node.dataset.secondLocation } };
-      moduleApi().swapLocations(first, second, node.dataset.operationId, expected).then(async () => {
+      moduleApi().swapLocations(first, second, node.dataset.operationId, expected, reason).then(async result => {
         await reloadInventory(); closeModal(); renderInventory();
         const updated = activeTable()?.items.find(item => item.id === first);
         if (updated) details(updated);
-        window.AldeckotMessage.show('Setor e Local permutados nos dois equipamentos.');
+        window.AldeckotMessage.show(result?.legacy
+          ? 'Permuta concluída. O histórico físico do PDV exige a migração 090, ainda não aplicada.'
+          : 'Setor e Local permutados nos dois equipamentos, com histórico físico correlacionado.');
       }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
         .finally(() => { delete form.dataset.busy; if (submit.isConnected) submit.disabled = false; });
       return;

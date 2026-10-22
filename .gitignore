@@ -1,3 +1,6 @@
 .env
 supabase-config.js
+node_modules/
+playwright-report/
+test-results/
 
