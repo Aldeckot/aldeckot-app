@@ -7,8 +7,8 @@ const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'
 test('os painéis da Home usam ícones vetoriais próprios em todos os estados', () => {
   const home = read('home.js');
   const operations = read('operational-dashboard.js');
-  assert.match(home, /recentItemsIcon = '<svg[^']+aria-hidden="true"/);
-  assert.equal((home.match(/\$\{recentItemsIcon\}/g) || []).length, 1);
+  assert.match(home, /const svg = paths => '<svg[^']+aria-hidden="true"/);
+  assert.match(home, /iconFor/);
   assert.match(home, /data-home-recent-list/);
   assert.match(operations, /operationsIcon = '<svg[^']+aria-hidden="true"/);
   assert.match(operations, /<span>\$\{operationsIcon\}<\/span>/);

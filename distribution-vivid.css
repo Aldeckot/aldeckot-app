@@ -1,0 +1,37 @@
+/* Intensidade visual dos gráficos; alturas e contagens continuam vindo dos dados reais. */
+body.inventory-open .inventory-chart-bar,
+body.management-open .management-chart-bar {
+  border-color: color-mix(in srgb,var(--chart-color) 90%,white 10%) !important;
+  background: linear-gradient(180deg,
+    color-mix(in srgb,var(--chart-color) 92%,white 8%) 0%,
+    var(--chart-color) 44%,
+    color-mix(in srgb,var(--chart-color) 76%,#06182b) 100%) !important;
+  box-shadow: 0 0 9px color-mix(in srgb,var(--chart-color) 65%,transparent),
+    0 0 22px color-mix(in srgb,var(--chart-color) 38%,transparent),
+    inset 0 1px #ffffff66 !important;
+  filter: saturate(1.18);
+}
+body.inventory-open .inventory-legend i,
+body.management-open .management-chart-legend i {
+  width: 9px !important;
+  height: 9px !important;
+  background: var(--chart-color) !important;
+  box-shadow: 0 0 8px var(--chart-color),0 0 4px var(--chart-color) !important;
+  filter: saturate(1.3);
+}
+body.inventory-open .inventory-legend span,
+body.management-open .management-chart-legend span { color: #e1efff !important; }
+body.theme-light.inventory-open .inventory-chart-bar,
+body.theme-light.management-open .management-chart-bar {
+  background: linear-gradient(180deg,
+    var(--chart-color) 0%,
+    color-mix(in srgb,var(--chart-color) 89%,white 11%) 46%,
+    color-mix(in srgb,var(--chart-color) 76%,#173957) 100%) !important;
+  box-shadow: 0 0 7px color-mix(in srgb,var(--chart-color) 35%,transparent),
+    inset 0 1px #ffffff77 !important;
+  filter: saturate(1.2) contrast(1.07);
+}
+body.theme-light.inventory-open .inventory-legend span,
+body.theme-light.management-open .management-chart-legend span { color: #294b68 !important; }
+body.theme-light.inventory-open .inventory-legend i,
+body.theme-light.management-open .management-chart-legend i { filter: saturate(1.25) contrast(1.1); }

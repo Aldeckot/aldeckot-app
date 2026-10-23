@@ -39,6 +39,9 @@
   }
 
   function uniqueResults(rows) {
+    if (document.body.classList.contains('home-operational')) {
+      return [...new Map(rows.filter(row => row.id && row.module).map(row => [row.module + ':' + row.id, { ...row, modules: [row.module] }])).values()];
+    }
     const groups = new Map();
     rows.forEach(row => {
       const key = identity(row);
@@ -69,6 +72,20 @@
     results = [];
   }
 
+  function openSearchResult(row) {
+    if (document.body.classList.contains('home-operational')) {
+      const pages = { inventory: 'inventory.html', management: 'management.html', control: 'control.html', flux: 'flux.html' };
+      const page = pages[row.module];
+      if (!page || !row.id) return;
+      const query = new URLSearchParams({ item: row.id });
+      if (row.table_id || row.tableId) query.set('table', row.table_id || row.tableId);
+      const url = page + '?' + query;
+      if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(url);
+      else window.location.href = url;
+      return;
+    }
+    openCentral(row);
+  }
   function renderResults(rows) {
     const panel = $('[data-central-search-results]');
     if (!panel) return;
@@ -80,7 +97,7 @@
       const sources = row.modules.map(module => MODULE(module).label).join(' · ');
       return '<button class="central-search-result" type="button" data-central-result="' + index + '"><span><b>' + esc(row.equipment || 'Equipamento sem nome') + '</b><small>' + esc(identifiers) + ' · ' + esc(row.brand || 'Marca não informada') + '</small></span><em>' + esc(sources) + '</em></button>';
     }).join('');
-    panel.querySelectorAll('[data-central-result]').forEach(button => button.addEventListener('click', () => openCentral(results[Number(button.dataset.centralResult)])));
+    panel.querySelectorAll('[data-central-result]').forEach(button => button.addEventListener('click', () => openSearchResult(results[Number(button.dataset.centralResult)])));
   }
 
   async function search(value) {
@@ -449,6 +466,7 @@
   }
 
   function animateSearchPlaceholder(input) {
+    if (input.dataset.homeSearch) { input.placeholder = 'Buscar no sistema…'; return; }
     const text = 'Seeking...';
     const staticHint = 'TAG ou série';
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -484,7 +502,7 @@
     input.addEventListener('keydown', event => {
       if (event.key === 'Escape') return hideResults();
       if (event.key === 'Enter' && results.length === 1) {
-        event.preventDefault(); openCentral(results[0]);
+        event.preventDefault(); openSearchResult(results[0]);
       }
     });
     document.addEventListener('click', event => {

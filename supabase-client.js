@@ -608,6 +608,11 @@
 
   const controlItemFromRow = row => ({
     id: row.id,
+    followUpKind: row.followup_kind || 'maintenance',
+    verificationInventoryItemId: row.verification_inventory_item_id || null,
+    verificationComputerId: row.verification_computer_id || null,
+    verificationStartedAt: row.verification_started_at || '',
+    verificationCompletedAt: row.verification_completed_at || '',
     inventoryItemId: row.inventory_item_id || null,
     managementRecordId: row.management_record_id || null,
     supplyUnitId: row.supply_unit_id || null,
@@ -633,12 +638,13 @@
   const control = {
     async load() {
       await init();
-      const rows = check(await client
-        .from('module_tables')
-        .select('id, name, icon, position, created_at, control_items(id, inventory_item_id, management_record_id, supply_unit_id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at, control_item_logs(id, message, created_at))')
-        .eq('module', 'control')
-        .order('position', { ascending: true })
-        .order('created_at', { ascending: false }));
+      const loadRows = extra => client.from('module_tables')
+        .select('id, name, icon, position, created_at, control_items(id, inventory_item_id, management_record_id, supply_unit_id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at' + extra + ', control_item_logs(id, message, created_at))')
+        .eq('module', 'control').order('position', { ascending: true }).order('created_at', { ascending: false });
+      let response = await loadRows(',followup_kind,verification_inventory_item_id,verification_computer_id,verification_started_at,verification_completed_at');
+      if (response.error && /42703|PGRST204/.test(String(response.error.code || ''))
+        && /followup_kind|verification_/.test(response.error.message || '')) response = await loadRows('');
+      const rows = check(response);
       return {
         tables: rows.map(table => ({
           id: table.id,
@@ -648,7 +654,7 @@
             (table.control_items || [])
               .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
               .map(controlItemFromRow),
-            ['equipment', 'model', 'brand', 'sector', 'entryDate', 'exitDate', 'status', 'situation', 'notes']
+            ['equipment', 'model', 'brand', 'sector', 'entryDate', 'exitDate', 'status', 'situation', 'notes', 'followUpKind', 'verificationInventoryItemId', 'verificationComputerId']
           )
         }))
       };
@@ -684,6 +690,16 @@
       await Promise.all(ordered.map((table, position) => client.from('module_tables').update({ position }).eq('id', table.id).then(check)));
     },
 
+    async completeVerification(itemId, values, requestId) {
+      await init();
+      const result = check(await client.rpc('complete_control_verification', {
+        p_control_item_id: itemId, p_request_id: requestId, p_solution: String(values.notes || '').trim(),
+        p_control_fields: { equipment: values.equipment.trim(), model: values.model.trim(),
+          brand: values.brand || '', sector: values.sector || '',
+          cleaningType: values.situation, notes: storeItemPriority(values.notes, values.priority) }
+      }));
+      return { id: itemId, eventId: result?.eventId, alreadyApplied: Boolean(result?.alreadyApplied) };
+    },
     async completeMaintenance(itemId, values, equipmentStatus, requestId) {
       await init();
       const result = check(await client.rpc('complete_control_maintenance', {
@@ -780,6 +796,14 @@
 
     async replace(snapshot) {
       await init();
+      // A rotina legada recria tabelas/UUIDs; acompanhamentos técnicos exigem preservação de identidade.
+      const verification = await client.from('control_items').select('id').eq('followup_kind','verification').limit(1);
+      if (verification.error && !(/42703|PGRST204/.test(String(verification.error.code || ''))
+        && /followup_kind/.test(verification.error.message || ''))) check(verification);
+      if (verification.data?.length || (snapshot?.tables || []).some(table =>
+        (table.items || []).some(item => item.followUpKind === 'verification'))) {
+        fail('Backup preservado. A restauração legada do Controle TI não pode recriar IDs de verificações técnicas. Nenhum registro foi alterado.');
+      }
       const existing = check(await client.from('module_tables').select('id').eq('module', 'control'));
       if (existing.length) check(await client.from('module_tables').delete().in('id', existing.map(table => table.id)));
       const restoredTables = [];
@@ -999,10 +1023,15 @@
     async movementHistory({ computerId = null, positionId = null } = {}) {
       await init();
       if (!computerId && !positionId) return [];
-      return check(await client.rpc('management_movement_history', {
-        p_computer_id: computerId,
-        p_position_id: positionId
+      const movements = check(await client.rpc('management_movement_history', {
+        p_computer_id: computerId, p_position_id: positionId
       }));
+      if (!computerId) return movements;
+      const technical = await client.rpc('management_technical_history', { p_computer_id: computerId });
+      if (technical.error && technical.error.code === 'PGRST202') return movements;
+      return [...new Map([...(movements || []), ...check(technical)]
+        .map(row => [row.event_id, row])).values()].sort((a,b) =>
+          String(b.occurred_at).localeCompare(String(a.occurred_at))).slice(0,100);
     },
 
     async transfer() {

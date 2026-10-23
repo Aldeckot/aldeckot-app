@@ -25,7 +25,7 @@
 @media (min-width:981px){
   .home-notification-panel{
     top:25px;
-    left:clamp(318px,23.3vw,340px);
+    left:clamp(292px,calc(23.8vw + 22px),422px);
     width:min(480px,calc(100vw - 560px));
     max-height:calc(100dvh - 40px);
     overflow-y:auto;
@@ -36,7 +36,9 @@
 }
 
 /* A lista rola independentemente do título em todas as larguras da Home. */
-.home-notification-panel {
+body.home-page .home-notification-panel[hidden] { display: none !important; }
+body.home-page .home-notification-panel {
+  z-index: 80;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;

@@ -31,12 +31,11 @@ test('navegação e restauração do cache limpam cortina e carregador anteriore
 
 test('atualização de recentes preserva o painel operacional e ignora respostas antigas', () => {
   const home = source('home.js');
-  assert.match(home, /lastRecentSignature/);
-  assert.match(home, /recentLoadSequence/);
   assert.match(home, /data-home-recent-list/);
-  assert.match(home, /list\.innerHTML = items\.map/);
-  assert.doesNotMatch(home.slice(home.indexOf('function renderRecentItems('), home.indexOf('async function loadRecentItems(')), /panel\.innerHTML/);
-  assert.match(home, /if \(requestId !== recentLoadSequence\) return/);
+  assert.match(home, /node\.innerHTML !== html/);
+  assert.equal((home.match(/root\.innerHTML = /g) || []).length, 1);
+  assert.match(home, /if \(loading\) \{ refreshAgain = true; return; \}/);
+  assert.match(source('home-data.js'), /if \(pending\) return pending/);
 });
 
 test('quadros de dados mantêm suas dimensões e a sincronização exibe feedback visual', () => {

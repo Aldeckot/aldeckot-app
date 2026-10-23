@@ -155,6 +155,18 @@ npm run verify:rls
 
 O comando não grava nem remove dados. Ele confirma que as tabelas corporativas não podem ser lidas anonimamente.
 
+## Home 2.1.51 — migração 094 aplicada no Supabase principal
+
+A `094_control_technical_verification.sql` é uma extensão incremental do Controle TI para acompanhamentos de Verificando. Não é necessária para apenas renderizar a Home com leitura compatível, mas é necessária para persistir o novo fluxo técnico.
+
+Foi validada em PostgreSQL/PGlite isolado com dados fictícios. O usuário informou ter aplicado a 094 na base principal em 23/10/2026 e enviou o preflight e o postflight. A consulta posterior confirmou função de conclusão, histórico técnico, dez gatilhos, índice, privilégios e ausência de vínculos técnicos duplicados. Não reaplicar a migração. A primeira operação real de verificação ainda não foi validada.
+
+Quatro equipamentos do Inventário já estavam em `Verificando` antes da migração. Nenhum chamado retroativo foi criado. Para revisão futura, conferir os registros reais antes de decidir qualquer reconciliação manual; não inventar data de início.
+
+A migração preserva computadores, locais e periféricos; diferencia verificação de manutenção e adiciona histórico por UUID do computador. A restauração legada que apagaria identidades é bloqueada quando existem acompanhamentos técnicos; uma restauração específica desses registros ainda é pendente.
+
+Auditoria, arquivos, testes e limites de aceite estão em [HOME_REFORMULATION.md](../docs/HOME_REFORMULATION.md).
+
 ## Dados sensíveis
 
 Nunca registre no Git, em prints ou em mensagens:

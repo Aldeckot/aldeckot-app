@@ -87,8 +87,21 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test('distribuições usam barras e legendas mais vivas nos dois temas', async ({ page }) => {
+  await page.goto('/management.html');
+  await expect(page.locator('.management-chart')).toHaveCount(3);
+  const bar = page.locator('.management-chart-bar').first();
+  await expect(bar).toHaveCSS('filter', 'saturate(1.18)');
+  await expect(page.locator('.management-chart-legend i').first()).toHaveCSS('width', '9px');
+  await page.screenshot({ path: 'test-results/management-charts-dark.png', animations: 'disabled' });
+  await page.evaluate(() => document.body.classList.add('theme-light'));
+  await expect(bar).toHaveCSS('filter', 'saturate(1.2) contrast(1.07)');
+  await page.screenshot({ path: 'test-results/management-charts-light.png', animations: 'disabled' });
+});
+
 test('monitor AJMON vinculado ao terminal aparece nas informações do PC atual', async ({ page }) => {
   await page.goto('/management.html?item=00000000-0000-4000-8000-000000000101');
+  await expect(page.locator('.mini-status').first()).toHaveCSS('border-radius', '5px');
   const monitor = page.locator('.management-asset-peripheral').filter({ hasText: 'AJMON001' });
   await expect(monitor).toBeVisible();
   await expect(monitor.locator('strong')).toHaveText('Monitor');

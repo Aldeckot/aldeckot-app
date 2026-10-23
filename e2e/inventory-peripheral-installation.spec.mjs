@@ -67,6 +67,21 @@ test.beforeEach(async ({ page }) => {
 test('Inventário mostra o PC atual sem mover o local físico do periférico', async ({ page }) => {
   await page.goto('/inventory.html');
   await expect(page.locator('html')).toHaveClass(/auth-ready/);
+  const labelRadii = await page.evaluate(() => {
+    const labels = ['inventory-status ativo', 'inventory-situation normal'].map(className => {
+      const span = document.createElement('span');
+      span.className = className; span.textContent = 'Estado'; document.body.append(span);
+      const radius = getComputedStyle(span).borderRadius; span.remove(); return radius;
+    });
+    return labels;
+  });
+  expect(labelRadii).toEqual(['5px', '5px']);
+  const chartTone = await page.evaluate(() => {
+    const bar = document.createElement('div');
+    bar.className = 'inventory-chart-bar'; bar.style.setProperty('--chart-color', '#ff6874');
+    document.body.append(bar); const tone = getComputedStyle(bar).filter; bar.remove(); return tone;
+  });
+  expect(chartTone).toBe('saturate(1.18)');
   await page.evaluate(() => window.AldeckotInventoryOpenDetails({
     id: '00000000-0000-4000-8000-000000000020',
     tableId: '00000000-0000-4000-8000-000000000010'

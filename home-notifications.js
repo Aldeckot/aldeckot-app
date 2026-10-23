@@ -103,6 +103,7 @@
         equipment: alert.title || 'Alerta operacional',
         updatedAt: new Date().toISOString()
       },
+      homeAlertKey: alert.key || '',
       level: alert.level || 'Média',
       weight: alert.urgent ? 420 : 170,
       age: 0,
@@ -161,7 +162,7 @@
 
   function render() {
     if (!root) return;
-    const list = root.querySelector('[data-home-notification-list]');
+    const list = panel.querySelector('[data-home-notification-list]');
     const count = notifications.length;
     const visible = count > 0 && !dataError;
     button.hidden = !visible;
@@ -172,9 +173,9 @@
     button.setAttribute('aria-label', count ? `Abrir ${count} ${count === 1 ? 'notificação prioritária' : 'notificações prioritárias'}` : 'Abrir Central de Notificações');
     root.dataset.hasNotifications = String(Boolean(count));
     root.dataset.hasUrgent = String(notifications.some(notification => notification.urgent));
-    root.querySelector('[data-home-notification-count]').textContent = dataError ? 'Atualização indisponível' : (count ? `${count} ${count === 1 ? 'alerta prioritário' : 'alertas prioritários'}` : 'Sem alertas pendentes');
-    const clear = root.querySelector('[data-home-notification-clear]');
-    clear.hidden = !count;
+    panel.querySelector('[data-home-notification-count]').textContent = dataError ? 'Atualização indisponível' : (count ? `${count} ${count === 1 ? 'alerta prioritário' : 'alertas prioritários'}` : 'Sem alertas pendentes');
+    const clear = panel.querySelector('[data-home-notification-clear]');
+    clear.hidden = !notifications.some(notification => notification.acknowledgeable !== false);
     clear.setAttribute('aria-label', `Limpar ${count} ${count === 1 ? 'notificação' : 'notificações'}`);
     if (dataError) {
       list.innerHTML = '<div class="home-notification-empty"><span>!</span><div><b>Atualização indisponível</b><p>Não foi possível consultar os alertas neste momento.</p></div></div>';
@@ -198,6 +199,9 @@
       const notification = notifications[Number(item.dataset.homeNotificationItem)];
       acknowledge(notification);
       closePanel();
+      if (notification?.homeAlertKey && window.AldeckotHomeDashboard) {
+        window.AldeckotHomeDashboard.openAlert(notification.homeAlertKey); return;
+      }
       if (notification?.targetUrl) {
         if (window.AldeckotRoute?.navigate) window.AldeckotRoute.navigate(notification.targetUrl);
         else window.location.href = notification.targetUrl;
@@ -241,13 +245,14 @@
     anchor.insertAdjacentElement('afterend', root);
     button = root.querySelector('[data-home-notification-toggle]');
     panel = root.querySelector('[data-home-notification-panel]');
+    document.body.append(panel);
     badge = root.querySelector('[data-home-notification-badge]');
     button.hidden = true;
     button.setAttribute('aria-hidden', 'true');
     button.addEventListener('click', event => { event.stopPropagation(); togglePanel(); });
-    root.querySelector('[data-home-notification-clear]').addEventListener('click', clearNotifications);
+    panel.querySelector('[data-home-notification-clear]').addEventListener('click', clearNotifications);
     document.addEventListener('click', event => {
-      if (!root.contains(event.target)) closePanel();
+      if (!root.contains(event.target) && !panel.contains(event.target)) closePanel();
     });
     document.addEventListener('keydown', event => { if (event.key === 'Escape') closePanel(); });
   }
@@ -260,7 +265,7 @@
   }
   window.addEventListener('aldeckot:home-data', async event => {
     dataError = Boolean(event.detail?.error);
-    allNotifications = dataError ? [] : importantNotifications(event.detail || {});
+    allNotifications = window.AldeckotHomeDashboard ? [] : dataError ? [] : importantNotifications(event.detail || {});
     try { await hydrateAcknowledgements(); }
     catch (error) { console.warn('Não foi possível carregar os alertas reconhecidos.', error); }
     showCurrentNotifications();

@@ -217,7 +217,7 @@
   function chartMarkup(title, items, key, labels, colors) {
     const counts = Object.fromEntries(labels.map(label => [label, items.filter(item => item[key] === label).length]));
     const max = Math.max(...Object.values(counts), 1);
-    return `<section class="management-chart"><h3>${escape(title)}</h3><div class="management-chart-stage">${labels.map(label => `<div class="management-chart-bar" style="--chart-color:${colors[label]};height:${Math.max(4, Math.round(counts[label] / max * 116))}px" title="${escape(label)}: ${counts[label]}"></div>`).join('')}</div><div class="management-chart-legend">${labels.map(label => `<span><i style="background:${colors[label]}"></i><em>${escape(label)}</em><b>${counts[label]}</b></span>`).join('')}</div></section>`;
+    return `<section class="management-chart"><h3>${escape(title)}</h3><div class="management-chart-stage">${labels.map(label => `<div class="management-chart-bar" style="--chart-color:${colors[label]};height:${Math.max(4, Math.round(counts[label] / max * 116))}px" title="${escape(label)}: ${counts[label]}"></div>`).join('')}</div><div class="management-chart-legend">${labels.map(label => `<span style="--chart-color:${colors[label]}"><i></i><em>${escape(label)}</em><b>${counts[label]}</b></span>`).join('')}</div></section>`;
   }
 
   function toolbarMarkup() {
@@ -390,6 +390,10 @@
     const eventLegs = event => [event.metadata?.incoming, event.metadata?.outgoing]
       .filter(leg => leg && typeof leg === 'object');
     const eventCard = (event, kind) => {
+      if (kind === 'computer' && event.metadata?.physicalMovement === false
+        && event.metadata?.computerId === item.computerId) {
+        return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(event.action || 'Registro técnico')}</strong><span>${escape(event.reason || 'Acompanhamento técnico registrado no Controle TI.')}</span><small>Evento ${escape(event.event_id)} · sem movimentação física</small></article>`;
+      }
       const peripheral = event.metadata?.peripheral;
       if (kind === 'position' && peripheral && typeof peripheral === 'object') {
         const label = peripheral.equipment || peripheral.type || 'Periférico';

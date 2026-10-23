@@ -45,7 +45,53 @@
       .sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`))[0];
   }
 
+  let agendaUnavailable = false;
+  const operationalToday = () => window.AldeckotHomeModel
+    ? new Date(window.AldeckotHomeModel.dateKey() + 'T12:00:00') : new Date();
+  function renderOperationalWidget(widget) {
+    const icons = window.AldeckotHomeDashboard.icons;
+    const sourceEvents = read().filter(event => event.kind !== 'note');
+    const year = view.getFullYear(), month = view.getMonth();
+    window.AldeckotHomeDashboard.ensureCalendarMonth(iso(view).slice(0,7));
+    const first = new Date(year, month, 1).getDay();
+    const last = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < first; i++) cells.push('<td></td>');
+    for (let day = 1; day <= last; day++) {
+      const key = iso(new Date(year, month, day));
+      const hasEvents = sourceEvents.some(event => event.date === key);
+      const other = window.AldeckotHomeDashboard.calendarEntries(key);
+      const marked = hasEvents || Object.values(other).some(rows => Array.isArray(rows) && rows.length);
+      cells.push('<td><button type="button" class="agenda-date ' + (key === iso(today) ? 'today ' : '') + (key === selectedDate ? 'is-selected' : '')
+        + '" data-date="' + key + '" aria-label="' + key + (marked ? ', com registros' : '') + '" aria-pressed="' + (key === selectedDate) + '">' + day
+        + (marked ? '<span class="agenda-indicators"><i class="agenda-dot event"></i></span>' : '') + '</button></td>');
+    }
+    while (cells.length % 7) cells.push('<td></td>');
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push('<tr>' + cells.slice(i, i + 7).join('') + '</tr>');
+    widget.innerHTML = '<div class="home-calendar-split"><div class="home-calendar-main"><div class="agenda-head"><div class="home-cal-title">'
+      + calendarIcon + localeMonth(view) + '</div><div class="agenda-nav"><button type="button" data-agenda-today aria-label="Ir para hoje">Hoje</button><button type="button" data-agenda-nav="prev" aria-label="Mês anterior">‹</button><button type="button" data-agenda-nav="next" aria-label="Próximo mês">›</button></div></div>'
+      + '<table class="agenda-table" aria-label="Calendário de compromissos"><thead><tr>' + ['D','S','T','Q','Q','S','S'].map(day => '<th>' + day + '</th>').join('')
+      + '</tr></thead><tbody>' + weeks.join('') + '</tbody></table>'
+      + '<button type="button" class="postit-archive-trigger" data-postit-archive-trigger hidden aria-label="Abrir notas finalizadas"></button>'
+      + '</div></div>';
+    widget.dataset.agendaReady = 'true';
+  }
+
+  function openAgendaList() {
+    closeModal();
+    const events = read().filter(event => event.kind !== 'note').sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    const dialog = document.createElement('div');
+    dialog.className = 'agenda-modal';
+    dialog.innerHTML = '<section class="agenda-dialog" role="dialog" aria-modal="true" aria-label="Agenda completa"><div class="agenda-dialog-head"><h2>Agenda completa</h2><button type="button" class="agenda-close" data-agenda-close aria-label="Fechar">×</button></div><div class="agenda-list">'
+      + (events.length ? events.map(item => '<button type="button" data-agenda-details="' + safe(item.id) + '"><b>' + safe(item.title) + '</b><small>' + safe(formatShort(item)) + (item.completed ? ' · Concluído' : '') + '</small></button>').join('')
+        : '<p>' + (agendaUnavailable ? 'Não foi possível consultar a agenda.' : 'Nenhum compromisso cadastrado.') + '</p>')
+      + '</div><div class="agenda-actions"><button type="button" class="agenda-save" data-agenda-new-date="' + selectedDate + '">Novo compromisso</button></div></section>';
+    document.body.append(dialog);
+  }
+
   function renderWidget(widget) {
+    if (window.AldeckotHomeDashboard) return renderOperationalWidget(widget);
     if (!widget || !document.body.contains(widget)) return;
     const events = read();
     const year = view.getFullYear();
@@ -97,7 +143,7 @@
         upcoming.className = 'agenda-upcoming-panel';
         side.appendChild(upcoming);
       }
-      if (!side.querySelector('.agenda-today-panel')) {
+      if (!document.body.classList.contains('home-operational') && !side.querySelector('.agenda-today-panel')) {
         const todayPanel = document.createElement('section');
         todayPanel.className = 'agenda-today-panel';
         side.appendChild(todayPanel);
@@ -107,10 +153,24 @@
 
   function renderPanels() {
     const events = read().filter(event => event.kind !== 'note');
-    const upcoming = events.filter(event => event.date >= iso(today))
+    const upcoming = events.filter(event => !event.completed && event.date >= iso(today)
+      && new Date(event.date + 'T' + (event.time || '23:59') + ':00-03:00') >= new Date())
       .sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`))
       .slice(0, 3);
     const todays = events.filter(event => event.date === iso(today)).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    if (window.AldeckotHomeDashboard) {
+      const icons = window.AldeckotHomeDashboard.icons;
+      document.querySelectorAll('.agenda-upcoming-panel').forEach(panel => {
+        panel.innerHTML = '<div class="home-agenda-head"><h3>' + calendarIcon + 'Próximos agendamentos</h3><button type="button" class="home-small-button" data-agenda-all>Ver todos</button></div>'
+          + (agendaUnavailable ? '<p class="home-source-note">Consulta da agenda indisponível.</p>' : '')
+          + (upcoming.length ? upcoming.map(item => '<button type="button" class="agenda-task agenda-task-compact" data-agenda-details="' + safe(item.id) + '">'
+            + (item.kind === 'task' ? icons.activity : icons.calendar) + '<span><b>' + safe(item.title) + '</b><small>' + (item.kind === 'task' ? 'Tarefa' : 'Compromisso') + '</small></span><time>'
+            + safe(new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')) + '<small>' + safe(item.time || 'Sem horário') + '</small></time></button>').join('')
+            : '<p class="home-state">' + (agendaUnavailable ? 'Aguardando consulta válida.' : 'Nenhum agendamento próximo.') + '</p>');
+      });
+      return;
+    }
+
     document.querySelectorAll('.agenda-upcoming-panel').forEach(panel => {
       panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
     });
@@ -131,7 +191,7 @@
 
   function renderAll() {
     const previousToday = today;
-    today = new Date();
+    today = operationalToday();
     if (view.getFullYear() === previousToday.getFullYear() && view.getMonth() === previousToday.getMonth()
       && (view.getFullYear() !== today.getFullYear() || view.getMonth() !== today.getMonth())) {
       view = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -190,6 +250,25 @@
     dialog.querySelector('input[name="title"]').focus();
   }
 
+  function openOperationalDay(date) {
+    const agendaEntries = read().filter(item => item.kind !== 'note' && item.date === date);
+    const external = window.AldeckotHomeDashboard.calendarEntries(date);
+    const kinds = [['appointments', 'Compromissos', agendaUnavailable ? null : agendaEntries.length],
+      ['maintenance', 'Manutenções', external.maintenance?.length],
+      ['technical', 'Verificações', external.technical?.length],
+      ['transfers', 'Transferências', external.transfers?.length],
+      ['fiscal', 'Fiscais', external.fiscal?.length]];
+    const readable = new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const dialog = document.createElement('div');
+    dialog.className = 'agenda-modal';
+    dialog.innerHTML = '<section class="agenda-dialog" role="dialog" aria-modal="true" aria-label="Registros do dia"><div class="agenda-dialog-head"><h2>Registros · ' + safe(readable)
+      + '</h2><button class="agenda-close" data-agenda-close aria-label="Fechar">×</button></div><div class="agenda-list home-day-categories">'
+      + kinds.map(([kind, label, total]) => '<button type="button" data-home-calendar-kind="' + kind + '"' + (total === null ? ' disabled' : '')
+        + '><b>' + label + '</b><small>' + (total === null ? 'Consulta indisponível' : total + ' registro(s)') + '</small></button>').join('')
+      + '</div></section>';
+    document.body.append(dialog);
+  }
+
   function openDay(date) {
     const events = read()
       .filter(item => item.date === date)
@@ -244,6 +323,16 @@
   }
 
   document.addEventListener('click', event => {
+    if (event.target.closest('[data-agenda-today]')) { today = operationalToday(); view = new Date(today.getFullYear(), today.getMonth(), 1); selectedDate = iso(today); renderAll(); return; }
+    if (event.target.closest('[data-agenda-all]')) { openAgendaList(); return; }
+    if (event.target.closest('[data-agenda-open-selected]')) { if (window.AldeckotHomeDashboard) openOperationalDay(selectedDate); else openDay(selectedDate); return; }
+    const category = event.target.closest('[data-home-calendar-kind]');
+    if (category) {
+      closeModal();
+      if (category.dataset.homeCalendarKind === 'appointments') openDay(selectedDate);
+      else window.AldeckotHomeDashboard?.openCalendar(category.dataset.homeCalendarKind, selectedDate);
+      return;
+    }
     const navigation = event.target.closest('[data-agenda-nav]');
     if (navigation) {
       view = new Date(view.getFullYear(), view.getMonth() + (navigation.dataset.agendaNav === 'next' ? 1 : -1), 1);
@@ -253,6 +342,8 @@
     }
     const day = event.target.closest('.agenda-date[data-date]');
     if (day) {
+      selectedDate = day.dataset.date;
+      renderAll();
       if (!requestCreationChoice(day.dataset.date)) openDay(day.dataset.date);
       return;
     }
@@ -355,6 +446,13 @@
     }).catch(error => window.AldeckotMessage.show(error.message || 'Não foi possível salvar o agendamento.'));
   });
 
+  window.addEventListener('aldeckot:agenda-open-day', event => {
+    const date = event.detail?.date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return;
+    selectedDate = date;
+    if (window.AldeckotHomeDashboard) openOperationalDay(date);
+    else openDay(date);
+  });
   window.addEventListener('aldeckot:agenda-open-entry-form', event => {
     const { date, kind } = event.detail || {};
     openForm(date);
@@ -362,6 +460,8 @@
     if (type && (kind === 'task' || kind === 'event')) type.value = kind;
   });
 
+  window.addEventListener('aldeckot:home-calendar-ready', renderAll);
+  window.addEventListener('aldeckot:home-operational-ready', renderAll);
   async function bootstrapAgenda() {
     // Monta os três quadros antes da consulta para não reagrupar o grid ao carregar.
     renderAll();
@@ -371,8 +471,10 @@
       if (!backend()) throw new Error('Cliente Supabase não foi carregado.');
       await ensureHomeBackend();
       entries = await backend().agenda.load();
+      agendaUnavailable = false;
       window.dispatchEvent(new CustomEvent('aldeckot:agenda-ready', { detail: { entries: read() } }));
     } catch (error) {
+      agendaUnavailable = true;
       console.warn('Agenda indisponível:', error.message || error);
     }
     renderAll();

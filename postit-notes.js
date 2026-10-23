@@ -255,6 +255,7 @@
       + '<button type="button" data-postit-choice="note" data-postit-date="' + safe(date) + '"><i>▣</i><span><b>Nota</b><small>Post-it com checklist na Home</small></span></button>'
       + '<button type="button" data-postit-choice="task" data-postit-date="' + safe(date) + '"><i>✓</i><span><b>Tarefa</b><small>Item da agenda com conclusão</small></span></button>'
       + '<button type="button" data-postit-choice="event" data-postit-date="' + safe(date) + '"><i>◷</i><span><b>Evento</b><small>Compromisso no calendário</small></span></button>'
+      + '<button type="button" data-postit-view-day="' + safe(date) + '"><i>⌕</i><span><b>Ver registros do dia</b><small>Consultar compromissos e operações vinculadas</small></span></button>'
       + '</div><div class="postit-dialog-actions"><button type="button" data-postit-close>Cancelar</button></div></div>';
     document.body.appendChild(dialog);
   }
@@ -489,6 +490,13 @@
   document.addEventListener('click', event => {
     if (event.target.closest('[data-postit-close]')) {
       removeModal();
+      return;
+    }
+    const viewDay = event.target.closest('[data-postit-view-day]');
+    if (viewDay) {
+      const date = viewDay.dataset.postitViewDay;
+      removeModal();
+      window.dispatchEvent(new CustomEvent('aldeckot:agenda-open-day', { detail: { date } }));
       return;
     }
     const choice = event.target.closest('[data-postit-choice]');

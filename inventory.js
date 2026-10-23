@@ -5,7 +5,7 @@
   const moduleConfig = controlMode ? {
     key: 'control', backupKey: 'controlBackups', title: 'CONTROLE TI', name: 'Controle TI',
     subtitle: 'Aldeckot — Controle de Manutenção', page: 'control.html', backupName: 'Controle TI', backupFile: 'controle-ti', backupModule: 'controle-ti',
-    statuses: ['Em manutenção', 'Manutenção concluída', 'Aguardando avaliação', 'Em uso', 'Em sala', 'Descartado', 'Cancelado'],
+    statuses: ['Em manutenção', 'Manutenção concluída', 'Aguardando avaliação', 'Em uso', 'Em sala', 'Descartado', 'Cancelado', 'Verificação concluída'],
     situations: ['Completa', 'Preventiva', 'Regular', 'Não realizada'],
     statusDefault: 'Em manutenção', situationDefault: 'Não realizada', situationLabel: 'Tipo de Limpeza', situationChart: 'Distribuição por Limpeza',
     tablePlaceholder: 'Ex.: Equipamentos da sala de TI', emptyText: 'Selecione uma tabela na lateral', emptyCreateText: 'Crie uma tabela para começar a organizar as manutenções.'
@@ -91,6 +91,7 @@
   const normalizeStatus = value => {
     const source = comparable(value);
     if (controlMode) {
+      if (source.includes('verifica') && source.includes('conclu')) return 'Verificação concluída';
       if (source.includes('conclu')) return 'Manutenção concluída';
       if (source.includes('aguard') || source.includes('avali')) return 'Aguardando avaliação';
       if (source.includes('em uso') || source === 'uso') return 'Em uso';
@@ -1232,7 +1233,9 @@
     if (!activeTable()) { tableForm(); return; }
     const value = entry || {};
     const status = statuses.includes(value.status) ? value.status : moduleConfig.statusDefault;
-    const controlStatuses = statuses.filter(option => option !== 'Cancelado' || status === 'Cancelado');
+    const controlStatuses = value.followUpKind === 'verification'
+      ? (value.status === 'Verificação concluída' ? ['Verificação concluída'] : ['Aguardando avaliação', 'Verificação concluída'])
+      : statuses.filter(option => option !== 'Verificação concluída' && (option !== 'Cancelado' || status === 'Cancelado'));
     const situation = situations.includes(value.situation) ? value.situation : moduleConfig.situationDefault;
     const priority = priorities.includes(value.priority) ? value.priority : 'Estável';
     const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Data de Entrada</span><input name="entryDate" type="date" value="${escape(value.entryDate)}"></label><label><span>Data de Saída</span><input name="exitDate" type="date" value="${escape(value.exitDate)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${controlStatuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="situation" data-tone="${choiceTone('situation', situation)}"><span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-situation-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
@@ -1604,6 +1607,18 @@
         if (before === after) delete valuesToSave[field];
       });
     }
+    const verificationCompletion = controlMode && old?.followUpKind === 'verification'
+      && old.status !== 'Verificação concluída' && item.status === 'Verificação concluída';
+    if (controlMode && old?.followUpKind === 'verification') {
+      if (form.dataset.verificationBusy) return;
+      if (['tag','serial'].some(key => String(old[key] || '').trim() !== String(item[key] || '').trim())) {
+        window.AldeckotMessage.show('Altere a identificação do equipamento no módulo de origem.'); return;
+      }
+      if (verificationCompletion && String(valuesToSave.notes || '').trim().length < 3) {
+        window.AldeckotMessage.show('Descreva o resultado da verificação em Observações antes de concluir.');
+        form.querySelector('[name="notes"]')?.focus(); return;
+      }
+    }
     let maintenanceStatus = null;
     if (controlMode && old && old.status !== 'Manutenção concluída' && item.status === 'Manutenção concluída') {
       if (old.supplyUnitId) {
@@ -1656,7 +1671,13 @@
         previousLocation: old.location,
         previousTag: old.tag
       } : null;
-      const saved = maintenanceStatus
+      if (verificationCompletion) {
+        form.dataset.verificationBusy = 'true';
+        form.dataset.verificationRequestId ||= crypto.randomUUID();
+      }
+      const saved = verificationCompletion
+        ? await moduleApi().completeVerification(id, valuesToSave, form.dataset.verificationRequestId)
+        : maintenanceStatus
         ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
         : await moduleApi().saveItem(table.id, valuesToSave, id || null, message.slice(0, 490),
           fluxMode ? fluxReview : movementContext);
@@ -1683,7 +1704,7 @@
       window.AldeckotMessage.show(savedCommitted
         ? `${fluxMode ? 'Movimentação gravada' : 'Item salvo'}, mas a tela não atualizou: ${backendMessage(error)}. Recarregue antes de tentar novamente.`
         : backendMessage(error));
-    } finally { if (fluxMode) delete form.dataset.fluxBusy; await finishSave?.(); }
+    } finally { delete form.dataset.verificationBusy; if (fluxMode) delete form.dataset.fluxBusy; await finishSave?.(); }
   }
   function download(content, name, type) { const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type })); link.download = name; link.click(); URL.revokeObjectURL(link.href); }
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
