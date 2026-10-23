@@ -1,17 +1,32 @@
-/* Rótulos de estado compartilhados: contorno e tipografia, sem alterar cores semânticas. */
+/* Rótulos de estado compartilhados: acabamento leve da Home, sem preenchimento nem blur. */
 :where(.inventory-status,.inventory-situation,.inventory-movement,.inventory-shipping,.mini-status,.management-badge,.management-asset-status,.sp-badge,.detail-status,.central-severity-badge,.central-overall-badge) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border: 1px solid color-mix(in srgb,currentColor 72%,transparent) !important;
+  border: 1px solid currentColor !important;
   border-radius: 5px !important;
-  background: color-mix(in srgb,currentColor 9%,transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb,currentColor 5%,transparent);
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   font-weight: 700;
+  filter: none !important;
   line-height: 1.25;
   vertical-align: middle;
 }
+:where(.inventory-status,.inventory-situation,.inventory-movement,.inventory-shipping,.management-badge,.sp-badge) {
+  padding: 3px 5px !important;
+  font-size: 9px !important;
+}
+body:not(.theme-light) :is(.inventory-status.ativo,.inventory-status.entregue,.inventory-status.manutenção-concluída,.inventory-situation.aquisição,.inventory-situation.completa,.sp-badge.normal) { color: #00d89a !important; }
+body:not(.theme-light) :is(.inventory-status.reserva,.inventory-status.pendente,.inventory-status.aguardando-avaliação,.inventory-situation.atenção,.inventory-situation.regular,.sp-badge.reserve,.sp-badge.low) { color: #ffc34a !important; }
+body:not(.theme-light) :is(.inventory-status.manutenção,.inventory-status.em-manutenção,.inventory-situation.manutenção,.inventory-situation.não-realizada,.sp-badge.maintenance,.sp-badge.none) { color: #ff617c !important; }
+body:not(.theme-light) :is(.inventory-status.defeito,.inventory-situation.substituição,.inventory-movement.envio,.inventory-shipping.caminhão,.sp-badge.defect) { color: #ff963d !important; }
+body:not(.theme-light) :is(.inventory-status.em-trânsito,.inventory-status.em-uso,.inventory-situation.substituído,.inventory-situation.transferência,.inventory-situation.preventiva,.sp-badge.installed) { color: #5dbaff !important; }
+body:not(.theme-light) :is(.inventory-status.recebido,.inventory-status.em-sala,.inventory-situation.normal,.inventory-movement.recebimento,.inventory-shipping.transporte-interno) { color: #35d8c8 !important; }
+body:not(.theme-light) :is(.inventory-status.atenção,.inventory-status.troca,.inventory-situation.verificando,.inventory-situation.troca,.inventory-shipping.motoboy,.sp-badge.attention) { color: #b98bff !important; }
+body:not(.theme-light) :is(.inventory-status.inativo,.inventory-status.descartado,.inventory-status.cancelado,.inventory-shipping.outro,.sp-badge.inactive) { color: #aabbd2 !important; }
 :where(.inventory-status,.inventory-situation,.inventory-movement,.inventory-shipping,.mini-status,.management-badge,.management-asset-status,.sp-badge,.detail-status,.central-severity-badge,.central-overall-badge) i {
   flex-shrink: 0;
 }

@@ -20,6 +20,23 @@ test('tabela móvel de Suprimentos separa miniatura e nome', () => {
   assert.match(css, /\.sp-table td:nth-child\(2\)\s*\{ padding-left: 8px; \}/);
 });
 
+test('indicadores dos módulos repetem o acabamento leve e as cores da Home', () => {
+  const css = read('indicator-labels.css');
+  const version = JSON.parse(read('package.json')).version;
+  assert.match(css, /border: 1px solid currentColor !important;/);
+  assert.match(css, /filter: none !important;/);
+  assert.match(css, /backdrop-filter: none !important;/);
+  assert.match(css, /font-size: 9px !important;/);
+  assert.match(css, /\.inventory-status\.reserva[^}]+color: #ffc34a !important;/);
+  assert.match(css, /\.inventory-situation\.normal[^}]+color: #35d8c8 !important;/);
+  assert.match(css, /background: transparent !important;/);
+  assert.match(css, /box-shadow: none !important;/);
+  assert.doesNotMatch(css, /background: color-mix\(in srgb,currentColor/);
+  for (const page of ['inventory.html', 'control.html', 'flux.html', 'management.html', 'supplies.html', 'nfe.html']) {
+    assert.ok(read(page).includes(`indicator-labels.css?v=${version}`), `${page} deve carregar os indicadores atualizados`);
+  }
+});
+
 test('contadores singulares usam descrição correta para leitores de tela', () => {
   assert.match(read('inventory.js'), /entry\.items\.length === 1 \? 'item' : 'itens'/);
   assert.match(read('module-notifications.js'), /notifications\.length === 1 \? 'alerta' : 'alertas'/);
