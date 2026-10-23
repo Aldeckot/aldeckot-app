@@ -324,6 +324,19 @@ test('Resumo Global e Central de Operações cabem sem rolagem interna na altura
   }
 });
 
+test('as cores da marca se deslocam de fato, preservando a tipografia', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/index.html');
+  const brand = page.locator('.side .brand b');
+  const before = await brand.evaluate(element => ({
+    position: getComputedStyle(element).backgroundPositionX,
+    fontSize: getComputedStyle(element).fontSize
+  }));
+  await expect(brand).toHaveCSS('animation-name', 'home-brand-chroma');
+  await expect.poll(() => brand.evaluate(element => getComputedStyle(element).backgroundPositionX)).not.toBe(before.position);
+  await expect(brand).toHaveCSS('font-size', before.fontSize);
+});
+
 test('movimento reduzido desliga o passeio do wallpaper e os dois anéis dos gráficos', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/index.html');
