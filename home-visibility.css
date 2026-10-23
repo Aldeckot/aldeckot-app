@@ -10,7 +10,7 @@
     color: transparent;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 1px 5px #001529);
-    animation: aldeckot-gradient 5.5s ease-in-out infinite;
+    animation: aldeckot-gradient 12s ease-in-out infinite;
   }
 
   .home-page .side .brand .home-brand-subtitle {

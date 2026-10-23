@@ -2404,7 +2404,7 @@
       const submit = form.querySelector('[type="submit"]');
       form.dataset.busy = 'true';
       submit.disabled = true;
-      const finishSave = window.AldeckotLoading?.beginSave?.('Registrando destino da aquisição…');
+      let finishSave = window.AldeckotLoading?.beginSave?.('Registrando destino da aquisição…');
       (async () => {
         if (destination === 'supplies') {
           await moduleApi().setSupplyAcquisitionIntent(itemId, supplyId, supplyVariantId, supplyQuantity);
@@ -2412,11 +2412,15 @@
           await moduleApi().setAcquisitionIntent(itemId, destination, tableId, managementArea, managementKind);
         }
         if (destination === 'none') {
+          await finishSave?.();
+          finishSave = null;
           closeModal(); details(item);
           window.AldeckotMessage.show('Movimentação preservada no Flux sem cadastro adicional.');
           return;
         }
         if (item.status !== 'Recebido') {
+          await finishSave?.();
+          finishSave = null;
           await fluxAcquisitionWizard(item);
           window.AldeckotMessage.show('Destino salvo. Nenhuma entrada foi criada antes do recebimento.');
           return;
@@ -2440,6 +2444,8 @@
           : management
             ? `Cadastrar este computador em Reserva na Gestão TI (${managementArea}), ainda sem instalação em terminal ou PDV?`
             : 'Confirmar o recebimento e cadastrar este equipamento em Reserva na tabela escolhida do Inventário?';
+        await finishSave?.();
+        finishSave = null;
         const confirmed = await window.AldeckotMessage.confirm(action, {
           title: 'Confirmar aquisição recebida', confirmText: supplies ? 'Creditar estoque' : preview.state === 'existing' ? 'Vincular existente' : 'Cadastrar em Reserva', danger: false
         });
@@ -2447,6 +2453,7 @@
           form.querySelector('.flux-acquisition-note').textContent = 'Escolha salva; nenhuma entrada foi efetivada. Você pode confirmar depois.';
           return;
         }
+        finishSave = window.AldeckotLoading?.beginSave?.('Concluindo aquisição…');
         const result = supplies
           ? await moduleApi().completeSupplyAcquisition(itemId)
           : management ? await moduleApi().completeManagementAcquisition(itemId)

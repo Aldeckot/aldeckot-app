@@ -10,7 +10,7 @@ test('marca animada, versão sem moldura e busca sem quadro permanecem visíveis
   const styles = read('home-visibility.css');
   const index = read('index.html');
   assert.match(index, new RegExp(`home-visibility\\.css\\?v=${version}`));
-  assert.match(styles, /\.home-page \.side \.brand b \{[^}]*background: linear-gradient\(90deg, #27d6ef, #726aff\);[^}]*animation: aldeckot-gradient 5\.5s/s);
+  assert.match(styles, /\.home-page \.side \.brand b \{[^}]*background: linear-gradient\(90deg, #27d6ef, #726aff\);[^}]*animation: aldeckot-gradient 12s/s);
   assert.match(styles, /\.home-page \.side \.brand \.home-brand-subtitle \{[^}]*font-size: 11px;/s);
   assert.match(styles, /\.home-page \.side \.brand \.home-brand-subtitle \{[^}]*padding: 0;[^}]*border: 0;[^}]*background: none;/s);
   assert.match(styles, /\.home-page \.side \.sidebar-search \.input \{[^}]*opacity: 1;[^}]*pointer-events: auto;/s);

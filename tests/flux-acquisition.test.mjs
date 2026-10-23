@@ -44,7 +44,8 @@ test('assistente salva escolha pendente, prevê conflitos e exige confirmação'
   assert.match(ui, /setAcquisitionIntent\(itemId, destination, tableId, managementArea, managementKind\)/);
   assert.match(ui, /if \(item\.status !== 'Recebido'\)/);
   assert.match(ui, /previewInventoryAcquisition\(itemId\)/);
-  assert.match(ui, /AldeckotMessage\.confirm\(action/);
+  assert.match(ui, /await finishSave\?\.\(\);\s*finishSave = null;\s*const confirmed = await window\.AldeckotMessage\.confirm\(action/);
+  assert.match(ui, /finishSave = window\.AldeckotLoading\?\.beginSave\?\.\('Concluindo aquisição…'\);\s*const result = supplies/);
   assert.match(ui, /completeInventoryAcquisition\(itemId\)/);
   assert.match(api, /client\.rpc\('flux_complete_inventory_acquisition'/);
 });

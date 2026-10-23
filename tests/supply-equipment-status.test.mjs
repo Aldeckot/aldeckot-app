@@ -17,7 +17,8 @@ test('Suprimentos preserva status de cada equipamento compartilhado do Inventár
   assert.deepEqual(projected[0].inventory_group.units.map(unit => unit.status), ['Ativo', 'Reserva']);
   const ui = read('supplies.js');
   assert.match(ui, /originEquipmentFor\(unit\)\?\.status/);
-  assert.match(ui, /<th>Status do estoque<\/th><th>Status do equipamento<\/th>/);
+  assert.match(ui, /<th>Status do estoque<\/th><\/tr>/);
+  assert.doesNotMatch(ui, /<th>Status do equipamento<\/th>/);
   assert.match(ui, /\$\{img\(row\.image_path\)\}/);
 });
 
