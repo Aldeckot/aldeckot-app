@@ -49,18 +49,18 @@
   window.go = module => navigateTo(({ inventory: 'inventory.html', management: 'management.html', control: 'control.html',
     flux: 'flux.html', nfe: 'nfe.html', supplies: 'supplies.html' })[module]);
   const moduleCards = [
-    { id: 'inventory', title: 'Inventário', description: 'Controle de equipamentos, patrimônio e localização.', tags: ['Patrimônio', 'Localização', 'Status'] },
-    { id: 'management', title: 'Gestão TI', description: 'Computadores, posições físicas e periféricos.', tags: ['Computadores', 'PDVs', 'Histórico'] },
-    { id: 'control', title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.', tags: ['Manutenção', 'Chamados', 'Histórico'] },
-    { id: 'flux', title: 'Flux', description: 'Envio e recebimento de equipamentos.', tags: ['Transferência', 'Recebimento', 'Histórico'] },
-    { id: 'nfe', title: 'Fiscal NF-e', description: 'Registro e consulta de ocorrências fiscais.', tags: ['NF-e', 'Cupom fiscal', 'Auditoria'] },
-    { id: 'supplies', title: 'Suprimentos', description: 'Estoque rastreável de materiais e componentes de TI.', tags: ['Estoque', 'Componentes', 'Manutenção'] }
+    { id: 'inventory', title: 'Inventário', description: 'Controle de equipamentos, patrimônio e localização.' },
+    { id: 'management', title: 'Gestão TI', description: 'Computadores, posições físicas e periféricos.' },
+    { id: 'control', title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.' },
+    { id: 'flux', title: 'Flux', description: 'Envio e recebimento de equipamentos.' },
+    { id: 'nfe', title: 'Fiscal NF-e', description: 'Registro e consulta de ocorrências fiscais.' },
+    { id: 'supplies', title: 'Suprimentos', description: 'Estoque rastreável de materiais e componentes de TI.' }
   ];
   const nav = document.getElementById('nav');
   if (nav) {
     nav.innerHTML = moduleCards.map(card => '<button class="module-nav-card module-' + card.id + '" type="button" data-module-card="' + card.id + '">'
-      + '<span class="module-card-copy"><b>' + card.title + '</b><small>' + card.description + '</small><span class="module-card-tags">'
-      + card.tags.map(tag => '<i>' + tag + '</i>').join('') + '</span></span><span class="module-card-art" aria-hidden="true"></span><span class="module-card-arrow" aria-hidden="true">›</span></button>').join('');
+      + '<span class="module-card-copy"><b>' + card.title + '</b><small>' + card.description + '</small></span>'
+      + '<span class="module-card-art" aria-hidden="true"></span><span class="module-card-arrow" aria-hidden="true">›</span></button>').join('');
     nav.addEventListener('click', event => { const card = event.target.closest('[data-module-card]'); if (card) window.go(card.dataset.moduleCard); });
   }
   const root = document.querySelector('.home-reference');
@@ -225,7 +225,7 @@
     renderOperations();
     patch('[data-home-recent-list]', stateNote('recent') + (current.sets.recent.length
       ? current.sets.recent.slice(0, 3).map(row => listRow(row)).join('') : '<p class="home-state">Nenhum registro atualizado disponível.</p>'));
-    patch('[data-home-alerts]', stateNote('alerts') + (current.sets.alerts.length ? current.sets.alerts.slice(0, 3).map(row => listRow(row, 'alerts')).join('')
+    patch('[data-home-alerts]', stateNote('alerts') + (current.sets.alerts.length ? current.sets.alerts.slice(0, 6).map(row => listRow(row, 'alerts')).join('')
       : '<p class="home-state">' + (current.availability.alerts?.available ? 'Nenhum alerta ativo nas fontes consultadas.' : 'Alertas aguardando consulta completa.') + '</p>'));
     patch('[data-home-monthly]', current.metrics.map(metric => {
       const key = 'monthly:' + metric.key;

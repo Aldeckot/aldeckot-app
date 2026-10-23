@@ -214,19 +214,20 @@ test('atualizar reconsulta dados, preserva wallpaper e falha parcial não exibe 
   expect(await page.evaluate(() => window.__homeReads)).toBe(2);
   await expect(page.locator('[data-home-recent-list]')).toContainText('Consulta incompleta');
 });
-test('prévias exibem até três registros e pendências de fonte aparecem em Alertas críticos', async ({ page }) => {
+test('prévias exibem três recentes e até seis alertas, com acesso à lista completa', async ({ page }) => {
   await page.goto('/index.html');
   await page.evaluate(() => {
     window.__homeSource.inventory.push({ id: 'quality-a', module: 'inventory', equipment: 'Monitor A', tag: 'TAG-DUP', status: 'Ativo', createdAt: '2026-10-01', updatedAt: '2026-10-22T11:00:00-03:00' });
     window.__homeSource.inventory.push({ id: 'quality-b', module: 'inventory', equipment: 'Monitor B', tag: 'TAG-DUP', status: 'Ativo', createdAt: '2026-10-01', updatedAt: '2026-10-22T11:01:00-03:00' });
     for (let i = 2; i <= 5; i++) window.__homeSource.effects.push({ id: 'effect-' + i, eventId: 'event-' + i, module: 'inventory', status: 'applied', processedAt: '2026-10-22T10:0' + i + ':00-03:00' });
+    for (let i = 1; i <= 7; i++) window.__homeSource.stock.push({ itemId: 'critical-' + i, variantId: 'v' + i, itemName: 'Componente crítico ' + i, name: 'Lote ' + i, stock: 0, minimum: 2 });
   });
   await page.locator('[data-home-refresh]').click();
   await expect(page.locator('[data-home-recent-list] .home-data-row')).toHaveCount(3);
   await expect(page.locator('.home-activities')).toHaveCount(0);
   await expect(page.locator('.home-recent-panel .home-small-button')).toHaveCount(0);
   await expect(page.locator('.home-monthly .home-small-button')).toHaveCount(0);
-  await expect(page.locator('[data-home-alerts] .home-data-row')).toHaveCount(3);
+  await expect(page.locator('[data-home-alerts] .home-data-row')).toHaveCount(6);
   await expect(page.locator('.home-quality-note')).toHaveCount(0);
   await page.locator('.home-alert-panel [data-home-set="alerts"]').click();
   await expect(page.getByRole('dialog', { name: 'Alertas críticos' })).toContainText('TAG em identidades distintas');
@@ -338,7 +339,7 @@ test('movimento reduzido desliga o passeio do wallpaper e os dois anéis dos gr�
   expect(animationNames).toEqual(['none', 'none', 'none', 'none', 'none']);
 });
 
-for (const size of [{ width: 1920, height: 1080 }, { width: 1600, height: 900 }, { width: 1624, height: 724 }, { width: 1366, height: 768 }, { width: 1267, height: 724 }, { width: 900, height: 900 }, { width: 390, height: 844 }]) {
+for (const size of [{ width: 1920, height: 1080 }, { width: 1913, height: 887 }, { width: 1600, height: 900 }, { width: 1624, height: 724 }, { width: 1366, height: 768 }, { width: 1267, height: 724 }, { width: 900, height: 900 }, { width: 390, height: 844 }]) {
   for (const theme of ['dark', 'light']) {
     test('composição ' + size.width + 'x' + size.height + ' ' + theme, async ({ page }) => {
       await page.setViewportSize(size);
@@ -349,12 +350,21 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1600, height: 900 },
       expect(widths.scroll).toBeLessThanOrEqual(widths.view + 1);
       if (size.width >= 1366) expect(widths.height).toBeLessThanOrEqual(widths.screen + 1);
       await expect(page.locator('[data-module-card]')).toHaveCount(6);
+      await expect(page.locator('.module-card-tags')).toHaveCount(0);
+      await expect(page.locator('.theme-toggle')).toHaveCount(0);
       await expect(page.locator('.home-calendar')).toBeVisible();
       const surfaces = await page.evaluate(() => ({
         wallpaper: getComputedStyle(document.querySelector('.app'), '::before').backgroundImage,
         wallpaperFilter: getComputedStyle(document.querySelector('.app'), '::before').filter,
         wallpaperAnimation: getComputedStyle(document.querySelector('.app'), '::before').animationName,
+        wallpaperDuration: getComputedStyle(document.querySelector('.app'), '::before').animationDuration,
+        brandAnimation: getComputedStyle(document.querySelector('.brand b')).animationName,
+        accountBackground: getComputedStyle(document.querySelector('.auth-home-account')).backgroundColor,
         calendarHeight: document.querySelector('.home-calendar').getBoundingClientRect().height,
+        calendarWidth: document.querySelector('.home-calendar').getBoundingClientRect().width,
+        sideWidth: document.querySelector('.home-side').getBoundingClientRect().width,
+        summaryHeaderTop: document.querySelector('.home-global .home-panel-head').getBoundingClientRect().top,
+        summaryDonutBottom: document.querySelector('.home-global .home-donut').getBoundingClientRect().bottom,
         operationsRingBottom: document.querySelector('.home-operations-donut').getBoundingClientRect().bottom,
         heroImage: getComputedStyle(document.querySelector('.home-hero'), '::before').backgroundImage,
         heroContent: getComputedStyle(document.querySelector('.home-hero'), '::before').content,
@@ -372,7 +382,12 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1600, height: 900 },
       expect(surfaces.wallpaper).toContain('home-wallpaper-' + theme + '-v4.png');
       expect(surfaces.wallpaperFilter).not.toContain('blur(');
       expect(surfaces.wallpaperAnimation).toBe('home-wallpaper-tour');
+      expect(surfaces.wallpaperDuration).toBe('96s');
+      expect(surfaces.brandAnimation).toBe('home-brand-chroma');
+      expect(surfaces.accountBackground).toBe('rgba(0, 0, 0, 0)');
       if (size.width >= 1366) {
+        expect(surfaces.calendarWidth).toBeLessThan(surfaces.sideWidth * .75);
+        expect(surfaces.summaryHeaderTop).toBeGreaterThanOrEqual(surfaces.summaryDonutBottom - 1);
         expect(surfaces.calendarHeight).toBeLessThanOrEqual(191);
         expect(surfaces.operationsRingBottom).toBeLessThanOrEqual(size.height + 1);
       }
