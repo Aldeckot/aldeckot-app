@@ -1,8 +1,19 @@
 const { ensureConfig, normalizeEmail, normalizeName, normalizeUserCode, passwordValid, requestSupabase, send, userCodeValid } = require('../server/supabase-admin');
 const { allowRequest } = require('../server/rate-limit');
+const { timingSafeEqual } = require('node:crypto');
+
+const authorized = request => {
+  const expected = process.env.ALDECKOT_BOOTSTRAP_TOKEN;
+  const supplied = request.headers?.['x-aldeckot-bootstrap-token'];
+  if (process.env.ALDECKOT_BOOTSTRAP_ENABLED !== 'true' || typeof expected !== 'string' || expected.length < 32 || typeof supplied !== 'string') return false;
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
+};
 
 module.exports = async (request, response) => {
   if (request.method !== 'POST') return send(response, 405, { error: 'Método não permitido.' });
+  if (!authorized(request)) return send(response, 404, { error: 'Rota indisponível.' });
   if (!allowRequest(request, response, { namespace: 'auth-bootstrap', limit: 3, windowMs: 60 * 60_000 })) {
     return send(response, 429, { error: 'Muitas tentativas de configuração. Aguarde antes de tentar novamente.' });
   }

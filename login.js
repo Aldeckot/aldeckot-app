@@ -54,7 +54,6 @@
       if (requestedState === 'blocked') { showSignIn(); message(signInMessage, 'Sua conta está bloqueada. Procure um administrador.'); }
       else showProcessing();
     }
-    try { await api()?.bootstrapAdministrator?.(); } catch (error) { console.info('Administrador inicial aguardando configuração segura.', error.message); }
     try { const state = await api()?.state?.(); if (state?.session && state.profile?.status === 'active') destination(); } catch { /* O modal de entrada continua disponível. */ }
   }
   start();

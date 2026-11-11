@@ -2186,13 +2186,6 @@
       return payload;
     },
 
-    async bootstrapAdministrator() {
-      const response = await fetch('/api/auth-bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) fail(payload.error || 'Administrador inicial não configurado.');
-      return payload;
-    },
-
     async updateOwnAccount(values) {
       return this.api('/api/account', { method: 'PATCH', body: values });
     },

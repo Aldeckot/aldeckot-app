@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const source = readFileSync(resolve(root, 'management.js'), 'utf8');
+const source = readFileSync(resolve(root, 'management.js'), 'utf8').replace(/\r\n/g, '\n');
 const client = readFileSync(resolve(root, 'supabase-client.js'), 'utf8');
 const helper = source.match(/  function selectTransferDestination\(id\) \{[\s\S]*?\n  \}\n\n  function transferAdvance/);
 assert.ok(helper, 'O seletor do assistente deve existir.');
