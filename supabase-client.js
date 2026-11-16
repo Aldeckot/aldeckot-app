@@ -1356,9 +1356,11 @@
       return check(await client.rpc('flux_preview_supply_acquisition', { p_flux_item_id: itemId }));
     },
 
-    async completeSupplyAcquisition(itemId) {
+    async completeSupplyAcquisition(itemId, token) {
       await init();
-      return check(await client.rpc('flux_complete_supply_acquisition', { p_flux_item_id: itemId }));
+      const parameters = { p_flux_item_id: itemId };
+      if (token) parameters.p_token = token;
+      return check(await client.rpc('flux_complete_supply_acquisition', parameters));
     },
 
     async addLog(itemId, message) {

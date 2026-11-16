@@ -49,7 +49,31 @@ test('assistente de aquisição mostra Suprimentos apenas após a migração e p
   assert.match(ui, /if \(intent\?\.supplyAvailable\)/);
   assert.match(ui, /setSupplyAcquisitionIntent\(itemId, supplyId, supplyVariantId, supplyQuantity\)/);
   assert.match(ui, /previewSupplyAcquisition\(itemId\)/);
-  assert.match(ui, /completeSupplyAcquisition\(itemId\)/);
+  assert.match(ui, /completeSupplyAcquisition\(itemId, preview\.token\)/);
   assert.match(ui, /Creditar estoque/);
   assert.match(css, /\.flux-acquisition-fields\[hidden\]/);
+});
+
+test('confirma a aquisição com o contrato da prévia corrente, sem tentar outro contrato após erro', async () => {
+  const api = read('supabase-client.js');
+  const method = api.match(/async completeSupplyAcquisition\(itemId, token\) \{([\s\S]+?)\r?\n    \},/);
+  assert.ok(method);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const complete = new AsyncFunction('itemId', 'token', 'init', 'client', 'check', method[1]);
+  const recorded = [];
+  const init = async () => {};
+  const client = { rpc: async (name, parameters) => {
+    recorded.push({ name, parameters });
+    return parameters.p_token ? { error: 'Prévia desatualizada' } : { data: 'ok' };
+  } };
+  const check = result => {
+    if (result.error) throw new Error(result.error);
+    return result.data;
+  };
+  assert.equal(await complete('aquisição', undefined, init, client, check), 'ok');
+  await assert.rejects(complete('aquisição', 'prév-126', init, client, check), /Prévia desatualizada/);
+  assert.deepEqual(recorded, [
+    { name: 'flux_complete_supply_acquisition', parameters: { p_flux_item_id: 'aquisição' } },
+    { name: 'flux_complete_supply_acquisition', parameters: { p_flux_item_id: 'aquisição', p_token: 'prév-126' } }
+  ]);
 });

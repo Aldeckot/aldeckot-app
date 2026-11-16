@@ -2455,7 +2455,7 @@
         }
         finishSave = window.AldeckotLoading?.beginSave?.('Concluindo aquisição…');
         const result = supplies
-          ? await moduleApi().completeSupplyAcquisition(itemId)
+          ? await moduleApi().completeSupplyAcquisition(itemId, preview.token)
           : management ? await moduleApi().completeManagementAcquisition(itemId)
             : await moduleApi().completeInventoryAcquisition(itemId);
         await reloadInventory();
