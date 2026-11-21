@@ -210,6 +210,23 @@
       <section class="nfe-toolbar"><div class="nfe-quick-filters"><button class="nfe-filter-chip ${!state.filters.reason ? 'is-active' : ''}" type="button" data-nfe-quick-all>${icon('filter')}Todos</button>${reasons.map(reason => `<button class="nfe-filter-chip ${reasonClass(reason)} ${state.filters.reason === reason ? 'is-active' : ''}" type="button" data-nfe-quick-reason="${escape(reason)}"><i></i>${escape(reason)}</button>`).join('')}</div><div class="nfe-toolbar-actions"><button class="nfe-action-button" type="button" data-nfe-advanced>${icon('filter')}Filtros avançados</button>${canManage ? `<button class="nfe-action-button primary" type="button" data-nfe-new>${icon('plus')}Nova NF-e</button>` : ''}</div><section class="nfe-advanced" ${state.advancedOpen ? '' : 'hidden'} data-nfe-advanced-panel><div class="nfe-advanced-grid"><label class="nfe-field">PDV<input class="nfe-input" data-nfe-filter="pdv" value="${escape(state.filters.pdv)}" placeholder="Ex.: Caixa 12"></label><label class="nfe-field">Operador<input class="nfe-input" data-nfe-filter="operator" value="${escape(state.filters.operator)}" placeholder="Nome do operador"></label><label class="nfe-field">De<input class="nfe-input" data-nfe-filter="dateFrom" value="${escape(state.filters.dateFrom)}" type="date"></label><label class="nfe-field">Até<input class="nfe-input" data-nfe-filter="dateTo" value="${escape(state.filters.dateTo)}" type="date"></label></div></section></section>
       <section class="nfe-table-panel"><header class="nfe-table-head"><div class="nfe-table-title">${icon('server')}<div><h2>Últimas ocorrências</h2><p>${state.loading ? 'Carregando dados…' : `${number(state.total)} registro${state.total === 1 ? '' : 's'} localizado${state.total === 1 ? '' : 's'} na base`}</p></div></div><div class="nfe-table-actions"><div class="nfe-export-wrap"><button class="nfe-action-button" type="button" data-nfe-export-toggle>${icon('download')}Exportar${icon('chevron')}</button><div class="nfe-export-menu" data-nfe-export-menu hidden><button type="button" data-nfe-export="excel">${icon('document')}Excel</button><button type="button" data-nfe-export="pdf"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="20" height="20" alt="">PDF</button></div></div><button class="nfe-action-button" type="button" data-nfe-clear-filters>${icon('broom')}Limpar filtros</button></div></header><div class="nfe-table-wrap"><table class="nfe-table"><thead><tr><th>NF-e / PDV</th><th>Operador</th><th>Código</th><th>Fiscal</th><th>Data / Hora</th><th>Motivo</th><th>PDF</th><th>Ações</th></tr></thead><tbody>${tableBody}</tbody></table></div><footer class="nfe-pagination"><label><select class="nfe-page-size" data-nfe-page-size>${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select> por página</label><span>Página ${state.page} de ${totalPages}</span><button type="button" data-nfe-page="first" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronsLeft')}</button><button type="button" data-nfe-page="prev" ${state.page === 1 || state.loading ? 'disabled' : ''}>${icon('chevronLeft')}</button><b>${state.page}</b><button type="button" data-nfe-page="next" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronRight')}</button><button type="button" data-nfe-page="last" ${state.page >= totalPages || state.loading ? 'disabled' : ''}>${icon('chevronsRight')}</button></footer></section>
     </section><aside class="nfe-side"><section class="nfe-side-panel nfe-reasons-panel"><header>${icon('filter')}<div><h2>Ocorrências por motivo</h2><p>Selecione um motivo para filtrar a tabela</p></div></header><div class="nfe-reason-list">${counts.map(([reason, count]) => `<button class="nfe-reason-row ${reasonClass(reason)}" type="button" data-nfe-quick-reason="${escape(reason)}"><span class="nfe-side-reason-icon">${icon({ sasii: 'server', 'pin-pad': 'terminal', travamento: 'monitor', cartao: 'card' }[reasonClass(reason)])}</span><span>${escape(reason)}</span><b>${number(count)}</b></button>`).join('')}</div></section><section class="nfe-side-panel nfe-side-alert"><header>${icon('monitor')}<div><h2>PDVs para investigar</h2><p>Mais de 3 ocorrências do mesmo PDV nesta semana</p></div></header><div class="nfe-alert-list">${alertHtml}</div><button class="nfe-alert-history" type="button" data-nfe-alert-history>Ver histórico completo${icon('chevron')}</button></section></aside></div>`;
+    const side = root.querySelector('.nfe-side');
+    if (side) {
+      const palette = ['#ab66ff', '#27a3f5', '#27d79d', '#ffc53e', '#ff7180', '#67d9e9'];
+      const rows = counts.map(([label, count], index) => ({ label, count, color: palette[index % palette.length] }));
+      side.querySelector('.nfe-reasons-panel')?.remove();
+      side.insertAdjacentHTML('afterbegin', window.AldeckotModulePanels.bars('Ocorrências registradas', [
+        { label: 'Hoje', count: state.dashboard.today, color: '#29d9ba' },
+        { label: 'Mês atual', count: state.dashboard.month, color: '#42a8ff' },
+        { label: 'Total', count: state.dashboard.total, color: '#a46bfa' }
+      ]) + window.AldeckotModulePanels.donut('Distribuição por Motivo', rows)
+        + window.AldeckotModulePanels.actions([
+          { id: 'new', icon: 'plus', label: 'Nova NF-e', disabled: !canManage },
+          { id: 'search', icon: 'search', label: 'Buscar ocorrência' },
+          { id: 'export', icon: 'report', label: 'Exportar PDF' },
+          { id: 'history', icon: 'history', label: 'Histórico de investigações' }
+        ], 'data-nfe-home-action'));
+    }
     const tableHead = root.querySelector('.nfe-table-head');
     const tableActions = tableHead?.querySelector('.nfe-table-actions');
     if (tableHead && tableActions) {
@@ -227,6 +244,13 @@
   }
 
   function bindEvents() {
+    root.querySelectorAll('[data-nfe-home-action]').forEach(button => button.addEventListener('click', () => {
+      const action = button.dataset.nfeHomeAction;
+      if (action === 'new' && isAdmin()) openForm();
+      if (action === 'search') root.querySelector('[data-nfe-query]')?.focus();
+      if (action === 'export') exportPdf();
+      if (action === 'history') openInvestigationHistory();
+    }));
     root.querySelectorAll('[data-nfe-home]').forEach(button => button.addEventListener('click', () => go('index.html')));
     root.querySelector('[data-nfe-new]')?.addEventListener('click', () => openForm());
     root.querySelector('[data-nfe-backup]')?.addEventListener('click', openBackup);

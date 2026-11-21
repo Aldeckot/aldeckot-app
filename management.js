@@ -230,8 +230,8 @@
       ? (item, label) => normalize(item.cleaning) === normalize(label)
       : (item, label) => item[key] === label;
     const counts = Object.fromEntries(labels.map(label => [label, items.filter(item => matches(item, label)).length]));
-    const max = Math.max(...Object.values(counts), 1);
-    return `<section class="management-chart"><h3>${escape(title)}</h3><div class="management-chart-stage">${labels.map(label => `<div class="management-chart-bar" style="--chart-color:${colors[label]};height:${Math.max(4, Math.round(counts[label] / max * 116))}px" title="${escape(label)}: ${counts[label]}"></div>`).join('')}</div><div class="management-chart-legend">${labels.map(label => `<span style="--chart-color:${colors[label]}"><i></i><em>${escape(label)}</em><b>${counts[label]}</b></span>`).join('')}</div></section>`;
+    const rows = labels.map(label => ({ label, count: counts[label], color: colors[label] || '#42baff' }));
+    return key === 'situation' ? window.AldeckotModulePanels.donut(title, rows) : window.AldeckotModulePanels.bars(title, rows);
   }
 
   function toolbarMarkup() {
@@ -275,7 +275,7 @@
   function render() {
     const grouped = configuredAreas().map(area => [area, payload.items.filter(item => item.area === area)]);
     const computers = payload.items.filter(hasInstalledComputer);
-    app.innerHTML = `${headerMarkup()}${toolbarMarkup()}<div class="management-layout"><section class="management-areas">${grouped.map(([area, items]) => areaMarkup(area, items)).join('')}</section><aside class="management-charts" aria-label="Gráficos da Gestão TI">${chartMarkup('Distribuição por Status', computers, 'status', configuredStatuses(), statusColors)}${chartMarkup('Distribuição por Situação', computers, 'situation', situations, situationColors)}${chartMarkup('Distribuição por Limpeza', computers, 'cleaning', cleanings, cleaningColors)}</aside></div>`;
+    app.innerHTML = `${headerMarkup()}${toolbarMarkup()}<div class="management-layout"><section class="management-areas">${grouped.map(([area, items]) => areaMarkup(area, items)).join('')}</section><aside class="management-charts module-home-sidebar" aria-label="Gráficos e ações da Gestão TI">${chartMarkup('Distribuição por Status', computers, 'status', configuredStatuses(), statusColors)}${chartMarkup('Distribuição por Situação', computers, 'situation', situations, situationColors)}${chartMarkup('Distribuição por Limpeza', computers, 'cleaning', cleanings, cleaningColors)}${window.AldeckotModulePanels.actions([{ id: 'add-area', icon: 'plus', label: 'Adicionar computador', disabled: !canManage() }, { id: 'search', icon: 'search', label: 'Buscar computador' }, { id: 'export', icon: 'report', label: 'Exportar PDF' }, { id: 'backup', icon: 'backup', label: 'Backup', disabled: !canManage() }], 'data-management-home-action')}</aside></div>`;
     const managementHeader = app.querySelector('.management-header');
     const previousHeading = managementHeader?.querySelector('.management-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = managementHeaderSummaryMarkup();
@@ -1384,6 +1384,14 @@
   }
 
   document.addEventListener('click', event => {
+    const homeAction = event.target.closest('[data-management-home-action]');
+    if (homeAction) {
+      const type = homeAction.dataset.managementHomeAction;
+      if (type === 'search') app.querySelector('[data-management-query]')?.focus();
+      else if (type === 'add-area') app.querySelector('[data-management-action="add-area"]')?.click();
+      else app.querySelector(`.management-header [data-management-action="${type}"]`)?.click();
+      return;
+    }
     const open = event.target.closest('[data-management-open]');
     if (open) { openDetails(open.dataset.managementOpen); return; }
     const tab = event.target.closest('[data-management-tab]');

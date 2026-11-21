@@ -576,6 +576,34 @@
       return inventorySituationSummary(title, counts, values, value => chartColor(field, value));
     return chartWithCounts(title, counts, field, values, prefix);
   };
+  const homePanelRows = (rows, preferred, field) => {
+    const counts = Object.fromEntries((rows || []).map(row => [row.value, Number(row.count) || 0]));
+    return [...new Set([...preferred, ...Object.keys(counts)])].map(label => ({ label, count: counts[label] || 0, color: chartColor(field, label) }));
+  };
+  function inventoryHomeSidebar() {
+    const panels = window.AldeckotModulePanels;
+    return panels.bars('Distribuição por Status', homePanelRows(globalState.overview?.statuses, statuses, 'status'))
+      + panels.donut('Distribuição por Situação', homePanelRows(globalState.overview?.situations, situations, 'situation'))
+      + panels.actions([
+        { id: 'search', icon: 'search', label: 'Buscar equipamento' },
+        { id: 'category', icon: 'folder', label: 'Abrir categoria' },
+        { id: 'add-table', icon: 'plus', label: 'Nova tabela', disabled: !canManage() },
+        { id: 'export-pdf', icon: 'report', label: 'Exportar PDF' }
+      ], 'data-inv-home-action');
+  }
+  function controlHomeSidebar() {
+    const panels = window.AldeckotModulePanels;
+    const items = data.tables.flatMap(entry => entry.items || []);
+    const rows = (values, field) => values.map(label => ({ label, count: items.filter(item => item[field] === label).length, color: chartColor(field, label) }));
+    return panels.bars('Distribuição por Status', rows(statuses, 'status'))
+      + panels.donut(moduleConfig.situationChart, rows(situations, 'situation'))
+      + panels.actions([
+        { id: 'all', icon: 'folder', label: 'Todos os chamados' },
+        { id: 'active', icon: 'alert', label: 'Em andamento' },
+        { id: 'reports', icon: 'report', label: 'Relatórios' },
+        { id: 'refresh', icon: 'history', label: 'Atualizar indicadores' }
+      ], 'data-control-home-action');
+  }
 
   function applyInventoryCleaningColumn(table) {
     if (controlMode || fluxMode || !table) return;
@@ -961,7 +989,7 @@
     $('#app').innerHTML = `<div class="inventory-shell">
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome || moduleHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-        ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${fluxMode ? fluxHomeMarkup() : window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts">${chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses)}${chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+        ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts module-home-sidebar">${inventoryHomeSidebar()}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${fluxMode ? fluxHomeMarkup() : window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts ${controlMode ? 'module-home-sidebar' : ''}">${controlMode ? controlHomeSidebar() : chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses) + chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
     if (!controlMode && table) {
       const layout = document.querySelector('.inventory-layout');
       layout?.classList.add('inventory-no-sidebar');
@@ -1015,7 +1043,6 @@
     window.AldeckotActionMenus?.enhance(document.querySelector('.inventory-shell'));
     if (moduleHome && controlMode) {
       document.querySelector('.inventory-layout')?.classList.add('control-operational-layout');
-      document.querySelector('.inventory-charts')?.remove();
       renderControlOperational();
     }
     if (table) applyInventoryFilters();
@@ -3324,8 +3351,7 @@
         if (globalVisible && !state.active && categoriesBefore === categoriesAfter) {
           renderGlobalTable();
           const charts = document.querySelector('.inventory-global-charts');
-          if (charts) charts.innerHTML = globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)
-            + globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-');
+          if (charts) charts.innerHTML = inventoryHomeSidebar();
         } else renderInventory();
         if (controlMode && !state.active) void refreshControlOperational();
       }
@@ -3427,6 +3453,21 @@
   });
 
   document.addEventListener('click', async event => {
+    const inventoryHomeAction = event.target.closest('[data-inv-home-action]');
+    if (inventoryHomeAction) {
+      const type = inventoryHomeAction.dataset.invHomeAction;
+      if (type === 'search') document.querySelector('[data-inv-global-search]')?.focus();
+      else if (type === 'category') document.querySelector('[data-module-home-table-select]')?.focus();
+      else document.querySelector(`.inventory-header [data-inv-action="${type}"]`)?.click();
+      return;
+    }
+    const controlHomeAction = event.target.closest('[data-control-home-action]');
+    if (controlHomeAction) {
+      const type = controlHomeAction.dataset.controlHomeAction;
+      if (type === 'refresh') void refreshControlOperational();
+      else document.querySelector(`[data-control-tab="${type}"]`)?.click();
+      return;
+    }
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
     const tableStep = event.target.closest('[data-module-table-step]:enabled');

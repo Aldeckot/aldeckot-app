@@ -193,7 +193,28 @@
   };
   const renderDetail = () => {
     const item = active();
-    if (!item) return '<aside class="sp-detail" tabindex="0" aria-label="Detalhes do suprimento"><div class="sp-empty">Selecione um suprimento na tabela para ver seus detalhes.</div></aside>';
+    if (!item) {
+      const panels = window.AldeckotModulePanels;
+      const rows = [
+        { label: 'Normal', color: '#24d89d' },
+        { label: 'Estoque baixo', color: '#ffcb38' },
+        { label: 'Sem estoque', color: '#ff5f78' },
+        { label: 'Inativo', color: '#a467ee' }
+      ].map(row => ({ ...row, count: state.items.filter(entry => (entry.inactive ? 'Inativo' : entry.stock_status) === row.label).length }));
+      const categories = [...new Set(state.items.map(entry => entry.category).filter(Boolean))];
+      const colors = ['#27d4ae', '#4aa6ff', '#a56bfa', '#ffc63c', '#ff6f7f', '#37d3eb'];
+      const ranked = categories.map(label => ({ label, count: state.items.filter(entry => entry.category === label).length }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
+      const categoryRows = ranked.slice(0, 5).map((row, index) => ({ ...row, color: colors[index] }));
+      if (ranked.length > 5) categoryRows.push({ label: 'Outras categorias', count: ranked.slice(5).reduce((sum, row) => sum + row.count, 0), color: colors[5] });
+      return `<aside class="sp-detail sp-home-sidebar module-home-sidebar" tabindex="0" aria-label="Visão geral de Suprimentos">${panels.bars('Distribuição por Estoque', rows)}${panels.donut('Distribuição por Categoria', categoryRows)}${panels.actions([
+        { id: 'add', icon: 'plus', label: 'Adicionar suprimento', disabled: !canEdit() },
+        { id: 'focus-search', icon: 'search', label: 'Buscar suprimento' },
+        { id: 'below-minimum', icon: 'alert', label: 'Abaixo do mínimo' },
+        { id: 'export', icon: 'report', label: 'Exportar PDF' },
+        { id: 'backup', icon: 'backup', label: 'Backup' }
+      ], 'data-sp-action')}</aside>`;
+    }
     const inventory = isInventory(item);
     const chosen = selectedVariant(item);
     const tabs = inventory ? [['general','Geral'],['variants','Variações'],['units','Unidades'],['compatibility','Compatibilidade'],['logs','Logs']]
@@ -853,6 +874,7 @@
     const button = event.target.closest('[data-sp-action]');
     if (!button) return;
     const action = button.dataset.spAction;
+    if (action === 'focus-search') { app.querySelector('[data-sp-search]')?.focus(); return; }
     if (action === 'close') { state.selectedId = null; state.selectedVariantId = null; state.detail = null; history.replaceState(null,'','supplies.html'); render(); return; }
     if (action === 'overview') { state.selectedVariantId = null; state.activeTab = 'variants'; render(); return; }
     if (action === 'export') { exportPdf(); return; }
