@@ -30,3 +30,33 @@ test('TAG sem série não vira chave canônica entre módulos', () => {
   const results = prepare([row('management', 'm1', 'IMP04', ''), row('control', 'c1', 'IMP04', '')], 'IMP04');
   assert.equal(results.length, 2);
 });
+
+test('eventos explícitos do Inventário viram um resultado mesmo com TAG histórica diferente', () => {
+  const results = prepare([
+    row('flux', 'f1', 'IMP04', 'S1', { metadata: { inventoryItemId: 'i1' } }),
+    row('control', 'c1', 'IMP04', 'S1', { metadata: { inventoryItemId: 'i1' } }),
+    row('inventory', 'i1', 'IMP99', 'S1')
+  ], 'S1');
+  assert.deepEqual(results.map(item => [item.id, item.inventoryItemId]), [['i1', 'i1']]);
+});
+
+test('TAG e série iguais não fundem IDs explícitos de equipamentos diferentes', () => {
+  const results = prepare([
+    row('control', 'c1', 'IMP04', 'S1', { metadata: { inventoryItemId: 'i2' } }),
+    row('inventory', 'i1', 'IMP04', 'S1'),
+    row('flux', 'f1', 'IMP04', 'S1')
+  ], 'IMP04');
+  assert.deepEqual(results.map(item => item.id), ['i1', 'c1', 'f1']);
+  assert.ok(results.every(item => item.duplicateTag));
+});
+
+test('ciclos do mesmo equipamento e espelhos do mesmo computador são agrupados por seus próprios IDs', () => {
+  const records = [
+    row('management', 'm1', '', 'S1', { metadata: { computerId: 'pc1' } }),
+    row('control', 'c1', '', 'S1', { metadata: { computerId: 'pc1' } }),
+    row('flux', 'f1', '', 'S2', { metadata: { equipmentUid: 'physical1' } }),
+    row('flux', 'f2', '', 'S2', { metadata: { equipmentUid: 'physical1' } }),
+    row('flux', 'f3', '', 'S2', { metadata: { equipmentUid: 'physical2' } })
+  ];
+  assert.deepEqual(prepare(records, 'S2').map(item => item.id), ['f1', 'f3', 'm1']);
+});

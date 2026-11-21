@@ -157,6 +157,9 @@ test('valores e listagens têm a mesma origem e computadores vazios não entram 
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/index.html');
   await expect(page.locator('.home-donut strong')).toHaveText('4');
+  await expect(page.locator('[data-home-operation-filter="mode"]')).toHaveValue('activity');
+  await expect(page.locator('.home-operations-donut strong')).toHaveText('5');
+  await page.locator('[data-home-operation-filter="mode"]').selectOption('open');
   await expect(page.locator('.home-operations-donut strong')).toHaveText('3');
   await expect(page.locator('[data-home-set="operation:maintenanceOpen"] b')).toHaveText('1');
   await expect(page.locator('[data-home-set="operation:verificationOpen"] b')).toHaveText('1');
@@ -257,6 +260,9 @@ test('quadros centrais ocupam o lugar das atividades sem descartar os dados', as
 });
 test('Central de Operações alterna modo e combina filtros no gráfico e no modal', async ({ page }) => {
   await page.goto('/index.html');
+  await expect(page.locator('[data-home-operation-filter="mode"]')).toHaveValue('activity');
+  await expect(page.locator('.home-operations-donut strong')).toHaveText('5');
+  await page.locator('[data-home-operation-filter="mode"]').selectOption('open');
   await expect(page.locator('.home-operations-donut strong')).toHaveText('3');
   await page.locator('[data-home-operation-filter="mode"]').selectOption('activity');
   await expect(page.locator('.home-operations-donut strong')).toHaveText('5');
@@ -274,7 +280,7 @@ test('Central de Operações alterna modo e combina filtros no gráfico e no mod
   await page.locator('[data-home-operation-filter="to"]').fill('2026-10-22');
   await expect(page.locator('.home-operations-donut strong')).toHaveText('0');
   await page.locator('[data-home-operation-clear]').click();
-  await expect(page.locator('.home-operations-donut strong')).toHaveText('3');
+  await expect(page.locator('.home-operations-donut strong')).toHaveText('5');
 });
 
 test('alerta abre as causas e o calendário oferece criação de tarefa e nota', async ({ page }) => {

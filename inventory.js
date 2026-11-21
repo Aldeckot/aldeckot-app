@@ -2,6 +2,8 @@
   const moduleKey = document.body.dataset.module || 'inventory';
   const controlMode = moduleKey === 'control';
   const fluxMode = moduleKey === 'flux';
+  const controlBoard = window.AldeckotControlBoard;
+  const tableControls = window.AldeckotModuleTableControls;
   const moduleConfig = controlMode ? {
     key: 'control', backupKey: 'controlBackups', title: 'CONTROLE TI', name: 'Controle TI',
     subtitle: 'Aldeckot — Controle de Manutenção', page: 'control.html', backupName: 'Controle TI', backupFile: 'controle-ti', backupModule: 'controle-ti',
@@ -25,7 +27,7 @@
     tablePlaceholder: 'Ex.: Equipamentos TI, Estoque…', emptyText: 'Selecione uma tabela na lateral', emptyCreateText: 'Crie uma tabela para começar a organizar os equipamentos.'
   };
   const moduleHeader = controlMode ? {
-    title: 'Controle TI', description: 'Central de manutenção e gestão de chamados.',
+    title: 'Controle TI', description: 'Central de manutenção e gestão de equipamentos',
     tags: ['Manutenção', 'Chamados', 'Equipe'], art: 'control'
   } : fluxMode ? {
     title: 'Flux', description: 'Envio e recebimento de equipamentos.',
@@ -45,19 +47,29 @@
   const stamp = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const dateValue = value => value ? new Date(`${value}T12:00`).toLocaleDateString('pt-BR') : '—';
   const dateTimeValue = value => value && Number.isFinite(typeof value === 'number' ? value : Date.parse(value))
-    ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo' }) : '—';
+  const fluxLocalDay = instant => window.AldeckotFluxCycles.localDay(instant);
   let data = { tables: [] };
-  let backupMeta = { last: null, lastAt: null, lastSource: null, automatic: false, frequencyDays: 7, history: [] };
+  let backupMeta = { availability: 'loading', last: null, lastAt: null, lastSource: null, automatic: false, frequencyDays: 7, history: [] };
   let pendingRestore = null;
   let backupBusy = false;
   let initialized = false;
   let backupMetaLoadedAt = 0;
+  let backupMetaRequest = null;
   let reloadSequence = 0;
   let emptyPresentationCache;
   const branchModel = window.AldeckotInventoryBranches;
   const moduleRoute = new URLSearchParams(window.location.search);
-  let state = { active: moduleRoute.get('table'), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: !moduleRoute.get('table'), tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  let state = { active: moduleRoute.get('table'), overview: ['overview', 'operations'].includes(moduleRoute.get('view')), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
   const globalState = { view: 'recent', query: '', category: '', status: '', situation: '', order: 'recent', page: 1, pageSize: 25, overview: null, result: null, busy: false };
+  const controlOperational = { tab: 'overview', query: '', status: '', priority: '',
+    page: 1, pageSize: 25, dashboard: null, listing: null,
+    report: null, reportFilters: { maintenanceMode: 'all' },
+    busy: false, error: '', legacy: false };
+  let controlCaseDetailUnavailable = false;
+  let controlOperationalSequence = 0;
+  let controlOperationalSearchTimer;
   let globalRequestSequence = 0;
   let globalSearchTimer;
   let categoryRequestSequence = 0;
@@ -69,14 +81,31 @@
   const canManage = () => Boolean(window.AldeckotAuth?.isAdmin);
   const moduleApi = () => backend()?.[moduleConfig.key];
   const backupApi = () => backend()?.[moduleConfig.backupKey];
-  const pageSizes = [10, 25, 50, 100];
+  const pageSizes = controlMode ? [6, 10, 25, 50, 100] : [10, 25, 50, 100];
   const pageSizeKey = `aldeckot:${moduleConfig.key}:page-size`;
   const savedPageSize = (() => {
     try { return Number(window.localStorage.getItem(pageSizeKey)); } catch { return 0; }
   })();
   state.page = 1;
-  state.pageSize = pageSizes.includes(savedPageSize) ? savedPageSize : 25;
+  state.pageSize = pageSizes.includes(savedPageSize) ? savedPageSize : controlMode ? 6 : 25;
   const moduleHeaderSummaryMarkup = () => `<div class="inventory-heading module-header-summary module-header-summary-${moduleHeader.art}"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">${moduleHeader.title}</h1><p class="module-header-summary-description">${moduleHeader.description}</p><div class="module-header-summary-tags">${moduleHeader.tags.map(tag => `<span>${tag}</span>`).join('')}</div></div><span class="module-header-summary-art ${moduleHeader.art}" aria-hidden="true"></span></div>`;
+  async function showModuleHome() {
+    const previous = { ...state };
+    Object.assign(state, { active: null, overview: true, sidebarOpen: false, branchId: null,
+      page: 1, query: '', status: '', situation: '', tableActionMenu: false });
+    if (controlMode) controlOperational.tab = 'overview';
+    if (!controlMode && !fluxMode) {
+      try {
+        if (!await reloadGlobal()) { state = previous; return; }
+      } catch (error) {
+        state = previous;
+        window.AldeckotMessage.show(backendMessage(error));
+        return;
+      }
+    }
+    renderInventory();
+    if (controlMode) void refreshControlOperational();
+  }
   const backendMessage = error => {
     const message = error?.message || 'Não foi possível comunicar com o Supabase.';
     if (controlMode && /control_(items|item_logs|backups|backup_settings)/i.test(message)) return 'O banco ainda não possui a estrutura do Controle TI. Execute o arquivo supabase/003_control_ti.sql no SQL Editor do Supabase.';
@@ -288,16 +317,47 @@
     page: state.page, pageSize: state.pageSize, order: 'recent'
   });
   const globalListingActive = () => globalState.view === 'all' || Boolean(globalState.query.trim());
+  function refreshModuleBackupMeta() {
+    if (backupMetaRequest) return backupMetaRequest;
+    if (Date.now() - backupMetaLoadedAt < 30000) return;
+    const api = backupApi();
+    backupMetaRequest = (async () => {
+      const [setting, history] = await Promise.all([api.settings(), api.list()]);
+      let latest = history[0] || null;
+      const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
+      if (canManage() && setting.automatic &&
+        (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
+        const snapshot = controlMode || fluxMode ? data : await moduleApi().load();
+        latest = await api.create(clone(snapshot), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
+      }
+      writeBackupMeta({
+        availability: 'ready',
+        last: latest?.created_at ? new Date(latest.created_at).toLocaleString('pt-BR') : null,
+        lastAt: latest?.created_at || null,
+        lastSource: latest?.source || null,
+        automatic: setting.automatic, frequencyDays,
+        history: latest ? [latest, ...history.filter(entry => entry.id !== latest.id)].slice(0, 3) : []
+      });
+    })().catch(error => {
+      console.warn('Não foi possível consultar ou atualizar o backup em rede.', error);
+      writeBackupMeta({ availability: 'unavailable' });
+    }).finally(() => {
+      backupMetaLoadedAt = Date.now();
+      backupMetaRequest = null;
+      if (!backupBusy && document.querySelector('[data-inv-backup-availability]')) backupModal();
+    });
+    return backupMetaRequest;
+  }
+
   async function reloadGlobal() {
     const request = ++reloadSequence;
     ++globalRequestSequence;
     await (window.AldeckotAuthReady || Promise.resolve());
     if (!window.AldeckotAuth?.session) return false;
     await backend().init();
-    const [categories, overview, page, setting, history] = await Promise.all([
+    const [categories, overview, page] = await Promise.all([
       moduleApi().globalCategories(), moduleApi().globalOverview(),
-      globalListingActive() ? moduleApi().globalPage(globalFilters()) : Promise.resolve(null),
-      backupApi().settings(), backupApi().list()
+      globalListingActive() ? moduleApi().globalPage(globalFilters()) : Promise.resolve(null)
     ]);
     if (request !== reloadSequence) return false;
     data = { tables: categories.map(table => ({
@@ -305,27 +365,14 @@
     })) };
     globalState.overview = overview;
     globalState.result = page || { items: overview.recent || [], total: overview.total || 0, page: 1 };
-    let latest = history[0] || null;
-    const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
-    if (window.AldeckotAuth?.isAdmin && setting.automatic &&
-      (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
-      const fullSnapshot = await moduleApi().load();
-      if (request !== reloadSequence) return false;
-      latest = await backupApi().create(clone(fullSnapshot), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
-      history.unshift(latest);
-    }
-    writeBackupMeta({
-      last: latest?.created_at ? new Date(latest.created_at).toLocaleString('pt-BR') : null,
-      lastAt: latest?.created_at || null, lastSource: latest?.source || null,
-      automatic: setting.automatic, frequencyDays, history: history.slice(0, 3)
-    });
-    backupMetaLoadedAt = Date.now();
+    void refreshModuleBackupMeta();
     initialized = true;
     return true;
   }
 
-  async function reloadInventory() {
-    if (!controlMode && !fluxMode && !state.active) return reloadGlobal();
+  async function reloadInventory(categorySelection) {
+    const categoryId = categorySelection || state.active;
+    if (!controlMode && !fluxMode && !categoryId) return reloadGlobal();
     const request = ++reloadSequence;
     await (window.AldeckotAuthReady || Promise.resolve());
     if (!window.AldeckotAuth?.session) return;
@@ -334,42 +381,38 @@
     await api.init();
     let nextData;
     if (!controlMode && !fluxMode) {
+      const filters = categorySelection
+        ? { ...categoryFilters(), category: categoryId, branchId: null, page: 1 } : categoryFilters();
       const [categories, branches, page] = await Promise.all([
-        moduleApi().globalCategories(), moduleApi().categoryBranches(state.active),
-        moduleApi().categoryPage(categoryFilters())
+        moduleApi().globalCategories(), moduleApi().categoryBranches(categoryId),
+        moduleApi().categoryPage(filters)
       ]);
-      if (!categories.some(table => table.id === state.active)) {
+      if (request !== reloadSequence) return false;
+      if (!categories.some(table => table.id === categoryId)) {
+        if (categorySelection) throw new Error('Esta categoria não está mais disponível.');
         state.active = null;
         state.sidebarOpen = true;
         return reloadGlobal();
       }
-      nextData = { tables: categories.map(category => category.id === state.active
+      nextData = { tables: categories.map(category => category.id === categoryId
         ? { ...category, items: page.items, pageItems: page.items, total: Number(page.total || 0), branches, itemsLoaded: true }
         : { ...category, items: [], branches: [], itemsLoaded: false }) };
     } else nextData = await moduleApi().load();
     if (request !== reloadSequence) return false;
+    if (categorySelection) {
+      ++categoryRequestSequence;
+      Object.assign(state, { active: categoryId, branchId: null, page: 1, addMenu: false,
+        tableActionMenu: false, tableMenu: null, tableMenuPosition: null });
+    }
     data = nextData;
-    if (!initialized || Date.now() - backupMetaLoadedAt > 30000) {
-    const [setting, initialHistory] = await Promise.all([backupApi().settings(), backupApi().list()]);
-    if (request !== reloadSequence) return false;
-    let history = initialHistory;
-    let latest = history[0] || null;
-    const frequencyDays = Math.max(1, Number(setting.frequency_days || 7));
-    if (window.AldeckotAuth?.isAdmin && setting.automatic && (!latest || Date.now() - new Date(latest.created_at).getTime() >= frequencyDays * 86400000)) {
-      const snapshot = !controlMode && !fluxMode ? await moduleApi().load() : data;
-      latest = await backupApi().create(clone(snapshot), `Backup automático do ${moduleConfig.backupName}`, 'automatic');
-      history = [latest, ...history.filter(backup => backup.id !== latest.id)].slice(0, 3);
+    if ((controlMode || fluxMode) && !initialized && !state.active && state.pendingItemId) {
+      const requestedItem = data.tables.find(table => table.items.some(item => item.id === state.pendingItemId));
+      if (requestedItem) {
+        state.active = requestedItem.id;
+        state.sidebarOpen = false;
+      }
     }
-    writeBackupMeta({
-      last: latest?.created_at ? new Date(latest.created_at).toLocaleString('pt-BR') : null,
-      lastAt: latest?.created_at || null,
-      lastSource: latest?.source || null,
-      automatic: setting.automatic,
-      frequencyDays,
-      history
-    });
-    backupMetaLoadedAt = Date.now();
-    }
+    void refreshModuleBackupMeta();
     // A área de trabalho só deve carregar depois que a pessoa escolher uma tabela.
     // Mantemos a seleção atual em atualizações, mas nunca escolhemos a primeira tabela automaticamente.
     if (state.active && !data.tables.some(table => table.id === state.active)) {
@@ -465,6 +508,8 @@
     return !controlMode && !fluxMode && state.branchId
       ? items.filter(item => branchModel.inBranch(table, item, state.branchId)) : items;
   };
+  const filteredControlItems = table => scopedItems(table)
+    .filter(item => controlBoard.matches(item, state) && matchesOperation(item));
   const selectedBranch = table => table?.branches?.find(branch => branch.id === state.branchId) || null;
   const className = value => String(value || '').toLowerCase().replaceAll(' ', '-');
   const choiceTone = (kind, value) => {
@@ -488,19 +533,47 @@
   const chartToneColors = { green: '#36dc76', yellow: '#ffd34e', red: '#ff6874', blue: '#57a6ff', turquoise: '#35d8c8', purple: '#b56fff', orange: '#ff963d', gray: '#aeb7c6' };
   const chartColor = (field, value) => chartToneColors[choiceTone(field === 'status' ? 'status' : 'situation', value)] || chartToneColors.blue;
   const countBy = (items, values, field) => Object.fromEntries(values.map(value => [value, items.filter(item => item[field] === value).length]));
+  const cleaningPill = value => value
+    ? `<span class="cleaning-pill" data-cleaning="${escape(value)}">${escape(value)}</span>`
+    : '—';
   const log = (item, text) => { item.logs = item.logs || []; item.logs.unshift({ at: stamp(), text }); };
 
   function chart(title, items, field, values, prefix = '') {
     const counts = countBy(items, values, field);
     return chartWithCounts(title, counts, field, values, prefix);
   }
-  function chartWithCounts(title, counts, field, values, prefix = '') {
+  function chartWithCounts(title, counts, field, values, prefix = '', colorFor = value => chartColor(field, value), barHeight = 116) {
+    if (field === 'situation' && !controlMode && !fluxMode) return inventorySituationPie(title, counts, values, prefix, colorFor);
     const max = Math.max(1, ...Object.values(counts));
-    return `<section class="inventory-panel inventory-chart"><h3>${title}</h3><div class="inventory-chart-stage">${values.map(value => `<div class="inventory-chart-bar ${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)};height:${Math.max(4, Math.round(((counts[value] || 0) / max) * 116))}px" title="${escape(value)}: ${counts[value] || 0}"></div>`).join('')}</div><div class="inventory-legend">${values.map(value => `<span class="${prefix}${className(value)}" style="--chart-color:${chartColor(field, value)}"><i></i><em>${escape(value)}</em><b>${counts[value] || 0}</b></span>`).join('')}</div></section>`;
+    return `<section class="inventory-panel inventory-chart"><h3>${title}</h3><div class="inventory-chart-stage">${values.map(value => `<div class="inventory-chart-bar ${prefix}${className(value)}" style="--chart-color:${colorFor(value)};height:${Math.max(4, Math.round(((counts[value] || 0) / max) * barHeight))}px" title="${escape(value)}: ${counts[value] || 0}"></div>`).join('')}</div><div class="inventory-legend">${values.map(value => `<span class="${prefix}${className(value)}" style="--chart-color:${colorFor(value)}"><i></i><em>${escape(value)}</em><b>${counts[value] || 0}</b></span>`).join('')}</div></section>`;
+  }
+  function inventorySituationPie(title, counts, values, prefix, colorFor) {
+    const total = values.reduce((sum, value) => sum + (Number(counts[value]) || 0), 0);
+    let current = 0;
+    const slices = values.filter(value => Number(counts[value]) > 0).map(value => {
+      const start = current;
+      current += (Number(counts[value]) / total) * 100;
+      return `${colorFor(value)} ${start}% ${current}%`;
+    });
+    const background = slices.length ? `conic-gradient(${slices.join(',')})` : 'conic-gradient(#526b84 0% 100%)';
+    const description = values.map(value => `${value}: ${Number(counts[value]) || 0}`).join(', ');
+    return `<section class="inventory-panel inventory-chart inventory-pie-chart"><h3>${title}</h3><div class="inventory-pie-layout"><div class="inventory-pie-visual" role="img" aria-label="${escape(`${title}. ${description}`)}" style="background:${background}"><span class="inventory-pie-sheen" aria-hidden="true"></span></div><div class="inventory-legend inventory-pie-legend">${values.map(value => `<span class="${prefix}${className(value)}" style="--chart-color:${colorFor(value)}"><i></i><em>${escape(value)}</em><b>${Number(counts[value]) || 0}</b></span>`).join('')}</div></div></section>`;
+  }
+  function inventorySituationSummary(title, counts, values, colorFor) {
+    const max = Math.max(1, ...values.map(value => Number(counts[value]) || 0));
+    const description = values.map(value => `${value}: ${Number(counts[value]) || 0}`).join(', ');
+    return `<section class="inventory-panel inventory-chart inventory-situation-summary"><h3>${title}</h3>
+      <div class="inventory-situation-summary-bars" role="img" aria-label="${escape(`${title}. ${description}`)}">
+        ${values.map(value => `<div class="inventory-situation-summary-row" style="--chart-color:${colorFor(value)}">
+          <span>${escape(value)}</span><div class="inventory-situation-summary-track"><i style="width:${(Number(counts[value]) || 0) ? Math.max(3, Math.round((Number(counts[value]) || 0) / max * 100)) : 0}%"></i></div><b>${Number(counts[value]) || 0}</b>
+        </div>`).join('')}
+      </div></section>`;
   }
   const globalChart = (title, rows, field, preferred, prefix = '') => {
     const counts = Object.fromEntries((rows || []).map(row => [row.value, Number(row.count) || 0]));
     const values = [...new Set([...preferred, ...Object.keys(counts)])];
+    if (field === 'situation' && !controlMode && !fluxMode)
+      return inventorySituationSummary(title, counts, values, value => chartColor(field, value));
     return chartWithCounts(title, counts, field, values, prefix);
   };
 
@@ -520,7 +593,7 @@
       if (!situationCell || !item) return;
       const cell = document.createElement('td');
       cell.dataset.invCleaningColumn = 'true';
-      cell.innerHTML = '<span class="inventory-situation ' + className(item.cleaning || 'Não realizada') + '">' + escape(item.cleaning || 'Não realizada') + '</span>';
+      cell.innerHTML = cleaningPill(item.cleaning || 'Não realizada');
       situationCell.insertAdjacentElement('afterend', cell);
     });
     const empty = grid.querySelector('.inventory-empty-row');
@@ -530,6 +603,41 @@
   function applyInventoryFilters() {
     const table = activeTable();
     if (!table) return;
+    if (controlMode) {
+      const matched = filteredControlItems(table);
+      state.page = Math.min(Math.max(1, state.page), Math.max(1, Math.ceil(matched.length / state.pageSize)));
+      const page = matched.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+      const body = document.querySelector('.control-board-table tbody');
+      if (body) body.innerHTML = page.map(item => controlBoard.row(item, dateValue)).join('')
+        || '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento corresponde à consulta.</td></tr>';
+      const pagination = document.querySelector('.control-board-pagination');
+      if (pagination) pagination.innerHTML = controlBoard.pagination(matched.length, state.page, state.pageSize, pageSizes);
+      const charts = document.querySelector('.control-board-layout .inventory-charts');
+      if (charts) {
+        const counts = controlBoard.statusCounts(matched);
+        charts.innerHTML = chartWithCounts('Distribuição por Status', counts, 'status',
+          Object.keys(counts), '', value => controlBoard.statuses[value]?.[1] || '#678198', 86)
+          + controlBoard.sidebar(matched, canManage());
+      }
+      return;
+    }
+    if (fluxMode) {
+      const results = fluxGroups(table, state);
+      const lastPage = Math.max(1, Math.ceil(results.length / state.pageSize));
+      state.page = Math.max(1, Math.min(state.page, lastPage));
+      const shown = results.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+      const list = document.querySelector('.flux-card-list');
+      if (list) list.innerHTML = shown.length ? shown.map(fluxCardMarkup).join('')
+        : '<p class="flux-card-empty">Nenhum equipamento corresponde aos filtros deste mês.</p>';
+      let footer = document.querySelector('.inventory-pagination');
+      if (!footer) {
+        footer = document.createElement('footer');
+        footer.className = 'inventory-panel inventory-pagination';
+        document.querySelector('.inventory-workspace')?.appendChild(footer);
+      }
+      footer.innerHTML = `<span>Mostrando ${shown.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, results.length)} de ${results.length} equipamentos</span><label>Itens por página <select data-inv-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${state.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Páginas"><button type="button" data-inv-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button><span>Página ${state.page} de ${lastPage}</span><button type="button" data-inv-page="${state.page + 1}" aria-label="Próxima página" ${state.page === lastPage ? 'disabled' : ''}>›</button></nav>`;
+      return;
+    }
     if (!controlMode && !fluxMode && table.pageItems) {
       const shown = table.pageItems;
       const total = Number(table.total || 0);
@@ -650,7 +758,7 @@
     const total = Number(globalState.result?.total || 0);
     if (!globalListingActive()) return `<span>${(globalState.result?.items || []).length} equipamentos recentes · ${total} no Inventário</span>`;
     const pages = Math.max(1, Math.ceil(total / globalState.pageSize));
-    return `<span>${total} ${total === 1 ? 'equipamento' : 'equipamentos'} encontrados</span><nav aria-label="Páginas da consulta global"><button type="button" data-inv-global-page="${globalState.page - 1}" ${globalState.page <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button><span>Página ${globalState.page} de ${pages}</span><button type="button" data-inv-global-page="${globalState.page + 1}" ${globalState.page >= pages ? 'disabled' : ''} aria-label="Próxima página">›</button></nav>`;
+    return `<span>${total} ${total === 1 ? 'equipamento encontrado' : 'equipamentos encontrados'}</span><nav aria-label="Páginas da consulta global"><button type="button" data-inv-global-page="${globalState.page - 1}" ${globalState.page <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button><span>Página ${globalState.page} de ${pages}</span><button type="button" data-inv-global-page="${globalState.page + 1}" ${globalState.page >= pages ? 'disabled' : ''} aria-label="Próxima página">›</button></nav>`;
   }
   function globalMarkup() {
     const all = globalState.view === 'all';
@@ -673,11 +781,87 @@
   }
   function renderModuleHomeRows() {
     if (!(controlMode || fluxMode) || state.active) return;
-    const model = window.AldeckotModuleHome;
-    const body = document.querySelector('.inventory-module-data tbody');
-    if (body) body.innerHTML = model.rowsMarkup(data.tables, globalState, moduleConfig.key);
+    if (controlMode) { renderControlOperational(); return; }
+    const list = document.querySelector('.flux-home-list');
+    if (list) list.innerHTML = fluxHomeCardsMarkup();
     const footer = document.querySelector('.inventory-module-pagination');
-    if (footer) footer.innerHTML = model.paginationMarkup(data.tables, globalState, moduleConfig.name);
+    if (footer) footer.innerHTML = fluxHomePaginationMarkup();
+  }
+  function renderControlOperational() {
+    if (!controlMode || state.active) return;
+    const workspace = document.querySelector('.inventory-global-workspace');
+    if (!workspace) return;
+    workspace.innerHTML = controlOperational.legacy
+      ? '<p class="control-op-error" role="alert">A Central Operacional requer a migração 097. A consulta antiga permanece disponível.</p>'
+        + window.AldeckotModuleHome.markup(data.tables, globalState, 'control', moduleConfig.name)
+      : window.AldeckotControlOperational.markup(controlOperational);
+  }
+  async function refreshControlOperational() {
+    if (!controlMode || state.active || controlOperational.legacy) return;
+    if (typeof moduleApi()?.operationalOverview !== 'function' ||
+      typeof moduleApi()?.operationalCases !== 'function' ||
+      typeof moduleApi()?.controlCaseReport !== 'function') {
+      controlOperational.legacy = true;
+      renderControlOperational();
+      return;
+    }
+    const request = ++controlOperationalSequence;
+    controlOperational.busy = true;
+    controlOperational.error = '';
+    renderControlOperational();
+    try {
+      if (controlOperational.tab === 'overview') {
+        controlOperational.dashboard = await moduleApi().operationalOverview();
+      } else if (controlOperational.tab === 'reports') {
+        const report = await moduleApi().controlCaseReport(controlOperational.reportFilters);
+        if (request !== controlOperationalSequence) return;
+        controlOperational.report = report;
+        controlOperational.reportFilters.periodStart ||= controlOperational.report?.periodStart || '';
+        controlOperational.reportFilters.periodEnd ||= controlOperational.report?.periodEnd || '';
+      } else {
+        controlOperational.listing = await moduleApi().operationalCases({
+          tab: controlOperational.tab, query: controlOperational.query,
+          status: controlOperational.status, priority: controlOperational.priority,
+          page: controlOperational.page, pageSize: controlOperational.pageSize
+        });
+      }
+    } catch (error) {
+      if (request !== controlOperationalSequence) return;
+      if (/PGRST202|42883/.test(String(error?.code || '')) ||
+        /(?:control_operational_overview|list_control_cases).*(?:does not exist|schema cache)/i.test(error?.message || '')) {
+        controlOperational.legacy = true;
+      } else {
+        controlOperational.error = backendMessage(error);
+      }
+    } finally {
+      if (request === controlOperationalSequence) {
+        controlOperational.busy = false;
+        renderControlOperational();
+      }
+    }
+  }
+  function downloadControlReportCsv() {
+    const report = controlOperational.report;
+    if (!report || report.truncated) { controlOperational.error='Reduza o período para exportar todos os chamados do relatório.'; renderControlOperational(); return; }
+    const columns = [['Equipamento','equipment'],['TAG','tag'],['Setor','sector'],['Estado','state'],['Prioridade','priority'],['Origem','origin'],['Categoria','category'],['Abertura','openedAt'],['Resolução','resolvedAt'],['Minutos de manutenção','maintenanceMinutes'],['Intervenções','interventions'],['Recorrência','recurrence'],['Diagnóstico','diagnosis'],['Solução','solution']];
+    const quote = value => `"${String(value ?? '').replace(/"/g,'""')}"`;
+    const content = '\ufeff' + [columns.map(([label])=>quote(label)).join(','), ...(report.casesList||[]).map(row=>columns.map(([,key])=>quote(row[key])).join(','))].join('\r\n');
+    const url = URL.createObjectURL(new Blob([content], {type:'text/csv;charset=utf-8'}));
+    const anchor = document.createElement('a'); anchor.href=url; anchor.download=`relatorio-controle-ti-${report.periodStart}-${report.periodEnd}.csv`; anchor.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function printControlReport(caseId = null) {
+    const report = controlOperational.report;
+    if (!report) return;
+    if (report.truncated && !caseId) { controlOperational.error='Reduza o período para imprimir o relatório completo.'; renderControlOperational(); return; }
+    const allRows = report.casesList || [];
+    const rows = caseId ? allRows.filter(row=>row.id===caseId) : allRows;
+    if (!rows.length) return;
+    const popup = window.open('', '_blank');
+    if (!popup) { controlOperational.error='Permita a janela de impressão para gerar o PDF.'; renderControlOperational(); return; }
+    const esc = value => escape(value ?? '—');
+    popup.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório Controle TI</title><style>body{font:12px Arial;color:#15283a;margin:24px}h1{font-size:20px}p{color:#526477}table{border-collapse:collapse;width:100%;margin-top:18px}th,td{border:1px solid #9aabba;padding:7px;text-align:left}th{background:#e8f1f7}@media print{button{display:none}}</style><h1>${caseId?'Ficha de chamado':'Relatório Controle TI'}</h1><p>Período ${esc(report.periodStart)} a ${esc(report.periodEnd)} · ${rows.length} chamado(s)</p><table><thead><tr><th>Equipamento / TAG</th><th>Setor</th><th>Estado</th><th>Categoria</th><th>Abertura</th><th>Manutenção</th><th>Diagnóstico e solução</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.equipment)}<br>${esc(row.tag)}</td><td>${esc(row.sector)}</td><td>${esc(row.state)}</td><td>${esc(row.category)}</td><td>${esc(row.openedAt)}</td><td>${esc(row.maintenanceMinutes)} min</td><td>${esc(row.diagnosis)}<br>${esc(row.solution)}</td></tr>`).join('')}</tbody></table><script>window.onload=()=>window.print()</script></html>`);
+    popup.document.close();
   }
   async function refreshGlobalPage() {
     if (state.active) return;
@@ -717,7 +901,7 @@
 
   function applyHeaderPresentation() {
     const actions = {
-      'export-pdf': { label: 'Exportar PDF', className: 'inventory-pdf-action', icon: '<path d="M3.5 4.3 16.8 2l.7 3.5H5.2Z" fill="#b90c29" stroke="none"/><path d="M6.1 4.5h12.8v14H6.1Z" fill="#f9fafb" stroke="none"/><path d="M4.2 6.1h13v13.8c0 .9-.6 1.5-1.5 1.5h-10c-.9 0-1.5-.6-1.5-1.5Z" fill="#ff3048" stroke="none"/><path d="M5.8 11.9V7.8h1.7c1.1 0 1.7.5 1.7 1.35s-.6 1.35-1.7 1.35H5.8M10 7.8v4.1h1c1.3 0 2-.7 2-2.05s-.7-2.05-2-2.05ZM13.8 11.9V7.8h2.4M13.8 9.8H16" fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.8" cy="17.8" r="5.3" fill="#35d82e" stroke="#24a61e" stroke-width=".5"/><path d="M17.8 14.5v4.2m-2-1.9 2 2 2-2m-4.6 3.6h5.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' },
+      'export-pdf': { label: 'Exportar PDF', className: 'inventory-pdf-action' },
       backup: { label: 'Backup', className: 'inventory-backup-action', icon: '<ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/>' },
       'add-table': { label: 'Nova tabela', className: 'inventory-new-table-action', icon: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>' },
       home: { label: 'Home', className: 'inventory-home-action', icon: '<path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/>' }
@@ -728,7 +912,12 @@
       button.title = config.label;
       button.setAttribute('aria-label', config.label);
       button.classList.add(config.className);
-      button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${config.icon}</svg>`;
+      if (config.icon) button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${config.icon}</svg>`;
+      if (controlMode && action === 'export-pdf') {
+        button.classList.add('control-pdf-action');
+        button.setAttribute('aria-haspopup', 'dialog');
+        button.insertAdjacentHTML('beforeend', '<span>PDF</span>');
+      }
     });
     const toolbar = document.querySelector('.inventory-header-actions');
     toolbar?.setAttribute('role', 'toolbar');
@@ -745,8 +934,20 @@
     brand.dataset.systemHeaderBrand = 'true';
     brand.href = 'index.html';
     brand.setAttribute('aria-label', 'Voltar para a Home do Aldeckot');
-    brand.innerHTML = '<span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span>';
+    brand.innerHTML = '<span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.73" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span>';
     actions.append(brand);
+  }
+
+  function moduleHomeNavigationMarkup() {
+    const byCategory = !controlMode && !fluxMode;
+    const tables = byCategory ? data.tables : tableControls.periods(data.tables);
+    const options = byCategory
+      ? tables.map(table => `<option value="${escape(table.id)}">${escape(table.name)}</option>`).join('')
+      : tableControls.periodOptions(tables, '');
+    return `<nav class="module-home-navigation" aria-label="Início do ${moduleConfig.name}">
+      <button type="button" class="module-home-heading" ${byCategory ? 'data-inv-global-home' : 'data-inv-module-home'} aria-label="Atualizar visão geral do ${escape(moduleConfig.name)}" title="Atualizar visão geral"><span class="module-home-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v11h14V9m-9 11v-6h4v6"/></svg></span><span class="module-home-heading-copy"><small>INÍCIO DO MÓDULO</small><b>Visão geral</b><em>${escape(moduleConfig.name)} · ${byCategory ? 'categorias' : 'períodos'}</em></span></button>
+      <label class="module-home-select">Abrir ${byCategory ? 'categoria' : 'mês'}<select data-module-home-table-select aria-label="Abrir ${byCategory ? 'categoria' : 'mês'}" ${tables.length ? '' : 'disabled'}><option value="">Selecione ${byCategory ? 'uma categoria' : 'um mês'}</option>${options}</select></label>
+    </nav>`;
   }
 
   function renderInventory() {
@@ -758,9 +959,19 @@
     const moduleHome = (controlMode || fluxMode) && !table;
     const emptyPresentation = emptyPresentationCache ||= emptyPresentationMarkup();
     $('#app').innerHTML = `<div class="inventory-shell">
-      <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/></svg></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
+      <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome || moduleHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-        ${table ? `<main class="inventory-workspace">${controlMode || fluxMode ? `<nav class="inventory-branch-nav inventory-module-nav" aria-label="Navegação do ${moduleConfig.name}"><button type="button" class="inventory-global-back" data-inv-module-home>← ${moduleConfig.name}</button><span class="inventory-branch-name">${escape(table.name)}</span></nav>` : branchNavigationMarkup(table)}${controlMode || fluxMode ? tableMarkup(table, items) : inventoryTableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts">${chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses)}${chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+        ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts">${globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)}${globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-')}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${fluxMode ? fluxHomeMarkup() : window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts">${chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses)}${chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+    if (!controlMode && table) {
+      const layout = document.querySelector('.inventory-layout');
+      layout?.classList.add('inventory-no-sidebar');
+      layout?.querySelector('.inventory-table-sidebar')?.remove();
+    }
+    if (!table) {
+      const layout = document.querySelector('.inventory-layout');
+      layout?.classList.add('module-home-layout');
+      layout?.querySelector('.inventory-table-sidebar')?.remove();
+    }
     const inventoryHeader = document.querySelector('.inventory-header');
     const previousHeading = inventoryHeader?.querySelector('.inventory-heading');
     if (previousHeading && !previousHeading.classList.contains('module-header-summary')) previousHeading.outerHTML = moduleHeaderSummaryMarkup();
@@ -780,42 +991,9 @@
     }
     if (emptyPresentation.illustration) {
       const animationDock = document.createElement('div');
-      animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : controlMode ? '' : 'inventory-header-cube-scene'}`;
+      animationDock.className = `module-header-animation ${fluxMode ? 'flux-empty-state' : controlMode ? 'control-header-scene' : 'inventory-header-tracking-scene'}`;
       animationDock.setAttribute('aria-hidden', 'true');
-      animationDock.innerHTML = emptyPresentation.illustration;
-      if (!controlMode && !fluxMode) {
-        const illustration = animationDock.querySelector('.inventory-empty-illustration');
-        illustration?.setAttribute('viewBox', '0 0 620 110');
-        const faces = animationDock.querySelectorAll('#inventory-empty-cube path');
-        ['.34', '.2', '.48'].forEach((opacity, index) => faces[index]?.setAttribute('fill-opacity', opacity));
-        faces[3]?.setAttribute('fill', 'none');
-        animationDock.querySelector('.inventory-empty-object-main use')?.setAttribute('transform', 'translate(277 14) scale(1.5)');
-        for (const [name, transform] of [
-          ['purple', 'translate(67 19) scale(.8)'],
-          ['cyan', 'translate(494 13) scale(.85)'],
-          ['lilac', 'translate(173 58) scale(.68)'],
-          ['green', 'translate(379 54) scale(.7)'],
-          ['yellow', 'translate(554 55) scale(.8)']
-        ]) animationDock.querySelector(`.inventory-empty-object-${name} use`)?.setAttribute('transform', transform);
-        for (const [name, source, transform, delay] of [
-          ['edge-left', 'cyan', 'translate(18 54) scale(.7)', '-3.6s'],
-          ['upper-left', 'green', 'translate(120 16) scale(.6)', '-1.2s'],
-          ['left-mid', 'yellow', 'translate(153 30) scale(.58)', '-4.1s'],
-          ['middle-left', 'purple', 'translate(218 21) scale(.74)', '-2.7s'],
-          ['middle-low', 'cyan', 'translate(241 63) scale(.61)', '-4.8s'],
-          ['middle-right-high', 'yellow', 'translate(363 16) scale(.58)', '-1.9s'],
-          ['right-mid', 'lilac', 'translate(430 20) scale(.72)', '-3.3s'],
-          ['right-low', 'purple', 'translate(452 60) scale(.63)', '-.8s'],
-          ['edge-right', 'green', 'translate(584 16) scale(.5)', '-4.4s']
-        ]) {
-          const cube = illustration?.querySelector(`.inventory-empty-object-${source}`)?.cloneNode(true);
-          if (!cube) continue;
-          cube.classList.add('inventory-header-extra-cube', `inventory-header-extra-cube-${name}`);
-          cube.querySelector('use')?.setAttribute('transform', transform);
-          cube.style.animationDelay = delay;
-          illustration.append(cube);
-        }
-      }
+      animationDock.innerHTML = controlMode ? controlBoard.headerScene() : fluxMode ? emptyPresentation.illustration : inventoryScanScene();
       if (fluxMode) {
         // Enquadra apenas a cópia no cabeçalho; a ilustração do estado vazio permanece completa.
         animationDock.querySelector('.flux-empty-illustration')?.setAttribute('viewBox', '0 42 520 160');
@@ -823,11 +1001,23 @@
       inventoryHeader?.querySelector('.module-header-summary')?.insertAdjacentElement('afterend', animationDock);
     }
     applyHeaderPresentation();
+    if (controlMode) document.querySelector('.inventory-layout')?.classList.add('control-board-layout');
+    if (fluxMode) {
+      document.querySelector('.inventory-layout')?.classList.add('flux-board-layout');
+      const sidebar = document.querySelector('.inventory-charts');
+      if (sidebar) sidebar.innerHTML = fluxSidebarMarkup(table ? items : data.tables.flatMap(entry => entry.items || []));
+    }
     ensureHeaderBrand();
+    if (!table) inventoryHeader?.insertAdjacentHTML('afterend', moduleHomeNavigationMarkup());
     applyInventoryCleaningColumn(table);
     ensureFilterEmptyRow(table);
     setupInventoryAddMenu(table);
     window.AldeckotActionMenus?.enhance(document.querySelector('.inventory-shell'));
+    if (moduleHome && controlMode) {
+      document.querySelector('.inventory-layout')?.classList.add('control-operational-layout');
+      document.querySelector('.inventory-charts')?.remove();
+      renderControlOperational();
+    }
     if (table) applyInventoryFilters();
     else if (globalHome) void applySharedImages();
     if (table && !controlMode && !fluxMode) {
@@ -859,8 +1049,10 @@
 
   function branchNavigationMarkup(table) {
     if (controlMode || fluxMode || !table) return '';
+    const home = tableControls.homeButton('Início do Inventário', true);
+    if (!table.branches?.length) return `<div class="module-table-nav">${home}</div>`;
     const current = selectedBranch(table);
-    return `<nav class="inventory-branch-nav" aria-label="Navegação da categoria"><button type="button" class="inventory-global-back" data-inv-global-home aria-label="Voltar à visão global">← Inventário</button><div class="inventory-branch-tabs"><button type="button" class="inventory-branch-tab ${current ? '' : 'active'}" data-inv-branch-home aria-current="${current ? 'false' : 'page'}">${escape(table.name)}</button>${(table.branches || []).map(branch => `<button type="button" class="inventory-branch-tab ${current?.id === branch.id ? 'active' : ''}" data-inv-branch="${escape(branch.id)}" aria-current="${current?.id === branch.id ? 'page' : 'false'}">${escape(branch.name)}</button>`).join('')}</div>${current && canManage() ? `<div class="inventory-branch-admin"><button type="button" data-inv-branch-edit="${escape(current.id)}">Renomear</button><button type="button" data-inv-branch-delete="${escape(current.id)}">Excluir</button></div>` : ''}</nav>`;
+    return `<nav class="inventory-branch-nav module-table-nav" aria-label="Navegação da categoria">${home}<div class="inventory-branch-tabs"><button type="button" class="inventory-branch-tab ${current ? '' : 'active'}" data-inv-branch-home aria-current="${current ? 'false' : 'page'}">${escape(table.name)}</button>${table.branches.map(branch => `<button type="button" class="inventory-branch-tab ${current?.id === branch.id ? 'active' : ''}" data-inv-branch="${escape(branch.id)}" aria-current="${current?.id === branch.id ? 'page' : 'false'}">${escape(branch.name)}</button>`).join('')}</div>${current && canManage() ? `<div class="inventory-branch-admin"><button type="button" data-inv-branch-edit="${escape(current.id)}">Renomear</button><button type="button" data-inv-branch-delete="${escape(current.id)}">Excluir</button></div>` : ''}</nav>`;
   }
 
   function setupInventoryAddMenu(table) {
@@ -879,7 +1071,7 @@
     const charts = document.querySelector('.inventory-charts');
     if (!table || !workspace || !charts) return renderInventory();
     const items = scopedItems(table);
-    workspace.innerHTML = branchNavigationMarkup(table) + inventoryTableMarkup(table, items);
+    workspace.innerHTML = tableMarkup(table, items);
     charts.innerHTML = chart('Status nesta página', items, 'status', statuses) + chart('Situação nesta página', items, 'situation', situations, 'situation-');
     applyInventoryCleaningColumn(table);
     ensureFilterEmptyRow(table);
@@ -906,6 +1098,27 @@
     const illustrationMarkup = illustration?.outerHTML || '';
     illustration?.remove();
     return { illustration: illustrationMarkup, emptyState: template.innerHTML };
+  }
+
+  function inventoryScanScene() {
+    return `<svg class="inventory-scan-art" viewBox="0 0 620 112" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><linearGradient id="inventory-scan-beam"><stop stop-color="#35dfff" stop-opacity="0"/><stop offset=".5" stop-color="#35dfff" stop-opacity=".38"/><stop offset="1" stop-color="#35dfff" stop-opacity="0"/></linearGradient></defs>
+      <g class="inventory-scan-floor"><path d="M29 94h562M58 107h504M112 79h397M116 80l-46 27m112-27-30 27m112-27-14 27m100-27 14 27m70-27 30 27m70-27 46 27"/></g>
+      <g class="inventory-scan-input"><rect x="38" y="30" width="63" height="52" rx="9"/><path d="M48 45h41M48 57h30M48 68h23"/><circle cx="87" cy="68" r="4"/></g>
+      <g class="inventory-scan-route"><path d="M102 56h88m240 0h87"/><circle cx="160" cy="56" r="3"/><circle cx="472" cy="56" r="3"/></g>
+      <g class="inventory-scan-rack"><rect x="190" y="10" width="240" height="91" rx="12"/><path d="M190 55h240M270 10v91m80-91v91"/></g>
+      <g class="inventory-scan-assets">
+        <g class="inventory-scan-asset a"><rect x="208" y="23" width="42" height="22" rx="4"/><path d="M216 29h26m-26 7h15"/></g>
+        <g class="inventory-scan-asset b"><rect x="289" y="20" width="42" height="28" rx="4"/><path d="m297 27 13-5 13 5-13 5-13-5Zm0 0v13l13 6 13-6V27m-13 5v14"/></g>
+        <g class="inventory-scan-asset c"><rect x="367" y="23" width="42" height="22" rx="4"/><path d="M375 29h26m-26 7h19"/></g>
+        <g class="inventory-scan-asset d"><rect x="208" y="68" width="42" height="21" rx="4"/><path d="M216 75h26m-26 7h16"/></g>
+        <g class="inventory-scan-asset e"><rect x="289" y="67" width="42" height="23" rx="4"/><path d="M297 75h26m-26 7h18"/></g>
+        <g class="inventory-scan-asset f"><rect x="367" y="67" width="42" height="23" rx="4"/><path d="M375 75h26m-26 7h18"/></g>
+      </g>
+      <g class="inventory-scan-sweep"><rect x="189" y="12" width="52" height="87" fill="url(#inventory-scan-beam)"/><path d="M215 13v85"/></g>
+      <g class="inventory-scan-location"><path d="M545 18c-16 0-28 12-28 28 0 20 28 47 28 47s28-27 28-47c0-16-12-28-28-28Z"/><circle cx="545" cy="46" r="10"/></g>
+      <g class="inventory-scan-signal"><circle cx="117" cy="56" r="3"/><circle cx="495" cy="56" r="3"/><circle cx="545" cy="46" r="3"/></g>
+    </svg>`;
   }
 
   function emptyMarkup() {
@@ -945,10 +1158,6 @@
     </svg><h2 id="inventory-empty-title">Nenhuma tabela selecionada</h2><p>Selecione uma tabela na lateral</p></div></section>`;
   }
 
-  function controlTableMarkup(table, visible) {
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Limpeza ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data control-data"><thead><tr><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>Nº SÉRIE</th><th>TAG</th><th>SETOR</th><th>ENTRADA</th><th>SAÍDA</th><th>LIMPEZA</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.sector)}</td><td>${dateValue(item.entryDate)}</td><td>${dateValue(item.exitDate)}</td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento nesta tabela.</td></tr>'}</tbody></table></section>`;
-  }
-
   function fluxMovementIndicator(movement) {
     const label = String(movement || '');
     if (label !== 'Envio' && label !== 'Recebimento') {
@@ -957,24 +1166,147 @@
     return `<span class="inventory-movement-icon ${className(label)}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 18 24" aria-hidden="true" focusable="false"><path d="M9 0 18 10h-5v14H5V10H0Z"/></svg></span>`;
   }
 
-  function fluxTableMarkup(table, visible) {
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, número de série, empresa..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Motivo ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data flux-data"><thead><tr><th>MOVIMENTAÇÃO</th><th>EQUIPAMENTO</th><th>MODELO</th><th>MARCA</th><th>TAG</th><th>REMETENTE</th><th>DESTINO</th><th>ENVIO</th><th>RECEBIMENTO</th><th>TIPO DE ENVIO</th><th>MOTIVO</th><th>STATUS</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td>${fluxMovementIndicator(item.movement)}</td><td><b>${escape(item.equipment)}</b></td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td><span class="inventory-shipping ${className(item.shippingType)}">${escape(item.shippingType)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td></tr>`).join('') : '<tr><td colspan="12" class="inventory-empty-row">Nenhuma movimentação nesta tabela.</td></tr>'}</tbody></table></section>`;
+  const fluxIcon = name => {
+    const paths = {
+      direction: '<path fill="currentColor" stroke="none" d="M12 1 22 12h-5v11H7V12H2z"/>',
+      send: '<circle cx="12" cy="12" r="9"/><path d="M8 16l7-7m-5 0h5v5"/>',
+      entry: '<rect x="3" y="3" width="18" height="18" rx="6"/><path d="m8 12 3 3 5-6"/>',
+      connector: '<path d="M1 12h5m4 0h5m4 0h9m-5-5 5 5-5 5"/>',
+      tag: '<path d="M3 4h8l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1"/>',
+      calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 10h18m-13 5h4"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',
+      plane: '<path d="M21 3 3 10l8 4 4 7 6-18Zm0 0L11 14"/>',
+      return: '<path d="M9 5 4 10l5 5m-5-5h10a6 6 0 0 1 0 12H7"/>',
+      swap: '<path d="M3 7h17m-5-5 5 5-5 5M21 17H4m5-5-5 5 5 5"/>',
+      history: '<path d="M4 12a8 8 0 1 1 2 5m-3-6 1 3 3-1m5-6v6l3 2"/>'
+    };
+    return `<svg viewBox="${name === 'connector' ? '0 5 30 14' : '0 0 24 24'}" aria-hidden="true" focusable="false">${paths[name]}</svg>`;
+  };
+
+  function fluxTableMarkup(table) {
+    return `<div class="module-table-nav flux-module-table-nav">${tableControls.homeButton('Início do Flux')}</div>
+      ${tableControls.filters({
+        name: 'Flux', table, tables: data.tables, state, statuses, situations, situationLabel: 'Motivo',
+        placeholder: 'Buscar equipamento, TAG, nº de série, empresa...', actions: tableToolbarActions()
+      })}
+      <section class="flux-card-list" aria-label="Equipamentos movimentados"></section>`;
+  }
+
+  const fluxGroups = (table, filters) => window.AldeckotFluxCycles?.groups(data.tables, table.id, filters) || [];
+  function fluxCardMarkup(group) {
+    const item = group.latest;
+    const cycle = group.cycle;
+    const outbound = cycle?.send || (item.movement === 'Envio' ? item : null);
+    const inbound = cycle?.entry || (item.movement === 'Recebimento' ? item : null);
+    const direction = item.movement === 'Recebimento' ? 'entry' : 'send';
+    const sent = outbound?.sendDate ? dateValue(outbound.sendDate) : '—';
+    const sender = escape(outbound?.senderCompany || 'Origem não informada');
+    const destination = escape(inbound?.destinationCompany || outbound?.destinationCompany || 'Destino não informado');
+    const arrivalDate = inbound?.receivedDate || outbound?.deliveredAt ||
+      (['Entregue', 'Recebido'].includes(outbound?.status) ? outbound?.receivedDate : null);
+    const arrivalLabel = inbound ? (inbound.returnOf ? 'Retorno' : 'Entrada')
+      : outbound?.deliveredAt ? 'Entrega' : arrivalDate ? 'Data registrada' : 'Entrada';
+    const arrivalDisplay = outbound?.deliveredAt && !inbound
+      ? dateTimeValue(outbound.deliveredAt) : arrivalDate ? dateValue(arrivalDate) : 'Sem confirmação';
+    return `<article class="flux-card" data-inv-item="${escape(item.id)}" data-inv-table-id="${escape(item.tableId || '')}" tabindex="0" role="button" aria-label="Abrir histórico de ${escape(item.equipment)}">
+      <span class="flux-card-direction ${direction}" aria-hidden="true">${fluxIcon('direction')}</span>
+      <div class="flux-card-identity"><b>${escape(item.equipment)}</b><small>${escape([item.brand, item.model].filter(Boolean).join(' · ') || 'Marca não informada')}</small><span>TAG: ${escape(item.tag || 'não informada')}</span></div>
+      <div class="flux-card-route">
+        <div class="flux-card-step send"><div class="flux-card-pill">${fluxIcon('send')}<div><b>Saída</b><time>${sent}</time></div></div><small title="${sender}">${sender}</small></div>
+        <span class="flux-card-connector" aria-hidden="true">${fluxIcon('connector')}</span>
+        <div class="flux-card-step entry"><div class="flux-card-pill">${fluxIcon('entry')}<div><b>${arrivalLabel}</b><time>${arrivalDisplay}</time></div></div><small title="${destination}">${destination}</small></div>
+        ${group.cycles.length > 1 ? `<span class="flux-card-cycle-count">${group.cycles.length} ciclos</span>` : ''}
+      </div>
+      <div class="flux-card-meta">
+        <span>${fluxIcon('tag')}<span>Motivo: ${escape(item.situation || '—')}</span></span>
+        <span>${fluxIcon('calendar')}<span>Enviado: ${sent}</span></span>
+        ${inbound?.receivedDate ? `<span>${fluxIcon('clock')}<span>Recebido: ${dateValue(inbound.receivedDate)}</span></span>` : ''}
+      </div>
+      <span class="flux-card-status ${className(item.status)}">${escape(item.status || '—')}</span>
+    </article>`;
+  }
+
+  function fluxHomeListing() {
+    const query = comparable(globalState.query);
+    const groups = data.tables.flatMap(table => fluxGroups(table, {}).map(group => ({ ...group, tableName: table.name })))
+      .filter(group => !query || [group.tableName, ...group.items.flatMap(item => [item.equipment, item.tag, item.serial,
+        item.brand, item.model, item.senderCompany, item.destinationCompany])].some(value => comparable(value).includes(query)))
+      .sort((a, b) => String(b.latest.receivedDate || b.latest.sendDate || b.latest.updatedAt || '')
+        .localeCompare(String(a.latest.receivedDate || a.latest.sendDate || a.latest.updatedAt || '')));
+    const all = globalState.view === 'all' || Boolean(query);
+    const pageSize = Math.max(1, Number(globalState.pageSize) || 25);
+    const pages = Math.max(1, Math.ceil(groups.length / pageSize));
+    const page = Math.max(1, Math.min(Number(globalState.page) || 1, pages));
+    return { total: groups.length, pages, page, all,
+      rows: all ? groups.slice((page - 1) * pageSize, page * pageSize) : groups.slice(0, 5) };
+  }
+  function fluxHomeCardsMarkup() {
+    const rows = fluxHomeListing().rows;
+    return rows.length ? rows.map(group => `<div class="flux-home-entry"><span class="flux-home-period">${escape(tableControls.periodLabel({ name: group.tableName }))}</span>${fluxCardMarkup(group)}</div>`).join('')
+      : '<p class="inventory-panel flux-home-empty">Nenhuma movimentação encontrada.</p>';
+  }
+  function fluxHomePaginationMarkup() {
+    const { total, pages, page, rows, all } = fluxHomeListing();
+    return `<span>${all ? `${total} ${total === 1 ? 'equipamento encontrado' : 'equipamentos encontrados'}` : `${rows.length} equipamentos recentes · ${total} no Flux`}</span>
+      ${all ? `<nav aria-label="Páginas da consulta"><button type="button" data-inv-module-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button><span>Página ${page} de ${pages}</span><button type="button" data-inv-module-page="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="Próxima página">›</button></nav>` : `<button type="button" class="flux-home-show-all" data-inv-module-all>Ver todos</button>`}`;
+  }
+  function fluxHomeMarkup() {
+    return `<section class="module-table-filters flux-home-filters" aria-label="Buscar movimentações do Flux">
+      <label class="module-table-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input type="search" data-inv-module-search aria-label="Buscar em todo o Flux" placeholder="Buscar equipamento, TAG, série ou mês..." value="${escape(globalState.query)}"></label>
+    </section><section class="flux-card-list flux-home-list" aria-label="Movimentações recentes">${fluxHomeCardsMarkup()}</section>
+    <footer class="inventory-panel inventory-pagination inventory-module-pagination flux-home-pagination">${fluxHomePaginationMarkup()}</footer>`;
+  }
+
+  function fluxSidebarMarkup(items) {
+    const statusCounts = countBy(items, statuses, 'status');
+    const reasonCounts = countBy(items, situations, 'situation');
+    const statusColors = { Pendente: '#ffc31c', Recebido: '#26cfab', Entregue: '#15be71', 'Em Trânsito': '#9147da' };
+    const reasonColors = { Manutenção: '#9147d9', Troca: '#268fe9', Aquisição: '#13ce7d', Transferência: '#fa880e', Substituição: '#ffc21e' };
+    const max = Math.max(1, ...Object.values(statusCounts));
+    const total = items.length;
+    let angle = 0;
+    const segments = situations.map(reason => {
+      const start = angle;
+      angle += total ? (reasonCounts[reason] || 0) / total * 360 : 0;
+      return `${reasonColors[reason]} ${start}deg ${angle}deg`;
+    }).join(', ');
+    const legend = (labels, counts, colors) => `<div class="flux-side-legend">${labels.map(label => `<span><i style="--legend-color:${colors[label]}"></i>${escape(label)}<b>${counts[label] || 0}</b></span>`).join('')}</div>`;
+    const actions = [
+      ['flux-new-send', 'plane', 'Novo Envio'], ['flux-return', 'return', 'Registrar Retorno'],
+      ['flux-delivery', 'entry', 'Confirmar Entrega'], ['flux-replace', 'swap', 'Substituição'],
+      ['flux-history', 'history', 'Histórico Geral']
+    ];
+    return `<section class="inventory-panel flux-side-panel"><h3>Distribuição por Status</h3>
+      <div class="flux-status-bars" role="img" aria-label="Distribuição de ${total} movimentações por status">${statuses.map(status => `<span style="--bar-height:${Math.max(4, Math.round((statusCounts[status] || 0) / max * 64))}px;--bar-color:${statusColors[status]}" title="${escape(status)}: ${statusCounts[status] || 0}"></span>`).join('')}</div>
+      ${legend(statuses, statusCounts, statusColors)}</section>
+      <section class="inventory-panel flux-side-panel"><h3>Distribuição por Motivo</h3>
+        <div class="flux-reasons"><div class="flux-reason-donut" style="--donut:${total ? `conic-gradient(${segments})` : 'conic-gradient(#36516e 0deg 360deg)'}" role="img" aria-label="${total} movimentações por motivo"><b>${total}<small>Total</small></b></div>${legend(situations, reasonCounts, reasonColors)}</div>
+      </section>
+      <section class="inventory-panel flux-side-panel flux-quick-actions"><h3>Ações Rápidas</h3>
+        ${actions.map(([id, icon, label]) => `<button type="button" data-inv-action="${id}">${fluxIcon(icon)}<span>${label}</span></button>`).join('')}
+      </section>`;
   }
 
   function inventoryRowMarkup(table, item) {
     const changedAt = branchModel.lastChangedAt(item);
-    return `<tr data-inv-item="${escape(item.id)}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.sector || '—')}</td><td>${escape(item.location || '—')}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td><span class="inventory-situation ${className(item.cleaning || 'Não realizada')}">${escape(item.cleaning || 'Não realizada')}</span></td><td>${dateTimeValue(changedAt)}</td></tr>`;
+    return `<tr data-inv-item="${escape(item.id)}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.sector || '—')}</td><td>${escape(item.location || '—')}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td><td>${cleaningPill(item.cleaning || 'Não realizada')}</td><td>${dateTimeValue(changedAt)}</td></tr>`;
   }
 
   function inventoryTableMarkup(table, visible) {
     const initial = visible.slice(0, state.pageSize);
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, TAG, modelo, marca..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" type="button" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${initial.length ? initial.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento nesta categoria.</td></tr>'}</tbody></table></section>`;
+    const filters = tableControls.filters({
+      name: 'Inventário', table, tables: data.tables, state, statuses, situations, byCategory: true,
+      placeholder: 'Buscar equipamento, TAG, modelo, marca...',
+      actions: '<div class="inventory-toolbar-create"><button class="inventory-add" type="button" data-inv-action="add-item">＋ Adicionar</button></div>' + tableToolbarActions()
+    });
+    return `${filters}
+      <section class="inventory-panel inventory-data-wrap"><table class="inventory-data" data-inv-standard-columns="true"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>SETOR</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th><th>LIMPEZA</th><th>ÚLTIMA ALTERAÇÃO</th></tr></thead><tbody>${initial.length ? initial.map(item => inventoryRowMarkup(table, item)).join('') : '<tr><td colspan="10" class="inventory-empty-row">Nenhum equipamento nesta categoria.</td></tr>'}</tbody></table></section>`;
   }
 
   function tableMarkup(table, visible) {
-    if (controlMode) return controlTableMarkup(table, visible);
-    if (fluxMode) return fluxTableMarkup(table, visible);
-    return `<section class="inventory-panel inventory-toolbar"><div class="inventory-search-wrap"><span>⌕</span><input class="inventory-search" data-inv-search placeholder="Buscar equipamento, série, marca, TAG..." value="${escape(state.query)}"></div><div class="inventory-toolbar-create"><select class="inventory-filter" data-inv-status><option value="">Status ▼</option>${statuses.map(status => `<option ${state.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select><select class="inventory-filter" data-inv-situation><option value="">Situação ▼</option>${situations.map(situation => `<option ${state.situation === situation ? 'selected' : ''}>${situation}</option>`).join('')}</select><button class="inventory-add" data-inv-action="add-item">＋ Adicionar</button></div>${tableToolbarActions()}</section><section class="inventory-panel inventory-data-wrap"><table class="inventory-data"><thead><tr><th>EQUIPAMENTO</th><th>TAG</th><th>MODELO</th><th>MARCA</th><th>LOCAL</th><th>STATUS</th><th>SITUAÇÃO</th></tr></thead><tbody>${visible.length ? visible.map(item => `<tr data-inv-item="${item.id}"><td><b>${escape(item.equipment)}</b></td><td>${escape(item.tag)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.location)}</td><td><span class="inventory-status ${className(item.status)}">${escape(item.status)}</span></td><td><span class="inventory-situation ${className(item.situation)}">${escape(item.situation)}</span></td></tr>`).join('') : '<tr><td colspan="7" class="inventory-empty-row">Nenhum equipamento nesta tabela.</td></tr>'}</tbody></table></section>`;
+    if (controlMode) return controlBoard.tableMarkup(table, data.tables, state);
+    if (fluxMode) return fluxTableMarkup(table);
+    return branchNavigationMarkup(table) + inventoryTableMarkup(table, visible);
   }
 
   function removeOpenModals() {
@@ -991,6 +1323,15 @@
     const node = document.createElement('div');
     node.className = 'inv-modal';
     node.innerHTML = `<div class="inv-dialog ${dialogClass}${glowClass}"${glowStyle}>${content}</div>`;
+    for (const input of node.querySelectorAll('[data-inv-item-form] input[name="sector"]')) {
+      const select = document.createElement('select');
+      select.name = 'sector';
+      select.dataset.invSectorChoice = '';
+      const current = input.value || '';
+      const options = window.AldeckotSectors?.optionsFor(current) || ['', current, 'Frente de Loja', 'Doca', 'Escritório', 'Informática', 'Monitoramento', 'Tesouraria', 'Padaria', 'Açougue', 'Refeitório'].filter((value, index, all) => value || !index).filter((value, index, all) => all.indexOf(value) === index);
+      select.innerHTML = options.map(value => `<option value="${escape(value)}" ${value === current ? 'selected' : ''}>${escape(value || 'Selecione um setor')}</option>`).join('');
+      input.replaceWith(select);
+    }
     window.AldeckotActionMenus?.enhance(node);
     node.addEventListener('click', event => {
       if (event.target !== node) return;
@@ -1044,14 +1385,51 @@
       locationInput?.addEventListener('input', updateReason);
       updateReason();
       node.dataset.movementOperationId = crypto.randomUUID();
+      const verificationField = document.createElement('label');
+      verificationField.className = 'inv-full';
+      verificationField.innerHTML = '<span>Motivo da verificação *</span><textarea name="verificationReason" minlength="3" maxlength="2000" placeholder="Descreva o sintoma ou a ocorrência técnica."></textarea>';
+      notesField?.before(verificationField);
+      const verificationInput = verificationField.querySelector('textarea');
+      const situationSelect = node.querySelector('[name="situation"]');
+      const updateVerificationReason = () => {
+        const starting = situationSelect?.value === 'Verificando' && entry.situation !== 'Verificando';
+        verificationField.hidden = !starting;
+        verificationField.style.display = starting ? '' : 'none';
+        verificationInput.required = starting;
+        if (!starting) verificationInput.value = '';
+      };
+      situationSelect?.addEventListener('change', updateVerificationReason);
+      updateVerificationReason();
     }
     if (notesField) {
-      const field = document.createElement('label');
+      const field = document.createElement(entry ? 'div' : 'label');
       field.className = 'inv-choice-field';
       field.dataset.invChoiceField = '';
       field.dataset.kind = 'cleaning';
       field.dataset.tone = choiceTone('cleaning', cleaning);
       field.innerHTML = '<span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="cleaning" data-inv-cleaning-choice>' + cleanings.map(option => '<option' + (cleaning === option ? ' selected' : '') + '>' + escape(option) + '</option>').join('') + '</select></div>';
+      if (entry && window.AldeckotEquipmentCleaning) {
+        field.classList.add('equipment-cleaning-edit');
+        field.innerHTML = '<span>Limpeza atual</span>' + cleaningPill(cleaning) +
+          '<input type="hidden" name="cleaning" value="' + escape(cleaning) + '">' +
+          '<button type="button" class="inv-ghost" data-register-inventory-cleaning>Registrar limpeza</button>';
+        field.querySelector('button').onclick = () => window.AldeckotEquipmentCleaning.open({
+          module: 'inventory',
+          item: activeTable()?.items.find(item => item.id === entry.id) || entry,
+          onSaved: async () => {
+            if (!await reloadInventory()) throw new Error('Inventário indisponível.');
+            const current = activeTable()?.items.find(item => item.id === entry.id);
+            const label = field.querySelector('.cleaning-pill');
+            if (current?.cleaning && label) {
+              label.dataset.cleaning = current.cleaning;
+              label.textContent = current.cleaning;
+              field.querySelector('[name="cleaning"]').value = current.cleaning;
+            }
+            renderInventory();
+            window.AldeckotMessage.show('Limpeza registrada.');
+          }
+        });
+      }
       notesField.before(field);
     }
     if (activeTable()?.branches?.length) {
@@ -1101,9 +1479,21 @@
     if (controlMode || fluxMode || !inventoryIntegrationReady || item?.status !== 'Ativo') return;
     const candidates = activeTable()?.items.filter(row => row.id !== item.id && row.status === 'Reserva') || [];
     if (!candidates.length) { window.AldeckotMessage.show('Não há equipamento em Reserva nesta tabela.'); return; }
-    const label = row => escape(row.tag || row.serial || row.equipment);
-    const node = modal(`<div class="inv-dialog-head"><h2>Substituir ${label(item)}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">O equipamento retirado e o substituto permanecerão no Inventário, com históricos vinculados. A troca será feita em uma única operação.</p><form data-inv-replace-form><div class="inv-fields equipment-fields"><label><span>Substituto em Reserva *</span><select name="installed" required><option value="" selected disabled>Selecione o substituto</option>${candidates.map(row => `<option value="${escape(row.id)}">${label(row)} · ${escape(row.brand)} ${escape(row.model)}</option>`).join('')}</select></label><label><span>Status da unidade retirada *</span><select name="removed_status" required><option value="" selected disabled>Selecione o status</option>${['Manutenção','Defeito','Inativo'].map(status => `<option>${status}</option>`).join('')}</select></label><label><span>Destino da unidade retirada *</span><input name="removed_location" required maxlength="160"></label><label class="inv-full"><span>Motivo da substituição *</span><textarea name="reason" required maxlength="500"></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button class="inv-primary" type="submit">Confirmar substituição</button></div></form>`, 'equipment-dialog');
+    const label = row => `${row.equipment || 'Equipamento'} · TAG ${row.tag || '—'} · Série ${row.serial || '—'} · Modelo ${row.model || '—'} · Setor ${row.sector || '—'} · Local ${row.location || '—'} · ${row.status || '—'}`;
+    const preview = `<section class="inv-replacement-preview" data-inv-replacement-preview aria-live="polite"><div class="inv-replacement-preview-empty">Selecione o substituto para comparar os dois equipamentos.</div></section>`;
+    const node = modal(`<div class="inv-dialog-head"><h2>Substituir ${escape(item.equipment)} · ${escape(item.tag || item.serial || 'Sem identificação')}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">O equipamento retirado e o substituto permanecerão no Inventário, com históricos vinculados. A substituição aceita reservas de qualquer setor ou ramificação desta mesma tabela.</p><form data-inv-replace-form><div class="inv-fields equipment-fields"><label class="inv-full"><span>Substituto em Reserva *</span><select name="installed" data-inv-replacement-select required><option value="" selected disabled>Selecione o substituto</option>${candidates.map(row => `<option value="${escape(row.id)}">${escape(label(row))}</option>`).join('')}</select></label></div>${preview}<div class="inv-fields equipment-fields"><label><span>Condição final do retirado *</span><select name="removed_status" required><option value="" selected disabled>Selecione a condição</option>${['Manutenção','Defeito','Inativo'].map(status => `<option>${status}</option>`).join('')}</select></label><label><span>Destino do equipamento retirado *</span><input name="removed_location" required maxlength="160" placeholder="Ex.: Oficina, descarte autorizado"></label><label class="inv-full"><span>Motivo da substituição *</span><textarea name="reason" required maxlength="500"></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button class="inv-primary" type="submit">Confirmar substituição</button></div></form>`, 'equipment-dialog');
     node.dataset.itemId = item.id;
+    node.dataset.removedItem = JSON.stringify({equipment:item.equipment,tag:item.tag,serial:item.serial,model:item.model,sector:item.sector,location:item.location,status:item.status});
+  }
+  function updateReplacementPreview(node, replacementId) {
+    const preview=node?.querySelector('[data-inv-replacement-preview]');
+    const outgoing=JSON.parse(node?.dataset.removedItem||'null');
+    const incoming=activeTable()?.items.find(row=>row.id===replacementId);
+    if (!preview || !outgoing) return;
+    if (!incoming) { preview.innerHTML='<div class="inv-replacement-preview-empty">Selecione o substituto para comparar os dois equipamentos.</div>'; return; }
+    const fields=(row)=>[['TAG',row.tag],['Série',row.serial],['Modelo',row.model],['Setor',row.sector],['Local',row.location],['Status',row.status]];
+    const card=(title,row,tone)=>`<article class="inv-replacement-side ${tone}"><h3>${escape(title)}</h3><b>${escape(row.equipment||'Equipamento')}</b><dl>${fields(row).map(([name,value])=>`<div><dt>${name}</dt><dd>${escape(value||'—')}</dd></div>`).join('')}</dl></article>`;
+    preview.innerHTML=card('Equipamento retirado',outgoing,'removed')+`<span class="inv-replacement-arrow" aria-hidden="true">→</span>`+card('Substituto',incoming,'installed');
   }
 
   function setupFluxEquipmentSearch(node, entry) {
@@ -1143,7 +1533,20 @@
         const field = fields.querySelector(`[name="${name}"]`);
         if (field) field.value = row[name] || '';
       }
-      selection.textContent = `Selecionado: ${row.sourceLabel} · TAG ${row.tag || 'não informada'} · Série ${row.serial || 'não informada'}${row.inventoryItemId ? ' · vínculo patrimonial confirmado' : row.module === 'flux' ? ' · referência histórica, sem vínculo patrimonial presumido' : ''}`;
+      for (const name of ['sector', 'location']) {
+        const field = fields.querySelector(`[name="${name}"]`);
+        if (!field) continue;
+        if (name === 'sector' && field.tagName === 'SELECT' && row[name] && ![...field.options].some(option => option.value === row[name]))
+          field.add(new Option(row[name], row[name], true, true));
+        field.value = row[name] || '';
+        if (name === 'sector') {
+          field.disabled = true;
+          let official = fields.querySelector('input[type="hidden"][name="sector"]');
+          if (!official) { official = document.createElement('input'); official.type = 'hidden'; official.name = 'sector'; fields.append(official); }
+          official.value = row.sector || '';
+        } else field.readOnly = true;
+      }
+      selection.textContent = `Selecionado: ${row.sourceLabel} · TAG ${row.tag || 'não informada'} · Série ${row.serial || 'não informada'} · Setor ${row.sector || 'não informado'} · Local ${row.location || 'não informado'}${row.inventoryItemId ? ' · vínculo patrimonial confirmado' : row.module === 'flux' ? ' · referência histórica, sem vínculo patrimonial presumido' : ''}`;
       selection.hidden = false;
       clearButton.hidden = false;
       list.hidden = true;
@@ -1154,7 +1557,18 @@
       node.dataset.sourceRecordId = entry.sourceRecordId;
       if (entry.inventoryItemId) node.dataset.inventoryItemId = entry.inventoryItemId;
       selected = { module: entry.sourceModule, id: entry.sourceRecordId, tag: entry.tag, serial: entry.serial };
-      selection.textContent = `Vínculo salvo: ${entry.sourceModule} · TAG ${entry.tag || 'não informada'} · Série ${entry.serial || 'não informada'}`;
+      for (const name of ['sector', 'location']) {
+        const field = fields.querySelector(`[name="${name}"]`);
+        if (!field) continue;
+        field.disabled = name === 'sector';
+        field.readOnly = name === 'location';
+        if (name === 'sector') {
+          let official = fields.querySelector('input[type="hidden"][name="sector"]');
+          if (!official) { official = document.createElement('input'); official.type = 'hidden'; official.name = 'sector'; fields.append(official); }
+          official.value = entry.sector || '';
+        }
+      }
+      selection.textContent = `Vínculo salvo: ${entry.sourceModule} · TAG ${entry.tag || 'não informada'} · Série ${entry.serial || 'não informada'} · Setor ${entry.sector || 'não informado'} · Local ${entry.location || 'não informado'}`;
       selection.hidden = false;
       clearButton.hidden = false;
     }
@@ -1166,7 +1580,7 @@
         if (request !== sequence || !node.isConnected) return;
         results = window.AldeckotFluxSearch.prepare(rows, term);
         truncated = rows.length >= 12;
-        list.innerHTML = results.map((row, index) => `<button type="button" class="flux-equipment-result" role="option" data-flux-result="${index}" ${truncated ? 'disabled' : ''}><b>${escape(row.equipment || 'Equipamento')}</b><span>${escape([row.brand, row.model].filter(Boolean).join(' '))}</span><small>TAG: ${escape(row.tag || 'não informada')} · Série: ${escape(row.serial || 'não informada')}</small><em>${escape(row.sourceLabel)}${row.location ? ` · ${escape(row.location)}` : ''}</em>${row.duplicateTag ? '<strong>TAG repetida — confira a série</strong>' : ''}</button>`).join('');
+        list.innerHTML = results.map((row, index) => `<button type="button" class="flux-equipment-result" role="option" data-flux-result="${index}" ${truncated ? 'disabled' : ''}><b>${escape(row.equipment || 'Equipamento')}</b><span>${escape([row.brand, row.model].filter(Boolean).join(' '))}</span><small>TAG: ${escape(row.tag || 'não informada')} · Série: ${escape(row.serial || 'não informada')}</small><em>${escape(row.sourceLabel)} · Setor ${escape(row.sector || 'não informado')} · Local ${escape(row.location || 'não informado')}</em>${row.duplicateTag ? '<strong>TAG repetida — confira a série</strong>' : ''}</button>`).join('');
         list.hidden = !results.length;
         setStatus(truncated ? 'A busca atingiu o limite de resultados. Refine pelo número de série para escolher com segurança.' : results.length ? `${results.length} resultado(s). Selecione explicitamente o equipamento correto.` : 'Nenhum resultado encontrado. Você pode preencher a movimentação manualmente.');
       } catch (error) {
@@ -1203,6 +1617,11 @@
     });
     clearButton.addEventListener('click', () => {
       clearSelection();
+      const sector = fields.querySelector('[name="sector"]');
+      const location = fields.querySelector('[name="location"]');
+      if (sector) sector.disabled = false;
+      if (location) location.readOnly = false;
+      fields.querySelector('input[type="hidden"][name="sector"]')?.remove();
       setStatus('Vínculo removido. Os dados preenchidos permanecem no formulário para revisão manual.');
     });
     fields.addEventListener('input', event => {
@@ -1224,9 +1643,34 @@
     const situation = situations.includes(value.situation) ? value.situation : moduleConfig.situationDefault;
     const priority = priorities.includes(value.priority) ? value.priority : 'Estável';
     const choice = (name, label, values, selected, kind) => `<label class="inv-choice-field" data-inv-choice-field data-kind="${kind}" data-tone="${choiceTone(kind, selected)}"><span>${label} *</span><div class="inv-choice-select"><i></i><select name="${name}" data-inv-${kind}-choice required>${values.map(option => `<option ${selected === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label>`;
-    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Movimentação' : 'Adicionar Movimentação'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields flux-fields">${choice('movement', 'Movimentação', moduleConfig.movements, movement, 'movement')}<label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca *</span><input name="brand" required value="${escape(value.brand)}"></label><label><span>TAG *</span><input name="tag" required value="${escape(value.tag)}"></label><label><span>Nº Série *</span><input name="serial" required value="${escape(value.serial)}"></label><label><span>Empresa Remetente *</span><input name="senderCompany" required value="${escape(value.senderCompany)}"></label><label><span>Empresa Destino *</span><input name="destinationCompany" required value="${escape(value.destinationCompany)}"></label><label><span>Responsável Envio *</span><input name="senderResponsible" required value="${escape(value.senderResponsible)}"></label><label><span>Responsável Recebimento *</span><input name="receiverResponsible" required value="${escape(value.receiverResponsible)}"></label><label><span>Data de Envio *</span><input name="sendDate" type="date" required value="${escape(value.sendDate)}"></label><label><span>Data de Recebimento *</span><input name="receivedDate" type="date" required value="${escape(value.receivedDate)}"></label>${choice('shippingType', 'Tipo de Envio', moduleConfig.shippingTypes, shippingType, 'shipping')}${choice('situation', 'Motivo', situations, situation, 'situation')}${choice('status', 'Status', statuses, status, 'status')}${choice('priority', 'Prioridade', priorities, priority, 'priority')}<label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog flux-dialog');
+    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Movimentação' : 'Adicionar Movimentação'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields flux-fields">${choice('movement', 'Movimentação', moduleConfig.movements, movement, 'movement')}<label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca *</span><input name="brand" required value="${escape(value.brand)}"></label><label><span>TAG *</span><input name="tag" required value="${escape(value.tag)}"></label><label><span>Nº Série *</span><input name="serial" required value="${escape(value.serial)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Local</span><input name="location" value="${escape(value.location)}"></label><label><span>Empresa Remetente *</span><input name="senderCompany" required value="${escape(value.senderCompany)}"></label><label><span>Empresa Destino *</span><input name="destinationCompany" required value="${escape(value.destinationCompany)}"></label><label><span>Responsável Envio *</span><input name="senderResponsible" required value="${escape(value.senderResponsible)}"></label><label><span>Responsável Recebimento *</span><input name="receiverResponsible" required value="${escape(value.receiverResponsible)}"></label><label><span>Data de Envio *</span><input name="sendDate" type="date" required value="${escape(value.sendDate)}"></label><label><span>Data de Recebimento *</span><input name="receivedDate" type="date" required value="${escape(value.receivedDate)}"></label>${choice('shippingType', 'Tipo de Envio', moduleConfig.shippingTypes, shippingType, 'shipping')}${choice('situation', 'Motivo', situations, situation, 'situation')}${choice('status', 'Status', statuses, status, 'status')}${choice('priority', 'Prioridade', priorities, priority, 'priority')}<label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog flux-dialog');
     node.dataset.itemId = entry?.id || '';
     setupFluxEquipmentSearch(node, entry);
+    if (!entry) {
+      node.querySelector('.inv-dialog-head h2').textContent = 'Novo Envio';
+      const form = node.querySelector('[data-inv-item-form]');
+      const movementSelect = form.querySelector('[name="movement"]');
+      const statusSelect = form.querySelector('[name="status"]');
+      movementSelect.value = 'Envio';
+      movementSelect.disabled = true;
+      statusSelect.value = 'Pendente';
+      statusSelect.disabled = true;
+      for (const [name, value] of [['movement', 'Envio'], ['status', 'Pendente']]) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden'; hidden.name = name; hidden.value = value;
+        form.appendChild(hidden);
+      }
+      const tag = form.querySelector('[name="tag"]');
+      tag.required = false;
+      tag.closest('label').querySelector('span').textContent = 'TAG (opcional para equipamento novo)';
+      const recipient = form.querySelector('[name="receiverResponsible"]');
+      recipient.required = false;
+      recipient.closest('label').querySelector('span').textContent = 'Responsável recebimento (quando conhecido)';
+      const received = form.querySelector('[name="receivedDate"]');
+      received.required = false;
+      received.closest('label').querySelector('span').textContent = 'Data de recebimento (deixar vazia até ocorrer)';
+      form.querySelector('[name="sendDate"]').value ||= new Date().toLocaleDateString('en-CA');
+    }
   }
 
   function controlItemForm(entry) {
@@ -1238,12 +1682,255 @@
       : statuses.filter(option => option !== 'Verificação concluída' && (option !== 'Cancelado' || status === 'Cancelado'));
     const situation = situations.includes(value.situation) ? value.situation : moduleConfig.situationDefault;
     const priority = priorities.includes(value.priority) ? value.priority : 'Estável';
-    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Data de Entrada</span><input name="entryDate" type="date" value="${escape(value.entryDate)}"></label><label><span>Data de Saída</span><input name="exitDate" type="date" value="${escape(value.exitDate)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${controlStatuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="situation" data-tone="${choiceTone('situation', situation)}"><span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-situation-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
+    const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields"><label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca</span><input name="brand" value="${escape(value.brand)}"></label><label><span>Nº Série</span><input name="serial" value="${escape(value.serial)}"></label><label><span>TAG</span><input name="tag" value="${escape(value.tag)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Data de Entrada</span><input name="entryDate" type="date" value="${escape(value.entryDate)}"></label><label><span>Data de Saída</span><input name="exitDate" type="date" value="${escape(value.exitDate)}"></label><label class="inv-choice-field" data-inv-choice-field data-kind="status" data-tone="${choiceTone('status', status)}"><span>Status</span><div class="inv-choice-select"><i></i><select name="status" data-inv-status-choice>${controlStatuses.map(option => `<option ${status === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="priority" data-tone="${choiceTone('priority', priority)}"><span>Prioridade</span><div class="inv-choice-select"><i></i><select name="priority" data-inv-priority-choice>${priorities.map(option => `<option ${priority === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-choice-field" data-inv-choice-field data-kind="cleaning" data-tone="${choiceTone('cleaning', situation)}"><span>Tipo de Limpeza</span><div class="inv-choice-select"><i></i><select name="situation" data-inv-cleaning-choice>${situations.map(option => `<option ${situation === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label><label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
     node.dataset.itemId = entry?.id || '';
+    const fields = node.querySelector('.equipment-fields');
+    const technicalStatus = fields?.querySelector('[name="status"]')?.closest('label');
+    if (technicalStatus) technicalStatus.querySelector('span').textContent = 'Estado técnico do acompanhamento';
+    if (!entry) {
+      fields?.insertAdjacentHTML('afterbegin', controlBoardFields({ operationalStatus: 'Em manutenção' }, !data.controlBoardReady));
+      if (!data.controlBoardReady) fields?.insertAdjacentHTML('afterbegin',
+        '<p class="inv-full control-board-feedback">A classificação operacional depende da ativação da nova estrutura.</p>');
+    }
+    setupControlEquipmentSearch(node, value);
+  }
+
+  function controlBoardFields(item, disabled = false) {
+    return `<label><span>Status operacional</span><select name="operationalStatus"${disabled ? ' disabled' : ''}>
+      <option value="">Usar classificação legada quando inequívoca</option>${controlBoard.options(controlBoard.statuses, item.operationalStatus)}</select></label>
+      <label><span>Situação</span><select name="operationalSituation"${disabled ? ' disabled' : ''}><option value="">Sem situação definida</option>
+      ${controlBoard.options(controlBoard.situations, item.operationalSituation)}</select></label>`;
+  }
+
+  function controlClassificationForm(item) {
+    const node = modal(`<div class="inv-dialog-head"><h2>Classificação operacional · ${escape(item.equipment)}</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div>
+      <form class="control-board-dialog-form"><div class="inv-fields">${controlBoardFields(item)}</div>
+      <p class="control-board-feedback" role="status"></p><div class="inv-footer"><button type="submit" class="inv-primary">Salvar classificação</button>
+      <button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
+    const form = node.querySelector('form');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submit = form.querySelector('[type="submit"]');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      let saved = false;
+      try {
+        await moduleApi().saveBoardClassification(item, Object.fromEntries(new FormData(form)));
+        saved = true;
+        await reloadInventory();
+        renderInventory();
+        if (node.isConnected) details(activeTable()?.items.find(candidate => candidate.id === item.id) || item);
+      } catch (error) {
+        form.querySelector('.control-board-feedback').textContent = saved
+          ? 'Classificação salva. Reabra a tabela para ver os dados atualizados.' : backendMessage(error);
+      } finally { submit.disabled = saved; }
+    });
+  }
+
+  function controlEquipmentOptions(items) {
+    return '<option value="">Selecione um equipamento</option>' + items.map(item =>
+      `<option value="${escape(item.id)}">${escape([item.equipment, item.tag || item.serial, item.sector].filter(Boolean).join(' · '))}</option>`).join('');
+  }
+
+  function controlActivityForm(kind) {
+    const isPart = kind === 'part';
+    const title = isPart ? 'Solicitar peça' : 'Planejar manutenção preventiva';
+    const items = activeTable()?.items || [];
+    const fields = isPart
+      ? `<label>Peça<input name="part" required maxlength="160"></label><label>Quantidade<input name="quantity" type="number" min="1" max="2147483647" step="1" required></label>
+         <label>Prioridade<select name="priority" required>${priorities.map(value => `<option>${value}</option>`).join('')}</select></label>
+         <label class="inv-full">Justificativa<textarea name="reason" required maxlength="500"></textarea></label>`
+      : `<label>Atividade<input name="activity" required maxlength="160"></label><label>Data prevista<input name="dueDate" type="date" required></label>
+         <label>Responsável<input name="responsible" required maxlength="120"></label>`;
+    const node = modal(`<div class="inv-dialog-head"><h2>${title}</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div>
+      <form class="control-board-dialog-form"><div class="inv-fields">
+        <label class="inv-full">Equipamento<select name="itemId" required>${controlEquipmentOptions(items)}</select></label>${fields}
+        <label class="inv-full">Observações<textarea name="notes" maxlength="500"></textarea></label></div>
+        <p class="control-board-feedback" role="status">${data.controlBoardReady ? '' : 'A gravação deste formulário depende da ativação da nova estrutura do Controle TI.'}</p>
+        <div class="inv-footer"><button type="submit" class="inv-primary"${!data.controlBoardReady || !items.length ? ' disabled' : ''}>Registrar</button>
+        <button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog');
+    const form = node.querySelector('form');
+    let lastRequest;
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submit = form.querySelector('[type="submit"]');
+      if (submit.disabled) return;
+      const { itemId, ...fields } = Object.fromEntries(new FormData(form));
+      const draft = JSON.stringify({ itemId, fields });
+      if (lastRequest?.draft !== draft) lastRequest = { draft, id: crypto.randomUUID() };
+      submit.disabled = true;
+      try {
+        await moduleApi().recordBoardActivity(itemId, kind, fields, lastRequest.id);
+        if (node.isConnected) closeModal();
+        window.AldeckotMessage.show(isPart ? 'Solicitação de peça registrada.' : 'Manutenção preventiva planejada.');
+      } catch (error) {
+        form.querySelector('.control-board-feedback').textContent = backendMessage(error);
+        submit.disabled = false;
+      }
+    });
+  }
+
+  async function controlTimeline(item) {
+    if (data.controlBoardReady) return moduleApi().boardTimeline(item.id);
+    const logs = (item.logs || []).map(log => ({
+      occurred_at: log.createdAt, action: 'Registro do Controle TI', message: log.text, event_id: log.eventId
+    }));
+    const cases = await moduleApi().listCases(item.id);
+    const caseDates = cases.flatMap(entry => {
+      const title = entry.followup_kind === 'verification' ? 'Verificação' : 'Manutenção';
+      return [
+        { occurred_at: entry.opened_at, action: title, message: 'Abertura do chamado' },
+        { occurred_at: entry.closed_at, action: title, message: 'Encerramento do chamado' }
+      ].filter(row => row.occurred_at);
+    });
+    return [...logs, ...caseDates].sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at));
+  }
+
+  function controlTimelineMarkup(events) {
+    return events.map(row => `<article class="inv-log control-board-timeline-entry">
+      <b>${escape(row.action)} · ${escape(dateTimeValue(row.occurred_at))}</b><span>${escape(row.message || '—')}</span>
+      ${row.event_id ? `<small>Evento ${escape(row.event_id)}</small>` : ''}</article>`).join('')
+      || '<p>Nenhum evento foi localizado para este registro.</p>';
+  }
+
+  function controlReportForm() {
+    const items = activeTable()?.items || [];
+    const node = modal(`<div class="inv-dialog-head"><h2>Relatório por equipamento</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div>
+      <div class="inv-fields"><label class="inv-full">Equipamento<select data-control-report-item>${controlEquipmentOptions(items)}</select></label></div>
+      <div class="inv-log-list" role="status"></div>`, 'equipment-dialog');
+    const select = node.querySelector('select');
+    const timeline = node.querySelector('.inv-log-list');
+    let sequence = 0;
+    select.addEventListener('change', async () => {
+      const request = ++sequence;
+      const item = items.find(candidate => candidate.id === select.value);
+      timeline.textContent = item ? 'Carregando histórico…' : '';
+      if (!item) return;
+      try {
+        const events = await controlTimeline(item);
+        if (sequence === request && node.isConnected) timeline.innerHTML = controlTimelineMarkup(events);
+      } catch (error) {
+        if (sequence === request && node.isConnected) timeline.textContent = backendMessage(error);
+      }
+    });
+  }
+
+  function setupControlEquipmentSearch(node, item) {
+    const fields = node.querySelector('[data-inv-item-form] .equipment-fields');
+    if (!fields) return;
+    const wrapper = document.createElement('section');
+    wrapper.className = 'flux-equipment-search inv-full control-source-search';
+    wrapper.innerHTML = '<label>Identificar equipamento por TAG ou número de série</label><input type="search" autocomplete="off" spellcheck="false" placeholder="Digite a TAG ou o nº de série" aria-label="Buscar equipamento oficial"><p role="status" aria-live="polite">A identificação preenche os dados oficiais. Registros sem correspondência podem ser informados manualmente.</p><div role="listbox" hidden></div><p data-control-source-selection hidden></p><button type="button" data-control-source-clear hidden>Remover vínculo</button>';
+    fields.prepend(wrapper);
+    const query = wrapper.querySelector('input[type="search"]');
+    const status = wrapper.querySelector('[role="status"]');
+    const list = wrapper.querySelector('[role="listbox"]');
+    const selection = wrapper.querySelector('[data-control-source-selection]');
+    const clear = wrapper.querySelector('[data-control-source-clear]');
+    const linkFields = ['inventoryItemId','managementRecordId','supplyUnitId'];
+    const identityFields = ['equipment','model','brand','serial','tag','sector'];
+    let sequence = 0;
+    let timer;
+    let results = [];
+    let selected = null;
+    const hidden = (name, value) => {
+      let input = node.querySelector(`input[type="hidden"][name="${name}"]`);
+      if (!input) { input=document.createElement('input'); input.type='hidden'; input.name=name; fields.append(input); }
+      input.value=value || '';
+    };
+    const setOfficial = row => {
+      for (const name of identityFields) {
+        const control=node.querySelector(`[name="${name}"]`);
+        if (!control) continue;
+        const value=row[name] || '';
+        if (control.tagName==='SELECT' && value && ![...control.options].some(option=>option.value===value))
+          control.add(new Option(value,value,true,true));
+        control.value=value;
+        control.disabled=true;
+        hidden(name,value);
+      }
+    };
+    const releaseIdentity = () => {
+      for (const name of identityFields) {
+        const control=node.querySelector(`[name="${name}"]`);
+        if (control) control.disabled=false;
+      }
+      for (const name of [...identityFields,...linkFields]) node.querySelector(`input[type="hidden"][name="${name}"]`)?.remove();
+    };
+    const describe = row => `${row.sourceLabel || row.module || 'Cadastro oficial'} · TAG ${row.tag || 'não informada'} · Série ${row.serial || 'não informada'} · Setor ${row.sector || 'não informado'} · Local ${row.location || 'não informado'}`;
+    const bind = row => {
+      selected=row;
+      releaseIdentity();
+      setOfficial(row);
+      hidden('inventoryItemId',row.module==='inventory'?row.id:'');
+      hidden('managementRecordId',row.module==='management'?row.id:'');
+      hidden('supplyUnitId',row.module==='supplies'?row.id:'');
+      for (const name of identityFields) {
+        const control=node.querySelector(`[name="${name}"]`);
+        if(control) control.disabled=true;
+      }
+      selection.textContent=`Vínculo oficial selecionado: ${describe(row)}. Para corrigir Setor, Local ou identificação, altere a fonte oficial.`;
+      selection.hidden=false;
+      clear.hidden=false;
+      list.hidden=true;
+      status.textContent=row.duplicateTag?'TAG repetida: confira série e setor antes de selecionar.':'Dados oficiais vinculados; identificação bloqueada neste módulo consumidor.';
+    };
+    const existing=item.inventoryItemId||item.managementRecordId||item.supplyUnitId;
+    if (existing) {
+      for (const name of identityFields) {
+        const control=node.querySelector(`[name="${name}"]`);
+        if(control){control.disabled=true;hidden(name,item[name]||'');}
+      }
+      for (const name of linkFields) hidden(name,item[name]||'');
+      selection.textContent=`Origem oficial vinculada (${item.inventoryItemId?'Inventário':item.managementRecordId?'Gestão TI':'Suprimentos'}): ${item.equipment} · TAG ${item.tag||'não informada'} · Série ${item.serial||'não informada'} · Setor ${item.sector||'não informado'}. Corrija esses dados na fonte oficial.`;
+      selection.hidden=false;
+      status.textContent='Identificação e Setor oficiais bloqueados neste módulo consumidor.';
+      clear.remove();
+      query.disabled=true;
+      return;
+    }
+    const search=async term=>{
+      const request=++sequence;
+      status.textContent='Consultando Inventário, Gestão TI e Suprimentos…';
+      list.hidden=true;
+      try {
+        const rows=await backend().central.search(term);
+        if(request!==sequence||!node.isConnected)return;
+        results=window.AldeckotFluxSearch?.prepare(rows,term)||rows;
+        list.replaceChildren();
+        for(const row of results){
+          const button=document.createElement('button');button.type='button';button.dataset.controlSourceResult=String(results.indexOf(row));
+          button.textContent=`${row.equipment||'Equipamento'} · ${describe(row)}`;
+          list.append(button);
+        }
+        list.hidden=!results.length;
+        status.textContent=results.length?'Selecione o cadastro correto; correspondências ambíguas permanecem separadas.':'Nenhuma correspondência. Você pode continuar sem vínculo e sem inventar dados.';
+      }catch(error){if(request===sequence)status.textContent=`Busca indisponível: ${backendMessage(error)}. Você ainda pode cadastrar sem vínculo.`;}
+    };
+    query.addEventListener('input',()=>{
+      clearTimeout(timer);list.hidden=true;results=[];
+      const term=query.value.trim();
+      if(term.length<2){status.textContent='Digite ao menos dois caracteres da TAG ou série.';return;}
+      timer=setTimeout(()=>void search(term),240);
+    });
+    query.addEventListener('keydown',event=>{
+      if(event.key!=='Enter')return;event.preventDefault();
+      if(results.length===1)bind(results[0]);
+      else if(results.length>1)status.textContent='Há várias correspondências. Escolha o equipamento exato na lista.';
+      else void search(query.value.trim());
+    });
+    list.addEventListener('click',event=>{
+      const button=event.target.closest('[data-control-source-result]');
+      if(button&&results[Number(button.dataset.controlSourceResult)])bind(results[Number(button.dataset.controlSourceResult)]);
+    });
+    clear.addEventListener('click',()=>{
+      selected=null;releaseIdentity();selection.hidden=true;clear.hidden=true;
+      status.textContent='Vínculo removido. Os campos voltaram a ser editáveis; preencha apenas dados confirmados.';
+    });
   }
 
   function itemActionMenu(item) {
-    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button>${!controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo' ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : ''}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
+    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button><button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
   }
 
   async function refreshInstallationDetail(node) {
@@ -1271,12 +1958,13 @@
     const table = activeTable();
     const branch = branchModel.branchFor(table, item);
     const branches = branchModel.branchesFor(table, item);
-    const field = (label, value, tone = '') => `<div class="inv-detail ${tone}"><span>${label}</span><b>${escape(value || '—')}</b></div>`;
+    const field = (label, value, tone = '', action = '', markup = escape(value || '—')) => `<div class="inv-detail ${tone}"><span>${label}</span><div class="inv-detail-value"><b>${markup}</b>${action}</div></div>`;
     const section = (title, fields) => `<section class="inv-equipment-section"><h3>${title}</h3><div class="inv-detail-grid">${fields.join('')}</div></section>`;
     const image = escape(imageKey(branchModel.categoryForTable(table), item.brand, item.model));
     const latest = branchModel.lastChangedAt(item);
     const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
-    const node = modal(`<div class="inv-dialog-head"><div><small class="inv-equipment-eyebrow">INVENTÁRIO / ${escape(table?.name || '—')}</small><h2>${escape(item.equipment)}</h2><p class="inv-equipment-subtitle">${escape(item.tag || 'TAG não informada')} · ${escape(item.model || 'Modelo não informado')}</p></div><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close aria-label="Fechar detalhes">×</button></div></div><div class="inv-equipment-top"><div class="inv-equipment-image"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="Imagem de ${escape(item.equipment)}" decoding="async" hidden></div><div class="inv-equipment-summary">${section('Identificação', [field('Equipamento', item.equipment), field('TAG', item.tag), field('Nº de série', item.serial), field('Categoria', table?.name), ...(branches.length ? [field('Ramificações', branches.map(entry => entry.name).join(' · '))] : []), field('Marca', item.brand), field('Modelo', item.model)])}</div></div>${section('Localização', [field('Setor', item.sector), field('Local de instalação', item.location)])}${section('Estado atual', [field('Status', item.status, `inv-priority-detail priority-${choiceTone('status', item.status)}`), field('Situação', item.situation), field('Tipo de limpeza', item.cleaning), field('Prioridade', item.priority || 'Estável')])}${section('Informações complementares', [field('Data de cadastro', dateTimeValue(item.createdAt)), field('Última alteração', dateTimeValue(latest)), field('Observações', item.notes)])}<div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`, 'inv-equipment-detail-dialog');
+    const replacementAction=!controlMode&&!fluxMode&&inventoryIntegrationReady&&item.status==='Ativo'?`<button type="button" class="inv-replacement-inline" data-inv-replace-item="${escape(item.id)}">Substituir</button>`:'';
+    const node = modal(`<div class="inv-dialog-head"><div><small class="inv-equipment-eyebrow">INVENTÁRIO / ${escape(table?.name || '—')}</small><h2>${escape(item.equipment)}</h2><p class="inv-equipment-subtitle">${escape(item.tag || 'TAG não informada')} · ${escape(item.model || 'Modelo não informado')}</p></div><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close aria-label="Fechar detalhes">×</button></div></div><div class="inv-equipment-top"><div class="inv-equipment-image"><span class="inventory-image-placeholder" aria-hidden="true">◇</span><img data-inv-image-key="${image}" alt="Imagem de ${escape(item.equipment)}" decoding="async" hidden></div><div class="inv-equipment-summary">${section('Identificação', [field('Equipamento', item.equipment), field('TAG', item.tag), field('Nº de série', item.serial), field('Categoria', table?.name), ...(branches.length ? [field('Ramificações', branches.map(entry => entry.name).join(' · '))] : []), field('Marca', item.brand), field('Modelo', item.model, '', replacementAction)])}</div></div>${section('Localização', [field('Setor', item.sector), field('Local de instalação', item.location)])}${section('Estado atual', [field('Status', item.status, `inv-priority-detail priority-${choiceTone('status', item.status)}`), field('Situação', item.situation), field('Tipo de limpeza', item.cleaning, '', '', cleaningPill(item.cleaning)), field('Prioridade', item.priority || 'Estável')])}${section('Informações complementares', [field('Data de cadastro', dateTimeValue(item.createdAt)), field('Última alteração', dateTimeValue(latest)), field('Observações', item.notes)])}<div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`, 'inv-equipment-detail-dialog');
     node.dataset.itemId = item.id;
     node.dataset.inventoryLocation = item.location || '';
     void refreshInstallationDetail(node);
@@ -1299,21 +1987,539 @@
   }
 
   function controlDetails(item) {
-    const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['sector', 'Setor'], ['entryDate', 'Data de Entrada'], ['exitDate', 'Data de Saída'], ['status', 'Status'], ['priority', 'Prioridade'], ['situation', 'Tipo de Limpeza'], ['date', 'Atualizado'], ['notes', 'Observações']];
+    const labels = [['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['serial', 'Nº de série'], ['tag', 'TAG'], ['sector', 'Setor'], ['entryDate', 'Data de Entrada'], ['exitDate', 'Data de Saída'], ['status', 'Estado técnico do acompanhamento'], ['priority', 'Prioridade do chamado'], ['situation', 'Limpeza no chamado'], ['date', 'Atualizado'], ['notes', 'Observações']];
     const display = (key, value) => key === 'entryDate' || key === 'exitDate' ? dateValue(value) : (value || '—');
     const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
-    const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
+    const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${key === 'situation' ? cleaningPill(item[key]) : escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
     node.dataset.itemId = item.id;
+    node.querySelector('.inv-detail-grid')?.insertAdjacentHTML('afterbegin',
+      `<div class="inv-detail">Status operacional<b>${controlBoard.pill(controlBoard.statusFor(item), controlBoard.statuses, { legacy: item.status })}</b></div>
+       <div class="inv-detail">Situação do chamado<b>${controlBoard.pill(controlBoard.situationFor(item), controlBoard.situations, { empty: 'Sem situação definida' })}</b></div>
+       ${item.equipmentState?.situation ? '<div class="inv-detail">Situação física atual<b>' + escape(item.equipmentState.situation) + '</b></div>' : ''}
+       ${item.equipmentState?.cleaning_type ? '<div class="inv-detail">Limpeza atual no cadastro<b>' + cleaningPill(item.equipmentState.cleaning_type) + '</b></div>' : ''}`);
+    if (canManage() && data.controlBoardReady) {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'inv-ghost';
+      edit.textContent = 'Editar classificação';
+      edit.addEventListener('click', () => controlClassificationForm(item));
+      node.querySelector('.inv-actions')?.prepend(edit);
+    }
+    if (data.controlBoardReady) {
+      const timeline = document.createElement('section');
+      timeline.className = 'inv-equipment-section';
+      timeline.innerHTML = '<h3>Classificação e atividades</h3><div class="inv-log-list" role="status">Carregando histórico…</div>';
+      node.querySelector('.inv-log-head')?.before(timeline);
+      controlTimeline(item).then(events => {
+        if (node.isConnected) timeline.querySelector('.inv-log-list').innerHTML =
+          controlTimelineMarkup(events.filter(event => event.origin === 'board'));
+      }).catch(() => {
+        if (node.isConnected) timeline.querySelector('.inv-log-list').textContent = 'Histórico complementar indisponível.';
+      });
+    }
+    if (canManage() && item.followUpKind === 'verification'
+      && item.verificationInventoryItemId && item.status === 'Aguardando avaliação') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inv-primary';
+      button.dataset.invPromoteVerification = item.id;
+      button.textContent = 'Encaminhar para manutenção';
+      node.querySelector('.inv-actions')?.prepend(button);
+    }
     mountSourcePhoto(node, item);
+    if (typeof moduleApi().listCases === 'function') {
+      const history = document.createElement('section');
+      history.className = 'inv-equipment-section control-case-history';
+      history.innerHTML = '<h3>Chamados técnicos</h3><div class="inv-log-list" role="status">Carregando histórico…</div>';
+      node.querySelector('.inv-log-head')?.before(history);
+      moduleApi().listCases(item.id).then(cases => {
+        if (!node.isConnected || node.dataset.itemId !== item.id) return;
+        const selectedCaseId = moduleRoute.get('case');
+        history.querySelector('.inv-log-list').innerHTML = cases.length
+          ? cases.map(entry => `<div class="inv-log${entry.id === selectedCaseId ? ' control-case-focused' : ''}"${entry.id === selectedCaseId ? ' aria-current="true"' : ''}><b>${escape(entry.ticket_state || 'Estado legado a revisar')}${entry.id === selectedCaseId ? ' · Chamado selecionado' : ''}</b><span>${escape(dateTimeValue(entry.opened_at))} · ${escape(entry.followup_kind === 'verification' ? 'Verificação' : 'Manutenção')}${entry.closed_at ? ` · encerrado em ${escape(dateTimeValue(entry.closed_at))}` : ''}${entry.requires_review ? ' · vínculo de origem a revisar' : ''}</span>${window.AldeckotControlCaseDetail && !controlCaseDetailUnavailable ? `<button type="button" class="inv-ghost" data-control-open-case="${escape(entry.id)}">Abrir chamado</button>` : ''}</div>`).join('')
+          : '<div class="inv-log">Nenhum chamado registrado.</div>';
+        history.querySelector('.control-case-focused')?.scrollIntoView({ block: 'nearest' });
+        if (selectedCaseId && cases.some(entry => entry.id === selectedCaseId)
+          && window.AldeckotControlCaseDetail && typeof moduleApi().caseDetail === 'function'
+          && !controlCaseDetailUnavailable) void showControlCaseDetail(item, selectedCaseId);
+      }).catch(error => {
+        if (!node.isConnected || node.dataset.itemId !== item.id) return;
+        if (/42P01|PGRST205/.test(String(error?.code || '')) || /control_cases.*(?:does not exist|schema cache)/i.test(error?.message || '')) {
+          history.remove();
+          return;
+        }
+        history.querySelector('.inv-log-list').textContent = 'Histórico de chamados temporariamente indisponível.';
+        console.warn('Histórico de chamados indisponível:', error);
+      });
+    }
     applyStatusModalGlow(node, item.status);
   }
 
-  function fluxDetails(item) {
-    const labels = [['movement', 'Movimentação'], ['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['tag', 'TAG'], ['serial', 'Nº de série'], ['senderCompany', 'Empresa Remetente'], ['destinationCompany', 'Empresa Destino'], ['senderResponsible', 'Responsável Envio'], ['receiverResponsible', 'Responsável Recebimento'], ['sendDate', 'Data de Envio'], ['receivedDate', 'Data de Recebimento'], ['shippingType', 'Tipo de Envio'], ['situation', 'Motivo'], ['status', 'Status'], ['priority', 'Prioridade'], ['date', 'Atualizado'], ['notes', 'Observações']];
-    const display = (key, value) => key === 'sendDate' || key === 'receivedDate' ? dateValue(value) : (value || '—');
-    const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
-    const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid flux-detail-grid">${labels.map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
+  function renderControlCaseDetail(node, tab = 'overview') {
+    if (!node?.isConnected || !node.__caseDetail) return;
+    node.dataset.caseTab = tab;
+    node.querySelector('[data-control-case-detail-root]').innerHTML =
+      window.AldeckotControlCaseDetail.markup(
+        node.__caseDetail, tab, canManage(), node.__legacyLogs || []);
+  }
+
+  async function showControlCaseDetail(item, caseId, tab = 'overview') {
+    if (!caseId || controlCaseDetailUnavailable || !window.AldeckotControlCaseDetail
+      || typeof moduleApi().caseDetail !== 'function') return;
+    const node = modal('<div class="inv-dialog-head"><h2>Detalhes do chamado</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div data-control-case-detail-root role="status">Carregando chamado…</div>', 'control-case-dialog');
     node.dataset.itemId = item.id;
+    node.dataset.caseId = caseId;
+    try {
+      const detail = await moduleApi().caseDetail(caseId);
+      if (!node.isConnected || node.dataset.caseId !== caseId) return;
+      node.__caseDetail = detail;
+      node.__legacyLogs = detail.case?.control_item_id === item.id ? item.logs || [] : [];
+      renderControlCaseDetail(node, tab);
+    } catch (error) {
+      if (!node.isConnected) return;
+      if (/PGRST202|42883/.test(String(error?.code || ''))
+        || /get_control_case_detail.*(?:does not exist|schema cache)/i.test(error?.message || '')) {
+        controlCaseDetailUnavailable = true;
+        controlDetails(item);
+        return;
+      }
+      node.querySelector('[data-control-case-detail-root]').textContent =
+        'Não foi possível carregar este chamado. ' + backendMessage(error);
+    }
+  }
+
+  function fluxDeliveryWizard() {
+    const pending = data.tables.flatMap(table => table.items.filter(item =>
+      item.movement === 'Envio' && ['Pendente', 'Em Trânsito'].includes(item.status))
+      .map(item => ({ ...item, tableId: table.id, tableName: table.name })))
+      .sort((a, b) => String(b.sendDate).localeCompare(String(a.sendDate)));
+    if (!pending.length) {
+      window.AldeckotMessage.show('Não há envios aguardando confirmação de entrega.');
+      return;
+    }
+    const localNow = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const node = modal(`<div class="inv-dialog-head"><h2>Confirmar Entrega</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Escolha o envio exato, inclusive de meses anteriores. A entrega não registra retorno ao remetente.</p><form data-flux-delivery-form><div class="inv-fields equipment-fields"><label class="inv-full"><span>Buscar por equipamento, TAG, série ou mês</span><input type="search" data-flux-delivery-search autocomplete="off"></label><label class="inv-full"><span>Envio pendente *</span><select name="itemId" required data-flux-delivery-select></select></label><div class="inv-full flux-acquisition-state" data-flux-delivery-summary></div><label><span>Data e hora da entrega *</span><input name="deliveredAt" type="datetime-local" required value="${localNow}"></label><label><span>Confirmado por *</span><input name="receivedBy" required maxlength="160"></label><label><span>Transportadora</span><input name="carrier" maxlength="160"></label><label class="inv-full"><span>Observações</span><textarea name="notes" maxlength="500"></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Revisar entrega</button></div></form>`, 'equipment-dialog flux-dialog');
+    const form = node.querySelector('[data-flux-delivery-form]');
+    const list = form.querySelector('[data-flux-delivery-select]');
+    const search = form.querySelector('[data-flux-delivery-search]');
+    const summary = form.querySelector('[data-flux-delivery-summary]');
+    const refresh = () => {
+      const query = comparable(search.value);
+      const matches = pending.filter(item => !query ||
+        [item.equipment, item.tag, item.serial, item.tableName, item.senderCompany,
+          item.destinationCompany].some(value => comparable(value).includes(query)));
+      const selectedId = list.value;
+      list.innerHTML = '<option value="">Selecione o envio</option>' + matches.map(item =>
+        `<option value="${escape(item.id)}">${escape(item.tableName)} · ${escape(item.equipment)} · ${escape(item.tag || item.serial)} · ${dateValue(item.sendDate)}</option>`).join('');
+      if (matches.some(item => item.id === selectedId)) list.value = selectedId;
+      summary.textContent = matches.length ? `${matches.length} envio(s) compatíveis. Selecione um para conferir origem e destino.` : 'Nenhum envio corresponde à busca.';
+      if (list.value) showSelected();
+    };
+    const showSelected = () => {
+      const item = pending.find(candidate => candidate.id === list.value);
+      if (!item) return;
+      summary.textContent = `${item.equipment} · TAG ${item.tag || 'não informada'} · série ${item.serial || 'não informada'} · ${item.senderCompany} → ${item.destinationCompany} · envio em ${dateValue(item.sendDate)} · ${item.status}.`;
+    };
+    search.addEventListener('input', refresh);
+    list.addEventListener('change', showSelected);
+    refresh();
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (form.dataset.busy) return;
+      const item = pending.find(candidate => candidate.id === list.value);
+      if (!item) { window.AldeckotMessage.show('Selecione o envio correto.'); return; }
+      const values = Object.fromEntries(new FormData(form));
+      const deliveredAt = new Date(values.deliveredAt);
+      if (!Number.isFinite(deliveredAt.valueOf())) { window.AldeckotMessage.show('Informe uma data de entrega válida.'); return; }
+      if (!await window.AldeckotMessage.confirm(`Confirmar entrega de ${item.equipment} em ${item.destinationCompany}, recebida por ${values.receivedBy}? O envio original será preservado.`, { title: 'Revisar entrega', confirmText: 'Confirmar entrega' })) return;
+      form.dataset.busy = 'true';
+      const button = form.querySelector('[type="submit"]'); button.disabled = true;
+      const finish = window.AldeckotLoading?.beginSave?.('Confirmando entrega…');
+      try {
+        const requestKey = JSON.stringify([item.id, values]);
+        if (form.dataset.requestKey !== requestKey) {
+          form.dataset.requestKey = requestKey;
+          form.dataset.requestId = crypto.randomUUID();
+        }
+        const requestId = form.dataset.requestId;
+        await moduleApi().confirmDelivery(item, { ...values, deliveredAt: deliveredAt.toISOString() }, requestId);
+        closeModal();
+        state.active = item.tableId;
+        await reloadInventory(); renderInventory();
+        const updated = activeTable()?.items.find(row => row.id === item.id);
+        if (updated) details(updated);
+        window.AldeckotMessage.show('Entrega confirmada e registrada no histórico.');
+      } catch (error) {
+        window.AldeckotMessage.show(backendMessage(error));
+      } finally { delete form.dataset.busy; button.disabled = false; await finish?.(); }
+    });
+  }
+
+  function fluxReturnWizard() {
+    const returnedIds = new Set(data.tables.flatMap(table => table.items
+      .map(item => item.returnOf).filter(Boolean)));
+    const eligible = data.tables.flatMap(table => table.items.filter(item =>
+      item.movement === 'Envio' && item.status === 'Entregue' && Boolean(item.deliveredAt)
+      && item.situation !== 'Aquisição' && !returnedIds.has(item.id))
+      .map(item => ({ ...item, tableId: table.id, tableName: table.name })))
+      .sort((a, b) => String(b.sendDate).localeCompare(String(a.sendDate)));
+    if (!eligible.length) {
+      window.AldeckotMessage.show('Não há envios com entrega confirmada e sem retorno. Registros antigos sem confirmação individual exigem conferência antes de vincular um retorno.');
+      return;
+    }
+    const localNow = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const sourceTables = data.tables.filter(table => eligible.some(item => item.tableId === table.id));
+    const node = modal(`<div class="inv-dialog-head"><h2>Registrar Retorno</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Vincule a entrada física ao envio original, mesmo que tenha ocorrido em outro mês. Depois do recebimento, confira o destino patrimonial.</p><form data-flux-return-form><div class="inv-fields equipment-fields"><label><span>Tabela de origem do envio *</span><select name="sourceTableId" required data-flux-return-source><option value="">Selecione o mês</option>${sourceTables.map(table => `<option value="${escape(table.id)}">${escape(table.name)}</option>`).join('')}</select></label><label><span>Buscar nome, série ou TAG</span><input type="search" data-flux-return-search autocomplete="off"></label><label class="inv-full"><span>Envio original *</span><select name="sendId" required data-flux-return-send><option value="">Selecione o envio</option></select></label><div class="inv-full flux-acquisition-state" data-flux-return-summary></div><label><span>Tabela do recebimento *</span><select name="targetTableId" required>${data.tables.map(table => `<option value="${escape(table.id)}" ${table.id === activeTable()?.id ? 'selected' : ''}>${escape(table.name)}</option>`).join('')}</select></label><label><span>Data e hora do recebimento *</span><input name="receivedAt" type="datetime-local" required value="${localNow}"></label><label><span>Retornou de *</span><input name="originCompany" required maxlength="160"></label><label><span>Chegou em *</span><input name="destinationCompany" required maxlength="160"></label><label><span>Quem recebeu *</span><input name="receivedBy" required maxlength="160"></label><label><span>Transportadora</span><input name="carrier" maxlength="160"></label><label><span>Status pretendido após regularização *</span><select name="postReceiptStatus" required>${['Reserva','Ativo','Verificação','Defeito','Manutenção'].map(status => `<option>${status}</option>`).join('')}</select></label><label class="inv-full"><span>Motivo do retorno *</span><textarea name="returnReason" required minlength="5" maxlength="500" placeholder="Descreva por que o equipamento retornou."></textarea></label><label class="inv-full"><span>Observações</span><textarea name="notes" maxlength="500"></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Revisar retorno</button></div></form>`, 'equipment-dialog flux-dialog');
+    const form = node.querySelector('[data-flux-return-form]');
+    const source = form.querySelector('[data-flux-return-source]');
+    const search = form.querySelector('[data-flux-return-search]');
+    const list = form.querySelector('[data-flux-return-send]');
+    const summary = form.querySelector('[data-flux-return-summary]');
+    const showSelected = () => {
+      const item = eligible.find(row => row.id === list.value);
+      if (!item) return;
+      summary.textContent = `${item.equipment} · TAG ${item.tag || 'não informada'} · série ${item.serial || 'não informada'} · ${item.senderCompany} → ${item.destinationCompany} · enviado em ${dateValue(item.sendDate)} · ${item.status}.`;
+      form.elements.originCompany.value = item.destinationCompany;
+      form.elements.destinationCompany.value = item.senderCompany;
+    };
+    const refresh = () => {
+      const query = comparable(search.value);
+      const matches = eligible.filter(item => item.tableId === source.value &&
+        (!query || [item.equipment, item.serial, item.tag].some(value => comparable(value).includes(query))));
+      const selectedId = list.value;
+      list.innerHTML = '<option value="">Selecione o envio</option>' + matches.map(item =>
+        `<option value="${escape(item.id)}">${escape(item.equipment)} · ${escape(item.tag || item.serial)} · ${dateValue(item.sendDate)} · ${escape(item.destinationCompany)}</option>`).join('');
+      if (matches.some(item => item.id === selectedId)) list.value = selectedId;
+      summary.textContent = source.value ? `${matches.length} envio(s) elegíveis nesta tabela.` : 'Escolha primeiro a tabela do envio.';
+      if (list.value) showSelected();
+    };
+    source.addEventListener('change', refresh);
+    search.addEventListener('input', refresh);
+    list.addEventListener('change', showSelected);
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (form.dataset.busy) return;
+      const item = eligible.find(row => row.id === list.value && row.tableId === source.value);
+      if (!item) { window.AldeckotMessage.show('Selecione o envio original.'); return; }
+      const values = Object.fromEntries(new FormData(form));
+      const receivedAt = new Date(values.receivedAt);
+      if (!Number.isFinite(receivedAt.valueOf())) { window.AldeckotMessage.show('Informe uma data de recebimento válida.'); return; }
+      const target = data.tables.find(table => table.id === values.targetTableId);
+      if (!target) { window.AldeckotMessage.show('Selecione a tabela do recebimento.'); return; }
+      const nextStep = item.inventoryItemId || item.managementComputerId
+        ? 'O destino poderá ser conferido e aplicado no detalhe do retorno.'
+        : 'O destino precisa ser conferido no módulo de origem.';
+      if (!await window.AldeckotMessage.confirm(`Registrar a entrada de ${item.equipment} de ${values.originCompany} em ${values.destinationCompany}, recebida por ${values.receivedBy}, na tabela ${target.name}? ${nextStep}`, { title: 'Revisar retorno', confirmText: 'Registrar retorno' })) return;
+      form.dataset.busy = 'true';
+      const button = form.querySelector('[type="submit"]'); button.disabled = true;
+      const finish = window.AldeckotLoading?.beginSave?.('Registrando retorno…');
+      try {
+        const requestKey = JSON.stringify([item.id, values]);
+        if (form.dataset.requestKey !== requestKey) {
+          form.dataset.requestKey = requestKey;
+          form.dataset.requestId = crypto.randomUUID();
+        }
+        const saved = await moduleApi().registerReturn(item, target.id,
+          { ...values, receivedAt: receivedAt.toISOString() }, form.dataset.requestId);
+        closeModal();
+        state.active = target.id;
+        await reloadInventory(); renderInventory();
+        const updated = activeTable()?.items.find(row => row.id === saved.id);
+        if (updated) details(updated);
+        window.AldeckotMessage.show(`Retorno físico registrado. ${nextStep}`);
+      } catch (error) {
+        window.AldeckotMessage.show(backendMessage(error));
+      } finally { delete form.dataset.busy; button.disabled = false; await finish?.(); }
+    });
+    refresh();
+  }
+
+  function fluxReturnDestination(item) {
+    const installingComputer = item.managementComputerId && item.postReceiptStatus === 'Ativo';
+    const suggestedLocation = item.postReceiptStatus === 'Reserva' ? 'Sala CPD' : '';
+    const sectors = window.AldeckotSectors?.names || [];
+    const sectorOptions = sectors.map(value => `<option value="${escape(value)}" ${value === item.sector ? 'selected' : ''}>${escape(value)}</option>`).join('');
+    const node = modal(`<div class="inv-dialog-head"><h2>Regularizar destino do retorno</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div>
+      <p class="inv-log-intro">${escape(item.equipment)} · ${escape(item.tag || item.serial)} · Condição solicitada: ${escape(item.postReceiptStatus)}.</p>
+      <form data-flux-return-destination><div class="inv-fields equipment-fields">
+        <label><span>${installingComputer ? 'Terminal de destino *' : 'Local final *'}</span><input name="location" required maxlength="160" value="${suggestedLocation}" placeholder="${installingComputer ? 'Nome do terminal na Gestão TI' : 'PDV 10 ou Sala CPD'}"></label>
+        <label><span>Setor final *</span><select name="sector" required><option value="">Selecione</option>${sectorOptions}</select></label>
+        <label class="inv-full"><span>Motivo da decisão *</span><textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
+      </div><p class="inv-log-intro" data-flux-destination-review aria-live="polite">Confira o destino antes de aplicar.</p>
+      <div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button>
+        <button type="button" class="inv-ghost" data-flux-destination-check>Conferir destino</button>
+        <button type="submit" class="inv-primary" disabled>Aplicar destino</button></div>
+      </form>`, 'equipment-dialog flux-dialog');
+    const form = node.querySelector('[data-flux-return-destination]');
+    const feedback = form.querySelector('[data-flux-destination-review]');
+    const checkButton = form.querySelector('[data-flux-destination-check]');
+    const apply = form.querySelector('[type="submit"]');
+    let revision = 0;
+    let review;
+    let busy = false;
+    const values = () => Object.fromEntries([...new FormData(form)].map(([name, value]) => [name, value.trim()]));
+    const valid = draft => form.reportValidity() && draft.location && draft.reason.length >= 5;
+    form.addEventListener('input', () => {
+      revision += 1;
+      review = null;
+      apply.disabled = true;
+      feedback.textContent = 'Dados alterados. Confira o destino novamente.';
+    });
+    checkButton.addEventListener('click', async () => {
+      const draft = values();
+      if (busy || !valid(draft)) return;
+      const current = ++revision;
+      review = null;
+      apply.disabled = true;
+      checkButton.disabled = true;
+      feedback.textContent = 'Conferindo equipamento, destino e chamados…';
+      try {
+        const result = await moduleApi().previewReturnDestination(item, draft);
+        if (!node.isConnected || current !== revision) return;
+        const technical = { complete: 'O chamado de manutenção será concluído.',
+          reuse: 'O chamado atual será mantido.', verify: 'O Controle TI abrirá uma verificação.',
+          maintenance: 'O Controle TI registrará a manutenção.' };
+        const old = result.item;
+        const next = result.target;
+        const occupants = (result.occupants || []).map(row => row.tag || row.equipment).filter(Boolean);
+        feedback.textContent = result.blocked
+          ? `${result.reason}${occupants.length ? ` Ocupante: ${occupants.join(', ')}.` : ''}`
+          : `${old.location || 'Sem local'} / ${old.sector || 'Sem setor'} / ${old.status} → ${next.location} / ${next.sector} / ${next.status}${next.situation === 'Verificando' ? ' (Verificando)' : ''}. ${technical[result.technicalAction] || ''}`.trim();
+        if (!result.blocked) {
+          review = { draft, token: result.token, requestId: crypto.randomUUID() };
+          apply.disabled = false;
+        }
+      } catch (error) {
+        if (node.isConnected && current === revision) feedback.textContent = backendMessage(error);
+      } finally { checkButton.disabled = false; }
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (busy || !review) return;
+      const checked = review;
+      if (JSON.stringify(values()) !== JSON.stringify(checked.draft)) return;
+      busy = true;
+      checkButton.disabled = true;
+      apply.disabled = true;
+      let saved = false;
+      try {
+        await moduleApi().confirmReturnDestination(item, checked.draft, checked.token, checked.requestId);
+        saved = true;
+        await reloadInventory();
+        renderInventory();
+        if (node.isConnected) {
+          const updated = activeTable()?.items.find(row => row.id === item.id);
+          if (updated) details(updated);
+          else closeModal();
+        }
+        window.AldeckotMessage.show('Destino aplicado. O retorno foi vinculado ao histórico do equipamento.');
+      } catch (error) {
+        if (node.isConnected) feedback.textContent = saved
+          ? 'Destino aplicado. Recarregue a tabela para ver o novo estado.'
+          : backendMessage(error);
+      } finally {
+        busy = false;
+        checkButton.disabled = false;
+        apply.disabled = saved || review !== checked;
+      }
+    });
+  }
+
+  function fluxHistoryModal() {
+    const { historyEvents, filterHistory, compareHistory } = window.AldeckotFluxCycles;
+    let events = historyEvents(data.tables);
+    const months = [...new Set(events.map(row => row.period))].sort().reverse();
+    let linkedLoading = true;
+    let linkedError = false;
+    const node = modal(`<div class="inv-dialog-head"><h2>Histórico Geral do Flux</h2><button type="button" class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">Saídas, entregas confirmadas, entradas e eventos de outros módulos vinculados por ID patrimonial. Horários conhecidos são exibidos no horário de Brasília; nos demais casos, apenas a data foi informada. Períodos antigos sem evento explícito não recebem uma confirmação presumida.</p><div class="flux-history-filters"><input type="search" data-flux-history-search placeholder="Equipamento, TAG, série, empresa..." aria-label="Buscar no histórico"><select data-flux-history-month aria-label="Filtrar mês"><option value="">Todos os meses</option>${months.map(month => `<option value="${month}">${month.slice(5)}/${month.slice(0, 4)}</option>`).join('')}</select><select data-flux-history-type aria-label="Filtrar evento"><option value="">Todos os eventos</option>${['Saída', 'Entrega', 'Entrada', 'Retorno'].map(type => `<option>${type}</option>`).join('')}</select><select data-flux-history-status aria-label="Filtrar status"><option value="">Todos os status registrados</option>${statuses.map(status => `<option>${status}</option>`).join('')}</select><input type="date" data-flux-history-from aria-label="Data inicial"><input type="date" data-flux-history-to aria-label="Data final"></div><div class="flux-history-list" aria-live="polite"></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Fechar</button></div>`, 'equipment-dialog flux-history-dialog');
+    const update = () => {
+      const query = comparable(node.querySelector('[data-flux-history-search]').value);
+      const month = node.querySelector('[data-flux-history-month]').value;
+      const type = node.querySelector('[data-flux-history-type]').value;
+      const status = node.querySelector('[data-flux-history-status]').value;
+      const from = node.querySelector('[data-flux-history-from]').value;
+      const to = node.querySelector('[data-flux-history-to]').value;
+      if (from && to && from > to) {
+        node.querySelector('.flux-history-list').innerHTML = '<p>A data inicial deve ser anterior ou igual à data final.</p>';
+        return;
+      }
+      const results = filterHistory(events, { query, month, type, status, from, to });
+      node.querySelector('.flux-history-list').innerHTML = `<p>${results.length} ${results.length === 1 ? 'evento encontrado' : 'eventos encontrados'}${results.length > 100 ? '; exibindo os 100 mais recentes' : ''}.${linkedLoading ? ' Consultando eventos vinculados…' : linkedError ? ' Eventos vinculados indisponíveis no momento.' : ''}</p>` +
+        (results.slice(0, 100).map(row => {
+          if (row.shared) {
+            const entry = row.shared;
+            const before = entry.previous_location || entry.origin_location || '';
+            const after = entry.new_location || entry.destination_location || '';
+            const place = before && after && before !== after ? ` de ${before} para ${after}` : after ? ` em ${after}` : '';
+            const change = entry.previous_status && entry.new_status && entry.previous_status !== entry.new_status
+              ? `; status ${entry.previous_status} → ${entry.new_status}` : entry.new_status ? `; status ${entry.new_status}` : '';
+            return `<article class="flux-timeline-event"><span class="entry">${escape(row.tableName)}</span><div><b>${escape(dateTimeValue(row.when))} — ${escape(row.item.equipment)}: ${escape(entry.action || 'evento registrado')}${escape(place)}${escape(change)}.</b><small>Horário de registro · TAG ${escape(row.item.tag || 'não informada')} · série ${escape(row.item.serial || 'não informada')}</small><details><summary>Dados técnicos</summary><dl><dt>Evento</dt><dd>${escape(entry.id)}</dd><dt>Módulo de origem</dt><dd>${escape(entry.source_module)}</dd><dt>Registro de origem</dt><dd>${escape(entry.source_id)}</dd><dt>Motivo</dt><dd>${escape(entry.reason || 'não informado')}</dd><dt>Item patrimonial</dt><dd>${escape(entry.inventory_item_id)}</dd></dl></details><button type="button" data-flux-history-open="${escape(row.item.id)}" data-flux-history-table="${escape(row.tableId)}">Abrir equipamento</button></div></article>`;
+          }
+          return `<article class="flux-timeline-event"><span class="${row.type === 'Saída' ? 'send' : 'entry'}">${escape(row.type)}</span><div><b>${escape(row.dateOnly ? dateValue(row.when) + ' (horário não informado)' : dateTimeValue(row.when))} — ${escape(row.text)}</b><small>${escape(row.tableName)} · status atual do Flux: ${escape(row.item.status)} · TAG ${escape(row.item.tag || 'não informada')} · série ${escape(row.item.serial || 'não informada')}</small><details><summary>Dados técnicos</summary><dl><dt>Registro</dt><dd>${escape(row.item.id)}</dd><dt>Equipamento</dt><dd>${escape(row.item.equipmentUid || 'identidade legada')}</dd>${row.item.returnOf ? `<dt>Envio original</dt><dd>${escape(row.item.returnOf)}</dd>` : ''}</dl></details><button type="button" data-flux-history-open="${escape(row.item.id)}" data-flux-history-table="${escape(row.tableId)}">Abrir equipamento</button></div></article>`;
+        }).join('') || '<p>Nenhum evento corresponde aos filtros.</p>');
+    };
+    node.querySelectorAll('.flux-history-filters input, .flux-history-filters select').forEach(field =>
+      field.addEventListener(field.tagName === 'INPUT' ? 'input' : 'change', update));
+    node.addEventListener('click', event => {
+      const button = event.target.closest('[data-flux-history-open]');
+      if (!button) return;
+      const table = data.tables.find(row => row.id === button.dataset.fluxHistoryTable);
+      const item = table?.items.find(row => row.id === button.dataset.fluxHistoryOpen);
+      if (!item) return;
+      state.active = table.id;
+      renderInventory();
+      details(item);
+    });
+    const linkedByInventory = new Map();
+    data.tables.forEach(table => table.items.forEach(item => {
+      if (item.inventoryItemId && !linkedByInventory.has(item.inventoryItemId))
+        linkedByInventory.set(item.inventoryItemId, { item, tableId: table.id });
+    }));
+    update();
+    if (!linkedByInventory.size) {
+      linkedLoading = false;
+      update();
+      return;
+    }
+    moduleApi().equipmentEventsForItems([...linkedByInventory.keys()]).then(rows => {
+      if (!node.isConnected) return;
+      const moduleNames = { inventory: 'Inventário', management: 'Gestão TI', control: 'Controle TI', supplies: 'Suprimentos', nfe: 'Fiscal' };
+      const linked = rows.flatMap(entry => {
+        const source = linkedByInventory.get(entry.inventory_item_id);
+        if (!source) return [];
+        const day = fluxLocalDay(entry.created_at);
+        return [{ ...source, shared: entry, type: entry.action || 'Outro módulo',
+          tableName: moduleNames[entry.source_module] || entry.source_module || 'Outro módulo',
+          when: entry.created_at, timestamp: entry.created_at, key: entry.id,
+          day, period: day.slice(0, 7) }];
+      });
+      events = [...events, ...linked].sort(compareHistory);
+      const setOptions = (selector, label, values, format = value => value) => {
+        const field = node.querySelector(selector);
+        const selected = field.value;
+        field.innerHTML = `<option value="">${label}</option>` + values.map(value =>
+          `<option value="${escape(value)}">${escape(format(value))}</option>`).join('');
+        field.value = selected;
+      };
+      setOptions('[data-flux-history-month]', 'Todos os meses',
+        [...new Set(events.map(row => row.period))].sort().reverse(),
+        value => `${value.slice(5)}/${value.slice(0, 4)}`);
+      setOptions('[data-flux-history-type]', 'Todos os eventos',
+        [...new Set(events.map(row => row.type))].sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      setOptions('[data-flux-history-status]', 'Todos os status registrados',
+        [...new Set(events.map(row => row.shared ? row.shared.new_status : row.item.status).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      linkedLoading = false;
+      update();
+    }).catch(error => {
+      if (!node.isConnected) return;
+      linkedLoading = false;
+      linkedError = true;
+      update();
+      console.warn('Histórico geral vinculado indisponível:', error);
+    });
+  }
+
+  function fluxDetails(item) {
+    const labels = [['movement', 'Movimentação'], ['equipment', 'Equipamento'], ['model', 'Modelo'], ['brand', 'Marca'], ['tag', 'TAG'], ['serial', 'Nº de série'], ['senderCompany', 'Empresa Remetente'], ['destinationCompany', 'Empresa Destino'], ['senderResponsible', 'Responsável Envio'], ['receiverResponsible', 'Responsável Recebimento'], ['sendDate', 'Data de Envio'], ['receivedDate', 'Data de Recebimento'], ['deliveredAt', 'Entrega confirmada em'], ['deliveredBy', 'Entrega confirmada por'], ['receivedAt', 'Entrada física em'], ['returnOf', 'Envio original'], ['returnReason', 'Motivo do retorno'], ['postReceiptStatus', 'Status pretendido'], ['resolutionState', 'Regularização de status/local'], ['shippingType', 'Tipo de Envio'], ['situation', 'Motivo'], ['status', 'Status'], ['priority', 'Prioridade'], ['date', 'Atualizado'], ['notes', 'Observações']];
+    const display = (key, value) => key === 'sendDate' || key === 'receivedDate' ? dateValue(value)
+      : key === 'deliveredAt' || key === 'receivedAt' ? dateTimeValue(value) : (value || '—');
+    const logActions = entry => entry.id && !entry.eventId ? `<div class="inv-log-actions"><button class="inv-log-action edit" data-inv-action="edit-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Editar registro" aria-label="Editar registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg></button><button class="inv-log-action delete" data-inv-action="delete-log" data-inv-log-item="${item.id}" data-inv-log-id="${entry.id}" title="Excluir registro" aria-label="Excluir registro"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg></button></div>` : '';
+    const node = modal(`<div class="inv-dialog-head"><h2>${escape(item.equipment)}</h2><div class="inv-dialog-head-actions">${itemActionMenu(item)}<button class="inv-close" data-inv-close>×</button></div></div><div class="inv-detail-grid flux-detail-grid">${labels.filter(([key]) => item[key] !== null && item[key] !== undefined && item[key] !== '').map(([key, label]) => `<div class="inv-detail ${key === 'notes' ? 'inv-full' : ''}${key === 'priority' ? ` inv-priority-detail priority-${choiceTone('priority', item[key])}` : ''}">${label}<b>${escape(key === 'priority' ? (item[key] || 'Estável') : display(key, item[key]))}</b></div>`).join('')}</div><div class="inv-log-head"><h3>Histórico</h3><button class="inv-log-add" data-inv-action="add-log" data-inv-log-item="${item.id}">＋ Adicionar registro</button></div><div class="inv-log-list">${(item.logs || []).map(entry => `<div class="inv-log"><b>${escape(entry.at)}</b><span>${escape(entry.text)}</span>${logActions(entry)}</div>`).join('') || '<div class="inv-log">Nenhum registro no histórico.</div>'}</div><div class="inv-actions"><button class="inv-ghost" data-inv-close>Fechar</button></div>`);
+    const group = fluxGroups(activeTable()).find(candidate => candidate.items.some(entry => entry.id === item.id));
+    const sortTrajectory = timeline => {
+      const articles = [...timeline.querySelectorAll(':scope > .flux-timeline-event')].map(article => ({
+        article, day: article.dataset.fluxDay, timestamp: article.dataset.fluxTime, key: article.dataset.fluxKey
+      }));
+      articles.sort(window.AldeckotFluxCycles.compareHistory);
+      timeline.append(...articles.map(({ article }) => article));
+    };
+    if (group) {
+      const timeline = document.createElement('section');
+      timeline.className = 'flux-equipment-timeline';
+      timeline.innerHTML = `<h3>Trajetória do equipamento</h3><p>${group.items.length} ${group.items.length === 1 ? 'registro' : 'registros'} em ${new Set(group.items.map(entry => entry.tableId)).size} ${new Set(group.items.map(entry => entry.tableId)).size === 1 ? 'período' : 'períodos'}. Registros sem vínculo explícito permanecem separados.</p>${group.items.map(entry => {
+        const inbound = entry.movement === 'Recebimento';
+        const date = inbound ? entry.receivedAt || entry.receivedDate : entry.sendDate;
+        const verb = inbound ? (entry.returnOf ? 'registrou o retorno de' : 'registrou a entrada de') : 'registrou a saída de';
+        const from = entry.senderCompany ? ` de ${entry.senderCompany}` : '';
+        const to = entry.destinationCompany ? ` para ${entry.destinationCompany}` : '';
+        const precise = inbound && entry.receivedAt ? entry.receivedAt : '';
+        const day = precise ? fluxLocalDay(precise) : String(date || '').slice(0, 10);
+        return `<article class="flux-timeline-event" data-flux-day="${escape(day)}" data-flux-time="${escape(precise)}" data-flux-key="${escape(entry.id)}:movimento"><span class="${inbound ? 'entry' : 'send'}">${inbound ? (entry.returnOf ? '↓ Retorno' : '↓ Entrada') : '↑ Saída'}</span><div><b>${date ? (precise ? dateTimeValue(date) : dateValue(date) + ' (horário não informado)') : 'Data não informada'} — Flux ${verb} ${escape(entry.equipment)}${escape(from)}${escape(to)}${entry.situation ? ` por ${escape(entry.situation.toLowerCase())}` : ''}${inbound && entry.receiverResponsible ? `; recebido por ${escape(entry.receiverResponsible)}` : ''}.</b><small>${escape(entry.tableName || 'Período não informado')} · ${escape(entry.status || 'Estado não informado')}${entry.resolutionState === 'Pendente' ? ' · status/local de origem pendentes' : ''}</small><details><summary>Dados técnicos</summary><dl><dt>Registro</dt><dd>${escape(entry.id)}</dd><dt>Origem</dt><dd>${escape(entry.sourceModule || 'não vinculada')}</dd><dt>Série</dt><dd>${escape(entry.serial || 'não informada')}</dd><dt>TAG</dt><dd>${escape(entry.tag || 'não informada')}</dd>${entry.returnOf ? `<dt>Envio original</dt><dd>${escape(entry.returnOf)}</dd><dt>Motivo do retorno</dt><dd>${escape(entry.returnReason || 'não informado')}</dd>` : ''}</dl></details></div></article>`;
+      }).join('')}`;
+      const originalEvents = [...timeline.querySelectorAll('.flux-timeline-event')];
+      group.items.forEach((entry, index) => {
+        if (!entry.deliveredAt || !originalEvents[index]) return;
+        originalEvents[index].insertAdjacentHTML('afterend', `<article class="flux-timeline-event" data-flux-day="${escape(fluxLocalDay(entry.deliveredAt))}" data-flux-time="${escape(entry.deliveredAt)}" data-flux-key="${escape(entry.id)}:entrega"><span class="entry">✓ Entrega</span><div><b>${dateTimeValue(entry.deliveredAt)} — A entrega de ${escape(entry.equipment)} em ${escape(entry.destinationCompany)} foi confirmada${entry.deliveredBy ? ` por ${escape(entry.deliveredBy)}` : ''}.</b><small>${escape(entry.tableName || 'Período não informado')} · confirmação distinta do retorno físico</small><details><summary>Dados técnicos</summary><dl><dt>Envio</dt><dd>${escape(entry.id)}</dd><dt>Transportadora</dt><dd>${escape(entry.deliveryCarrier || 'não informada')}</dd>${entry.deliveryNote ? `<dt>Observações</dt><dd>${escape(entry.deliveryNote)}</dd>` : ''}</dl></details></div></article>`);
+      });
+      sortTrajectory(timeline);
+      node.querySelector('.inv-detail-grid')?.before(timeline);
+    }
+    node.dataset.itemId = item.id;
+    const inventoryIds = [...new Set((group?.items || [item]).map(entry => entry.inventoryItemId).filter(Boolean))];
+    if (inventoryIds.length === 1) {
+      const shared = document.createElement('section');
+      shared.className = 'flux-equipment-timeline';
+      shared.innerHTML = '<h3>Eventos nos módulos vinculados</h3><p>Consultando o histórico do item patrimonial identificado…</p>';
+      const fluxTimeline = node.querySelector('.flux-equipment-timeline');
+      if (fluxTimeline) fluxTimeline.after(shared);
+      else node.querySelector('.inv-detail-grid')?.before(shared);
+      moduleApi().equipmentEvents(inventoryIds[0]).then(events => {
+        if (!node.isConnected || node.dataset.itemId !== item.id) return;
+        const shown = events.slice(0, 200);
+        shared.innerHTML = `<h3>Eventos nos módulos vinculados</h3><p>${shown.length ? `${shown.length} evento(s) do mesmo item patrimonial${events.length > 200 ? '; exibindo os 200 mais recentes' : ''}. O horário indica quando cada evento foi registrado.` : 'Não há eventos de outros módulos vinculados a este item.'}</p>${shown.map(entry => {
+          const before = entry.previous_location || entry.origin_location || '';
+          const after = entry.new_location || entry.destination_location || '';
+          const place = before && after && before !== after ? ` de ${before} para ${after}` : after ? ` em ${after}` : '';
+          const status = entry.previous_status && entry.new_status && entry.previous_status !== entry.new_status
+            ? `; status ${entry.previous_status} → ${entry.new_status}` : entry.new_status ? `; status ${entry.new_status}` : '';
+          const moduleNames = { inventory: 'Inventário', management: 'Gestão TI', control: 'Controle TI', supplies: 'Suprimentos', nfe: 'Fiscal' };
+          const moduleName = moduleNames[entry.source_module] || entry.source_module || 'Módulo';
+          const action = entry.action === 'peripheral-transfer' ? 'foi movimentado' :
+            entry.action === 'Correção cadastral de local' ? 'teve o local cadastral corrigido' :
+              entry.action === 'Regularização após retorno' ? 'teve o local regularizado após o retorno' :
+                entry.action === 'Manutenção concluída' ? 'teve a manutenção concluída' :
+                  entry.action === 'Verificação concluída' ? 'teve a verificação concluída' :
+                `recebeu o registro “${entry.action}”`;
+          const details = [['Evento', entry.id], ['Módulo de origem', entry.source_module],
+            ['Registro de origem', entry.source_id], ['Motivo', entry.reason],
+            ['Local anterior', entry.previous_location], ['Novo local', entry.new_location],
+            ['Status anterior', entry.previous_status], ['Novo status', entry.new_status],
+            ['Vínculo anterior', entry.previous_assignment], ['Novo vínculo', entry.new_assignment],
+            ['Módulos afetados', Array.isArray(entry.affected_modules) ? entry.affected_modules.join(', ') : ''],
+            ['Operação correlacionada', entry.metadata?.requestId || entry.metadata?.operationId],
+            ['Chamado', entry.metadata?.ticketId || entry.metadata?.caseId]];
+          return `<article class="flux-timeline-event" data-flux-day="${escape(fluxLocalDay(entry.created_at))}" data-flux-time="${escape(entry.created_at)}" data-flux-key="${escape(entry.id)}"><span class="entry">${escape(moduleName)}</span><div><b>${escape(dateTimeValue(entry.created_at))} — ${escape(item.equipment)} ${escape(action)}${escape(place)}${escape(status)}.</b><small>${escape(entry.action)}${entry.reason ? ` · ${escape(entry.reason)}` : ''}</small><details><summary>Dados técnicos</summary><dl>${details.filter(([, value]) => value).map(([label, value]) => `<dt>${escape(label)}</dt><dd>${escape(value)}</dd>`).join('')}</dl></details></div></article>`;
+        }).join('')}`;
+        if (fluxTimeline) {
+          fluxTimeline.querySelector('p').textContent += ` ${shown.length ? `${shown.length} ${shown.length === 1 ? 'evento de outro módulo vinculado' : 'eventos de outros módulos vinculados'}.` : 'Sem eventos de outros módulos vinculados.'} Eventos com apenas a data informada não têm ordem conhecida dentro do mesmo dia.`;
+          fluxTimeline.append(...shared.querySelectorAll('.flux-timeline-event'));
+          sortTrajectory(fluxTimeline);
+          shared.remove();
+        }
+      }).catch(error => {
+        if (!node.isConnected || node.dataset.itemId !== item.id) return;
+        shared.innerHTML = '<h3>Eventos nos módulos vinculados</h3><p>Não foi possível consultar os eventos correlacionados agora.</p>';
+        console.warn('Histórico integrado indisponível:', error);
+      });
+    }
+    if (item.resolutionState === 'Pendente') {
+      const linked = item.inventoryItemId || item.managementComputerId;
+      const notice = document.createElement('p');
+      notice.className = 'flux-acquisition-note';
+      notice.textContent = linked
+        ? 'O retorno físico foi registrado. Confira o destino antes de encerrar a regularização.'
+        : 'O retorno físico foi registrado. O destino precisa ser conferido no módulo de origem.';
+      node.querySelector('.inv-actions')?.before(notice);
+      if (linked && canManage()) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'inv-primary';
+        button.textContent = 'Regularizar destino';
+        button.addEventListener('click', () => fluxReturnDestination(item));
+        node.querySelector('.inv-actions')?.prepend(button);
+      }
+    }
     mountSourcePhoto(node, item);
     if (item.situation === 'Aquisição' && canManage()) {
       const button = document.createElement('button');
@@ -1425,9 +2631,13 @@
       return;
     }
     if (intent?.status === 'completed') {
-      const moduleName = intent.destination === 'management' ? 'Gestão TI' : intent.destination === 'supplies' ? 'Suprimentos' : 'Inventário';
+      const peripheral = intent.destination === 'management' && intent.management_kind === 'peripheral';
+      const moduleName = peripheral ? 'Inventário para a Gestão TI'
+        : intent.destination === 'management' ? 'Gestão TI' : intent.destination === 'supplies' ? 'Suprimentos' : 'Inventário';
       const recordId = intent.supply_movement_id || intent.management_record_id || intent.inventory_item_id;
-      modal(`<div class="inv-dialog-head"><h2>Aquisição integrada</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p><b>${escape(item.equipment)}</b> · TAG ${escape(item.tag)} · série ${escape(item.serial)}</p><p>Este recebimento já foi integrado a ${escape(moduleName)}. Reabrir ou salvar a movimentação não criará outra entrada.</p><small>Identificador do registro: ${escape(recordId)}</small></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Fechar</button></div>`, 'equipment-dialog flux-acquisition-dialog');
+      const inventoryLink = peripheral ? `<p><a class="flux-supply-add-variant" href="inventory.html?table=${encodeURIComponent(intent.inventory_table_id)}&amp;item=${encodeURIComponent(recordId)}">Abrir no Inventário</a></p>
+        <p>Para instalar, confirme uma TAG compatível no Inventário e use a Conferência por PDV na Gestão TI.</p>` : '';
+      modal(`<div class="inv-dialog-head"><h2>Aquisição integrada</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p><b>${escape(item.equipment)}</b> · TAG no recebimento: ${escape(item.tag || 'não informada')} · série ${escape(item.serial)}</p><p>O recebimento já foi integrado ao ${escape(moduleName)}.</p>${inventoryLink}<small>Identificador do registro: ${escape(recordId)}</small></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Fechar</button></div>`, 'equipment-dialog flux-acquisition-dialog');
       return;
     }
     if (intent?.supplyAvailable) {
@@ -1440,7 +2650,7 @@
     const destination = intent?.destination || '';
     const category = intent?.inventory_table_id || '';
     const received = item.status === 'Recebido';
-    const node = modal(`<div class="inv-dialog-head"><h2>Destino da aquisição</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p>Deseja cadastrar <b>${escape(item.equipment)}</b> (TAG ${escape(item.tag)} · série ${escape(item.serial)}) em algum módulo?</p><p class="flux-acquisition-state">${received ? 'Recebimento confirmado no Flux. A entrada será efetivada somente após sua confirmação.' : 'Aguardando status Recebido: a escolha ficará salva, sem entrada no estoque.'}</p><form data-flux-acquisition-form><div class="inv-fields flux-acquisition-fields"><label><span>Destino *</span><select name="destination" required><option value="" ${destination ? '' : 'selected'} disabled>Selecione</option><option value="inventory" ${destination === 'inventory' ? 'selected' : ''} ${categories.length ? '' : 'disabled'}>Inventário</option><option value="none" ${destination === 'none' ? 'selected' : ''}>Não cadastrar agora</option><option disabled>Gestão TI — próxima etapa</option><option disabled>Suprimentos — próxima etapa</option></select></label><label data-flux-inventory-category ${destination === 'inventory' ? '' : 'hidden'}><span>Tabela do Inventário *</span><select name="inventoryTableId" ${destination === 'inventory' ? 'required' : 'disabled'}><option value="" ${category ? '' : 'selected'} disabled>Escolha a categoria real</option>${categories.map(row => `<option value="${escape(row.id)}" ${category === row.id ? 'selected' : ''}>${escape(row.name)}</option>`).join('')}</select></label></div><p class="flux-acquisition-note">${intent?.status === 'pending' ? 'Escolha salva. Assim que a movimentação estiver Recebida, volte aqui para confirmar a entrada.' : 'O cadastro adicional é opcional; a movimentação do Flux já está salva.'}</p><div class="inv-footer"><button class="inv-primary" type="submit">${received ? 'Continuar' : 'Salvar escolha'}</button><button type="button" class="inv-ghost" data-inv-close>Agora não</button></div></form></div>`, 'equipment-dialog flux-acquisition-dialog');
+    const node = modal(`<div class="inv-dialog-head"><h2>Destino da aquisição</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><div class="flux-acquisition-content"><p>Deseja cadastrar <b>${escape(item.equipment)}</b> (TAG ${escape(item.tag || 'não informada')} · série ${escape(item.serial)}) em algum módulo?</p><p class="flux-acquisition-state">${received ? 'Recebimento confirmado no Flux. A entrada será efetivada somente após sua confirmação.' : 'Aguardando status Recebido: a escolha ficará salva, sem entrada no estoque.'}</p><form data-flux-acquisition-form><div class="inv-fields flux-acquisition-fields"><label><span>Destino *</span><select name="destination" required><option value="" ${destination ? '' : 'selected'} disabled>Selecione</option><option value="inventory" ${destination === 'inventory' ? 'selected' : ''} ${categories.length ? '' : 'disabled'}>Inventário</option><option value="none" ${destination === 'none' ? 'selected' : ''}>Não cadastrar agora</option><option disabled>Gestão TI — próxima etapa</option><option disabled>Suprimentos — próxima etapa</option></select></label><label data-flux-inventory-category ${destination === 'inventory' ? '' : 'hidden'}><span>Tabela do Inventário *</span><select name="inventoryTableId" ${destination === 'inventory' ? 'required' : 'disabled'}><option value="" ${category ? '' : 'selected'} disabled>Escolha a categoria real</option>${categories.map(row => `<option value="${escape(row.id)}" ${category === row.id ? 'selected' : ''}>${escape(row.name)}</option>`).join('')}</select></label></div><p class="flux-acquisition-note">${intent?.status === 'pending' ? 'Escolha salva. Assim que a movimentação estiver Recebida, volte aqui para confirmar a entrada.' : 'O cadastro adicional é opcional; a movimentação do Flux já está salva.'}</p><div class="inv-footer"><button class="inv-primary" type="submit">${received ? 'Continuar' : 'Salvar escolha'}</button><button type="button" class="inv-ghost" data-inv-close>Agora não</button></div></form></div>`, 'equipment-dialog flux-acquisition-dialog');
     node.dataset.itemId = item.id;
     const destinationSelect = node.querySelector('[name="destination"]');
     const categoryLabel = node.querySelector('[data-flux-inventory-category]');
@@ -1453,7 +2663,18 @@
       const managementFields = document.createElement('div');
       managementFields.className = 'inv-fields flux-acquisition-fields';
       managementFields.dataset.fluxManagementFields = '';
-      managementFields.innerHTML = `<label><span>Área da Gestão TI *</span><select name="managementArea"><option value="" disabled>Selecione a área</option>${['Frente de Loja', 'Escritório', 'Estoque'].map(area => `<option value="${escape(area)}" ${intent.management_area === area ? 'selected' : ''}>${escape(area)}</option>`).join('')}</select></label><label><span>Tipo *</span><select name="managementKind"><option value="computer">Computador</option><option disabled>Periférico — próxima etapa</option></select></label>`;
+      const kinds = ['Impressora', 'Leitor', 'Gaveta', 'Pin Pad', 'Balança', 'Monitor', 'Teclado'];
+      const sectors = window.AldeckotSectors?.names || [];
+      const options = (values, selected) => values.map(value =>
+        `<option value="${escape(value)}" ${selected === value ? 'selected' : ''}>${escape(value)}</option>`).join('');
+      managementFields.innerHTML = `<label><span>Tipo *</span><select name="managementKind">
+        <option value="computer">Computador</option>
+        <option value="peripheral" ${intent.management_kind === 'peripheral' ? 'selected' : ''} ${intent.peripheralAvailable && categories.length ? '' : 'disabled'}>Periférico</option>
+        </select></label>
+        <label data-flux-computer-area><span>Área da Gestão TI *</span><select name="managementArea"><option value="">Selecione a área</option>${options(['Frente de Loja', 'Escritório', 'Estoque'], intent.management_area)}</select></label>
+        <label data-flux-peripheral-field hidden><span>Tipo de periférico *</span><select name="peripheralKind"><option value="">Selecione o tipo</option>${options(kinds, intent.peripheral_kind)}</select></label>
+        <label data-flux-peripheral-field hidden><span>Setor *</span><select name="peripheralSector"><option value="">Selecione o setor</option>${options(sectors, intent.peripheral_sector || item.sector)}</select></label>
+        <p class="inv-full flux-acquisition-note" data-flux-peripheral-field hidden>O cadastro inicial fica no Inventário, em Reserva na Sala CPD. Informe a série. A TAG pode ser atribuída antes da instalação em um PDV.</p>`;
       categoryLabel.closest('.flux-acquisition-fields').after(managementFields);
       destinationSelect.value = destination;
     }
@@ -1514,14 +2735,26 @@
       const inventory = destinationSelect.value === 'inventory';
       const management = destinationSelect.value === 'management';
       const supplies = destinationSelect.value === 'supplies';
-      categoryLabel.hidden = !inventory;
-      categorySelect.disabled = !inventory;
-      categorySelect.required = inventory;
+      const kind = managementFields?.querySelector('[name="managementKind"]');
+      const peripheral = management && kind?.value === 'peripheral';
+      categoryLabel.hidden = !(inventory || peripheral);
+      categorySelect.disabled = !(inventory || peripheral);
+      categorySelect.required = inventory || peripheral;
       if (managementFields) {
         managementFields.hidden = !management;
-        managementFields.querySelectorAll('select').forEach(select => {
-          select.disabled = !management;
-          select.required = management;
+        kind.disabled = !management;
+        const areaLabel = managementFields.querySelector('[data-flux-computer-area]');
+        const area = areaLabel.querySelector('select');
+        areaLabel.hidden = peripheral;
+        area.disabled = !management || peripheral;
+        area.required = management && !peripheral;
+        managementFields.querySelectorAll('[data-flux-peripheral-field]').forEach(field => {
+          field.hidden = !peripheral;
+          const select = field.querySelector('select');
+          if (select) {
+            select.disabled = !peripheral;
+            select.required = peripheral;
+          }
         });
       }
       if (supplyFields) {
@@ -1533,6 +2766,7 @@
       }
     };
     destinationSelect.addEventListener('change', updateDestinationFields);
+    managementFields?.querySelector('[name="managementKind"]').addEventListener('change', updateDestinationFields);
     updateDestinationFields();
   }
 
@@ -1540,6 +2774,12 @@
     const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar registro' : 'Adicionar registro'}</h2><button class="inv-close" data-inv-close>×</button></div><p class="inv-log-intro">${escape(item.equipment)} · ${entry ? 'altere o texto do registro abaixo.' : 'o horário do registro será salvo automaticamente.'}</p><form data-inv-log-form><div class="inv-fields"><label class="inv-full"><span>Ocorrência</span><textarea name="message" required maxlength="500" placeholder="Ex.: Equipamento revisado, manutenção realizada ou troca de local.">${escape(entry?.text || '')}</textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button class="inv-primary">${entry ? 'Salvar alterações' : 'Salvar no histórico'}</button></div></form>`);
     node.dataset.itemId = item.id;
     node.dataset.logId = entry?.id || '';
+  }
+
+  function promotionForm(item) {
+    const node = modal(`<div class="inv-dialog-head"><h2>Encaminhar para manutenção</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><p class="inv-log-intro">${escape(item.equipment)} · a verificação será encerrada e um chamado de manutenção relacionado será aberto. O status no Inventário passará a Manutenção; setor e localização serão preservados.</p><form data-inv-promotion-form><div class="inv-fields"><label class="inv-full"><span>Justificativa *</span><textarea name="reason" required minlength="3" maxlength="2000" placeholder="Descreva o diagnóstico que exige manutenção."></textarea></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-close>Cancelar</button><button type="submit" class="inv-primary">Confirmar encaminhamento</button></div></form>`, 'equipment-dialog');
+    node.dataset.itemId = item.id;
+    node.dataset.operationId = crypto.randomUUID();
   }
 
   function updateLogMessage(old, values) {
@@ -1561,14 +2801,60 @@
 
   function chooseMaintenanceResult(item) {
     return new Promise(resolve => {
-      const node = modal(`<div class="inv-dialog-head"><h2>Concluir manutenção</h2><button type="button" class="inv-close" data-inv-maintenance-cancel aria-label="Cancelar">×</button></div><p class="inv-log-intro">Defina o status de ${escape(item.equipment)} no módulo de origem. A localização e os vínculos existentes serão preservados.</p><form data-inv-maintenance-choice><div class="inv-maintenance-choices" role="radiogroup" aria-label="Status do equipamento"><label><input type="radio" name="equipmentStatus" value="Ativo" required><span>Ativo</span></label><label><input type="radio" name="equipmentStatus" value="Reserva" required><span>Reserva</span></label></div><div class="inv-footer"><button type="button" class="inv-ghost" data-inv-maintenance-cancel>Cancelar</button><button type="submit" class="inv-primary">Confirmar conclusão</button></div></form>`, 'equipment-dialog inv-maintenance-dialog');
+      const peripheral = Boolean(item.inventoryItemId) &&
+        /^(?:IMPR|EAN|GVT|PP|BAL|AJMON|MON|TEC)[0-9]+$/i.test(String(item.tag || '').trim());
+      const sectors = window.AldeckotSectors?.optionsFor(item.sector) ||
+        ['', item.sector, 'Frente de Loja', 'Doca', 'Escritório', 'Informática',
+          'Monitoramento', 'Tesouraria', 'Padaria', 'Açougue', 'Refeitório']
+          .filter((value, index, all) => all.indexOf(value) === index);
+      const sectorChoice = sectors.map(value => `<option value="${escape(value)}" ${value === item.sector ? 'selected' : ''}>${escape(value || 'Selecione um setor')}</option>`).join('');
+      const destinationFields = peripheral ? `<div class="inv-fields"><label><span>Local final *</span><input name="location" required placeholder="PDV 10 ou Sala CPD"></label><label><span>Setor final *</span><select name="sector" required>${sectorChoice}</select></label><label class="inv-full"><span>Motivo da decisão *</span><textarea name="reason" required minlength="5" maxlength="500" placeholder="Descreva o destino físico confirmado"></textarea></label></div><div class="inv-log-intro" data-maintenance-preview aria-live="polite">Escolha o status e o destino para conferir o PDV antes de concluir.</div>` : '';
+      const node = modal(`<div class="inv-dialog-head"><h2>Concluir manutenção</h2><button type="button" class="inv-close" data-inv-maintenance-cancel aria-label="Cancelar">×</button></div><p class="inv-log-intro">${peripheral ? `Confira a condição e o destino físico de ${escape(item.equipment)}. Ativo exige PDV livre; Reserva exige local fora dos PDVs.` : `Defina o status de ${escape(item.equipment)} no módulo de origem. A localização e os vínculos existentes serão preservados.`}</p><form data-inv-maintenance-choice><div class="inv-maintenance-choices" role="radiogroup" aria-label="Status do equipamento"><label><input type="radio" name="equipmentStatus" value="Ativo" required><span>Ativo</span></label><label><input type="radio" name="equipmentStatus" value="Reserva" required><span>Reserva</span></label></div>${destinationFields}<div class="inv-footer"><button type="button" class="inv-ghost" data-inv-maintenance-cancel>Cancelar</button>${peripheral ? '<button type="button" class="inv-ghost" data-maintenance-review>Conferir destino</button>' : ''}<button type="submit" class="inv-primary" ${peripheral ? 'disabled' : ''}>Confirmar conclusão</button></div></form>`, 'equipment-dialog inv-maintenance-dialog');
       node.querySelectorAll('[data-inv-maintenance-cancel]').forEach(button => button.addEventListener('click', () => { closeModal(); resolve(null); }));
-      node.querySelector('[data-inv-maintenance-choice]').addEventListener('submit', event => {
+      const form = node.querySelector('[data-inv-maintenance-choice]');
+      let review = null;
+      let revision = 0;
+      if (peripheral) {
+        const previewNode = node.querySelector('[data-maintenance-preview]');
+        const confirmButton = form.querySelector('[type="submit"]');
+        const reviewButton = form.querySelector('[data-maintenance-review]');
+        form.addEventListener('input', () => {
+          revision += 1; review = null; confirmButton.disabled = true;
+          previewNode.textContent = 'Dados alterados. Confira novamente antes de concluir.';
+        });
+        reviewButton.addEventListener('click', async () => {
+          if (!form.reportValidity()) return;
+          const values = Object.fromEntries(new FormData(form));
+          const currentRevision = revision;
+          reviewButton.disabled = true;
+          previewNode.textContent = 'Conferindo equipamento, chamado e PDV…';
+          try {
+            const result = await moduleApi().previewPeripheralCompletion(item.id, {
+              status: values.equipmentStatus, location: values.location.trim(),
+              sector: values.sector.trim()
+            });
+            if (currentRevision !== revision) return;
+            review = result;
+            previewNode.textContent = result.blocked
+              ? `Operação bloqueada: ${result.reason || 'destino inválido'}.`
+              : `${result.item?.tag || item.tag}: ${result.item?.location || 'sem local'} / ${result.item?.status} → ${result.target?.location} / ${result.target?.status}. Controle TI, Inventário e Gestão TI serão conferidos na mesma operação.`;
+            confirmButton.disabled = Boolean(result.blocked);
+          } catch (error) {
+            if (currentRevision !== revision) return;
+            review = null; previewNode.textContent = backendMessage(error);
+          } finally { reviewButton.disabled = false; }
+        });
+      }
+      form.addEventListener('submit', event => {
         event.preventDefault();
-        const selection = new FormData(event.currentTarget).get('equipmentStatus');
+        const values = Object.fromEntries(new FormData(event.currentTarget));
+        const selection = values.equipmentStatus;
         if (!['Ativo', 'Reserva'].includes(selection)) return;
+        if (peripheral && (!review || review.blocked)) return;
         closeModal();
-        resolve(selection);
+        resolve(peripheral ? { status: selection, location: values.location.trim(),
+          sector: values.sector.trim(), reason: values.reason.trim(), token: review.token }
+          : selection);
       });
     });
   }
@@ -1576,6 +2862,26 @@
   async function saveItem(form) {
     if (fluxMode && form.dataset.fluxBusy === 'true') return;
     const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    const verificationStart = !controlMode && !fluxMode && item.situation === 'Verificando'
+      && old?.situation !== 'Verificando';
+    if (verificationStart) {
+      if (!old) {
+        window.AldeckotMessage.show('Cadastre o equipamento primeiro; depois inicie a verificação com um motivo.');
+        return;
+      }
+      const unrelatedChanges = ['equipment','model','brand','serial','tag','sector','location',
+        'status','priority','cleaning','notes','branchId'].filter(field =>
+        String(old[field] ?? '').trim() !== String(values[field] ?? '').trim());
+      if (unrelatedChanges.length) {
+        window.AldeckotMessage.show('Salve as outras alterações primeiro. A verificação preserva status, local e demais dados do equipamento.');
+        return;
+      }
+      if (String(values.verificationReason || '').trim().length < 3) {
+        window.AldeckotMessage.show('Descreva o motivo da verificação antes de continuar.');
+        form.querySelector('[name="verificationReason"]')?.focus();
+        return;
+      }
+    }
     const usesPdv = location => /^PDV\s+[0-9]+$/i.test(String(location || '').trim());
     const pdvMovement = !controlMode && !fluxMode && old
       && String(old.location || '').trim() !== String(item.location || '').trim()
@@ -1606,6 +2912,29 @@
         const after = String(item[field] || '').trim().toLocaleLowerCase('pt-BR');
         if (before === after) delete valuesToSave[field];
       });
+    }
+    if (pdvMovement && window.AldeckotLocalRegularization?.peripheralTag(old?.tag)) {
+      const unrelatedChanges = ['equipment', 'model', 'brand', 'serial', 'tag',
+        'situation', 'cleaning', 'notes', 'priority', 'branchId'].filter(field =>
+        String(old[field] ?? '').trim() !== String(values[field] ?? '').trim());
+      if (unrelatedChanges.length) {
+        window.AldeckotMessage.show('Salve os outros campos primeiro. A conferência de local deve registrar somente local, setor e status.');
+        return;
+      }
+      try {
+        await window.AldeckotLocalRegularization.open({ item: old,
+          location: item.location, sector: item.sector, status: item.status,
+          reason: movementReason,
+          onSaved: async saved => {
+            closeModal();
+            await reloadInventory();
+            renderInventory();
+            const updated = activeTable()?.items.find(entry => entry.id ===
+              (saved.incomingItemId || saved.id));
+            if (updated) details(updated);
+          } });
+      } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      return;
     }
     const verificationCompletion = controlMode && old?.followUpKind === 'verification'
       && old.status !== 'Verificação concluída' && item.status === 'Verificação concluída';
@@ -1677,6 +3006,9 @@
       }
       const saved = verificationCompletion
         ? await moduleApi().completeVerification(id, valuesToSave, form.dataset.verificationRequestId)
+        : verificationStart
+        ? await moduleApi().startVerification(id, String(values.verificationReason).trim(),
+          old.updatedAt, form.dataset.verificationStartRequestId ||= crypto.randomUUID())
         : maintenanceStatus
         ? await moduleApi().completeMaintenance(id, valuesToSave, maintenanceStatus, crypto.randomUUID())
         : await moduleApi().saveItem(table.id, valuesToSave, id || null, message.slice(0, 490),
@@ -1710,25 +3042,66 @@
   function safeFileName(value) { return String(value || 'inventario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase(); }
   function formattedNow() { return new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); }
 
+  function showControlPdf() {
+    const ordered = controlBoard.periods(data.tables);
+    const initial = activeTable() || ordered[0];
+    if (!initial) {
+      window.AldeckotMessage.show('Nenhum período está disponível para exportar.');
+      return;
+    }
+    const dialog = document.createElement('dialog');
+    dialog.className = 'control-pdf-dialog';
+    dialog.setAttribute('aria-labelledby', 'control-pdf-title');
+    dialog.innerHTML = controlBoard.pdfDialog(ordered, initial.id);
+    const period = dialog.querySelector('[name="period"]');
+    const scope = dialog.querySelector('[name="scope"]');
+    const report = dialog.querySelector('.control-pdf-report');
+    const count = dialog.querySelector('[data-control-pdf-count]');
+    const print = dialog.querySelector('[data-control-pdf-print]');
+    const originalTitle = document.title;
+    const restoreTitle = () => { document.title = originalTitle; };
+    const refreshPreview = () => {
+      const table = data.tables.find(entry => entry.id === period.value);
+      const canUseFilters = table?.id === state.active && Boolean(state.query.trim() || state.status || state.situation || state.operation);
+      scope.options[1].disabled = !canUseFilters;
+      if (!canUseFilters) scope.value = 'all';
+      const items = scope.value === 'filtered' ? filteredControlItems(table) : scopedItems(table);
+      print.disabled = !items.length;
+      count.textContent = `${items.length} ${items.length === 1 ? 'registro para exportar' : 'registros para exportar'}`;
+      report.innerHTML = table ? controlBoard.pdfReport(table, items, scope.selectedOptions[0].textContent, formattedNow(), dateValue)
+        : '<p>Este período não está mais disponível.</p>';
+      return table;
+    };
+    if (state.active && (state.query.trim() || state.status || state.situation || state.operation)) scope.value = 'filtered';
+    dialog.addEventListener('change', refreshPreview);
+    dialog.querySelector('[data-control-pdf-close]').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => {
+      restoreTitle();
+      window.removeEventListener('afterprint', restoreTitle);
+      dialog.remove();
+    }, { once: true });
+    print.addEventListener('click', () => {
+      const table = refreshPreview();
+      if (print.disabled) return;
+      document.title = `aldeckot-controle-ti-${safeFileName(table.name)}${scope.value === 'filtered' ? '-filtrado' : ''}`;
+      window.addEventListener('afterprint', restoreTitle, { once: true });
+      window.print();
+    });
+    refreshPreview();
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
   function exportPdf(popupWindow = null) {
     const table = activeTable();
     if (!table) { window.AldeckotMessage.show('Selecione uma tabela para exportá-la em PDF.'); return; }
-    const printBrand = new URL('assets/aldeckot-symbol.png?v=2.0.71', location.href).href;
+    const printBrand = new URL('assets/aldeckot-symbol.png?v=2.0.73', location.href).href;
     if (fluxMode) {
       const rows = table.items.map(item => `<tr><td>${escape(item.movement)}</td><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.tag)}</td><td>${escape(item.serial)}</td><td>${escape(item.senderCompany)}</td><td>${escape(item.destinationCompany)}</td><td>${escape(item.senderResponsible)}</td><td>${escape(item.receiverResponsible)}</td><td>${dateValue(item.sendDate)}</td><td>${dateValue(item.receivedDate)}</td><td>${escape(item.shippingType)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="16" class="empty">Nenhuma movimentação cadastrada nesta tabela.</td></tr>';
       const popup = popupWindow || window.open('', '_blank', 'width=1280,height=860');
       if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
       popup.document.open();
       popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A3 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:6px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:10px;padding-bottom:7px}h1{font-size:17px;margin:0 0 3px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:6px;letter-spacing:.1px;padding:5px 2px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:4px 2px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:7px;color:#647386}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><header><img class="print-brand" src="${printBrand}" alt=""><h1>ALDECKOT · FLUX</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} movimentação(ões) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Movimentação</th><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>TAG</th><th>Nº Série</th><th>Remetente</th><th>Destino</th><th>Responsável Envio</th><th>Responsável Recebimento</th><th>Envio</th><th>Recebimento</th><th>Tipo</th><th>Motivo</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de envio e recebimento</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
-      popup.document.close();
-      return;
-    }
-    if (controlMode) {
-      const rows = table.items.map(item => `<tr><td>${escape(item.equipment)}</td><td>${escape(item.model)}</td><td>${escape(item.brand)}</td><td>${escape(item.serial)}</td><td>${escape(item.tag)}</td><td>${escape(item.sector)}</td><td>${dateValue(item.entryDate)}</td><td>${dateValue(item.exitDate)}</td><td>${escape(item.situation)}</td><td>${escape(item.status)}</td><td>${escape(item.notes || '—')}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Nenhum equipamento cadastrado nesta tabela.</td></tr>';
-      const popup = popupWindow || window.open('', '_blank', 'width=1280,height=860');
-      if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
-      popup.document.open();
-      popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>ALDECKOT — ${escape(table.name)}</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202d;font-size:7px;margin:0}header{border-bottom:2px solid #2596e7;margin-bottom:12px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px;color:#10203a}p{margin:0;color:#516070}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#13223c;color:#fff;font-size:7px;letter-spacing:.15px;padding:6px 3px;text-align:left}td{border-bottom:1px solid #d5dce4;vertical-align:top;overflow-wrap:anywhere;padding:5px 3px}tbody tr:nth-child(even){background:#f4f7fa}.empty{text-align:center;padding:28px;color:#617084}footer{position:fixed;bottom:0;font-size:8px;color:#647386}.print-brand{display:block;width:54px;height:36px;object-fit:contain;margin-bottom:3px}</style></head><body><header><img class="print-brand" src="${printBrand}" alt=""><h1>ALDECKOT · CONTROLE TI</h1><p>Tabela: <strong>${escape(table.name)}</strong> · ${table.items.length} item(ns) · Exportado em ${formattedNow()}</p></header><table><thead><tr><th>Equipamento</th><th>Modelo</th><th>Marca</th><th>Nº Série</th><th>TAG</th><th>Setor</th><th>Entrada</th><th>Saída</th><th>Limpeza</th><th>Status</th><th>Observações</th></tr></thead><tbody>${rows}</tbody></table><footer>ALDECKOT — Controle de Manutenção</footer><script>window.onload=()=>{window.focus();window.print();};<\/script></body></html>`);
       popup.document.close();
       return;
     }
@@ -1791,9 +3164,12 @@
   function backupModal() {
     const meta = readBackupMeta();
     const latest = meta.history[0] || (meta.lastAt ? { created_at: meta.lastAt, source: meta.lastSource } : null);
-    const latestMessage = latest ? 'Backup realizado com sucesso' : 'Nenhum backup realizado';
+    const settingsReady = meta.availability === 'ready';
+    const backupNotice = meta.availability === 'loading' ? 'Consultando backup em rede…'
+      : settingsReady ? '' : 'Backup em rede indisponível. Tente novamente ao reabrir esta janela.';
+    const latestMessage = latest ? 'Backup realizado com sucesso' : settingsReady ? 'Nenhum backup realizado' : 'Último backup indisponível';
     const latestDetail = latest ? (latest.source === 'automatic' ? 'Backup automático' : latest.source === 'local' ? 'Backup local' : 'Backup manual') : `Crie seu primeiro backup para proteger os dados do ${moduleConfig.backupName}.`;
-    return replaceBackupModal(`<section class="backup-dialog-content"><header class="backup-dialog-header"><div class="backup-title-icon">${backupSvg('backup')}</div><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do ${moduleConfig.backupName}</p></div><button class="backup-close" data-inv-close aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close')}</button></header><section class="backup-latest" aria-labelledby="backup-latest-title"><h3 id="backup-latest-title">Último backup</h3><div class="backup-latest-grid"><div class="backup-latest-result ${latest ? 'success' : 'empty'}"><span class="backup-status-icon">${backupSvg(latest ? 'check' : 'history')}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="backup-latest-time">${backupSvg('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="backup-automatic-status" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}" aria-label="${meta.automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${meta.automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="backup-actions-section" aria-labelledby="backup-actions-title"><h3 id="backup-actions-title">Ações</h3><div class="backup-action-grid"><button class="backup-action-card create" data-inv-action="create-backup"><span class="backup-action-icon">${backupSvg('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados do ${moduleConfig.backupName}.</small></span></button><button class="backup-action-card restore" data-inv-action="restore-backup"><span class="backup-action-icon">${backupSvg('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="backup-details-grid"><section class="backup-automatic-panel" aria-labelledby="backup-auto-title"><h3 id="backup-auto-title">Backup automático</h3><button class="backup-switch-row" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}"><span class="backup-switch ${meta.automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="backup-frequency"><span>Frequência</span><span class="backup-frequency-control">${backupSvg('calendar')}<input type="number" min="1" max="90" step="1" value="${meta.frequencyDays}" data-inv-backup-frequency aria-label="Frequência do backup automático em dias"><em>dias</em></span><small>De 1 a 90 dias. A alteração é salva automaticamente.</small></label></section><section class="backup-history-panel" aria-labelledby="backup-history-title"><h3 id="backup-history-title">Histórico de backups</h3><div class="backup-history-list">${backupHistoryMarkup(meta.history)}</div></section></div><footer class="backup-dialog-footer"><div class="backup-warning">${backupSvg('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais do ${moduleConfig.backupName} pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="backup-secondary-button" data-inv-close>Fechar</button></footer></section>`);
+    return replaceBackupModal(`<section class="backup-dialog-content"><header class="backup-dialog-header"><div class="backup-title-icon">${backupSvg('backup')}</div><div><h2>Sistema de Backup</h2><p>Proteção e recuperação dos dados do ${moduleConfig.backupName}</p></div><button class="backup-close" data-inv-close aria-label="Fechar sistema de backup" title="Fechar">${backupSvg('close')}</button></header><p data-inv-backup-availability role="status" ${backupNotice ? '' : 'hidden'}>${backupNotice}</p><section class="backup-latest" aria-labelledby="backup-latest-title"><h3 id="backup-latest-title">Último backup</h3><div class="backup-latest-grid"><div class="backup-latest-result ${latest ? 'success' : 'empty'}"><span class="backup-status-icon">${backupSvg(latest ? 'check' : 'history')}</span><span><b>${latestMessage}</b><small>${latestDetail}</small></span></div><div class="backup-latest-time">${backupSvg('calendar')}<span><b>${latest ? backupDate(latest.created_at) : '—'}</b><small>${latest ? backupTime(latest.created_at) : '—'}</small></span></div><button class="backup-automatic-status" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}" ${settingsReady ? '' : 'disabled'} aria-label="${meta.automatic ? 'Desativar' : 'Ativar'} backup automático"><i></i><span><b>${!settingsReady ? 'Indisponível' : meta.automatic ? 'Ativado' : 'Desativado'}</b><small>Backup automático</small></span></button></div></section><section class="backup-actions-section" aria-labelledby="backup-actions-title"><h3 id="backup-actions-title">Ações</h3><div class="backup-action-grid"><button class="backup-action-card create" data-inv-action="create-backup"><span class="backup-action-icon">${backupSvg('download')}</span><span><b>Criar Backup</b><small>Criar uma cópia completa dos dados do ${moduleConfig.backupName}.</small></span></button><button class="backup-action-card restore" data-inv-action="restore-backup"><span class="backup-action-icon">${backupSvg('upload')}</span><span><b>Restaurar Backup</b><small>Selecionar um backup e recuperar os dados.</small></span></button></div></section><div class="backup-details-grid"><section class="backup-automatic-panel" aria-labelledby="backup-auto-title"><h3 id="backup-auto-title">Backup automático</h3><button class="backup-switch-row" data-inv-action="toggle-auto-backup" role="switch" aria-checked="${meta.automatic}" ${settingsReady ? '' : 'disabled'}><span class="backup-switch ${meta.automatic ? 'enabled' : ''}"><i></i></span><span><b>Backup automático</b><small>Criar automaticamente uma cópia dos dados em intervalos definidos.</small></span></button><label class="backup-frequency"><span>Frequência</span><span class="backup-frequency-control">${backupSvg('calendar')}<input type="number" min="1" max="90" step="1" value="${meta.frequencyDays}" ${settingsReady ? '' : 'disabled'} data-inv-backup-frequency aria-label="Frequência do backup automático em dias"><em>dias</em></span><small>De 1 a 90 dias. A alteração é salva automaticamente.</small></label></section><section class="backup-history-panel" aria-labelledby="backup-history-title"><h3 id="backup-history-title">Histórico de backups</h3><div class="backup-history-list">${backupHistoryMarkup(meta.history)}</div></section></div><footer class="backup-dialog-footer"><div class="backup-warning">${backupSvg('warning')}<p><b>Atenção:</b> restaurar um backup substituirá todos os dados atuais do ${moduleConfig.backupName} pelos dados do backup selecionado.<br>Esta ação não poderá ser desfeita.</p></div><button class="backup-secondary-button" data-inv-close>Fechar</button></footer></section>`);
   }
 
   function backupChoice(kind) {
@@ -1897,7 +3273,7 @@
 
   async function toggleAutomaticBackup(button) {
     const meta = readBackupMeta();
-    if (!backupButtonBusy(button, `${meta.automatic ? 'Desativando' : 'Ativando'}…`)) return;
+    if (meta.availability !== 'ready' || !backupButtonBusy(button, `${meta.automatic ? 'Desativando' : 'Ativando'}…`)) return;
     try {
       const setting = await backupApi().setAutomatic(!meta.automatic);
       writeBackupMeta({ automatic: setting.automatic });
@@ -1913,6 +3289,7 @@
   async function updateBackupFrequency(input) {
     const days = Number(input.value);
     const meta = readBackupMeta();
+    if (meta.availability !== 'ready') return;
     if (!Number.isInteger(days) || days < 1 || days > 90) {
       input.value = meta.frequencyDays;
       window.AldeckotMessage.show('Informe uma frequência entre 1 e 90 dias.');
@@ -1950,6 +3327,7 @@
           if (charts) charts.innerHTML = globalChart('Distribuição por Status', globalState.overview?.statuses, 'status', statuses)
             + globalChart('Distribuição por Situação', globalState.overview?.situations, 'situation', situations, 'situation-');
         } else renderInventory();
+        if (controlMode && !state.active) void refreshControlOperational();
       }
     }
     catch (error) {
@@ -1961,7 +3339,8 @@
   }
   let realtimeRefreshTimer;
   const realtimeTables = controlMode
-    ? ['module_tables', 'control_items', 'control_item_logs', 'control_backups', 'control_backup_settings']
+    ? ['module_tables', 'inventory_items', 'module_records', 'control_items', 'control_item_logs', 'control_cases',
+      'control_case_transitions', 'control_backups', 'control_backup_settings']
     : fluxMode
       ? ['module_tables', 'flux_items', 'flux_item_logs', 'flux_backups', 'flux_backup_settings']
       : ['module_tables', 'inventory_items', 'inventory_item_logs', 'inventory_branches', 'inventory_backups', 'inventory_backup_settings'];
@@ -2004,6 +3383,34 @@
     renderInventory();
     details(item);
   };
+  async function selectModuleTable(id, direction) {
+    if (state.active === id || !data.tables.some(table => table.id === id)) return;
+    if (controlMode || fluxMode) {
+      Object.assign(state, { active: id, page: 1, tableActionMenu: false,
+        tableMenu: null, tableMenuPosition: null });
+    } else {
+      const filters = document.querySelector('.module-table-filters');
+      filters?.setAttribute('aria-busy', 'true');
+      if (filters) filters.inert = true;
+      window.clearTimeout(categorySearchTimer);
+      ++categoryRequestSequence;
+      try {
+        if (!await reloadInventory(id)) return;
+      } catch (error) {
+        window.AldeckotMessage.show(backendMessage(error));
+        return;
+      } finally {
+        if (filters) {
+          filters.inert = false;
+          filters.removeAttribute('aria-busy');
+          filters.querySelector('[data-module-table-select]').value = state.active || '';
+        }
+      }
+    }
+    renderInventory();
+    const nextStep = direction && document.querySelector(`[data-module-table-step="${direction}"]:enabled`);
+    (nextStep || document.querySelector('[data-module-table-select]'))?.focus({ preventScroll: true });
+  }
   document.querySelectorAll('#nav button').forEach(button => {
     if (button.textContent.includes('Inventário')) button.onclick = openInventorySafely;
   });
@@ -2011,14 +3418,78 @@
     const button = event.target.closest && event.target.closest('#nav button');
     if (button && button.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); }
   }, true);
+  document.addEventListener('keydown', event => {
+    if (!fluxMode || !['Enter', ' '].includes(event.key)) return;
+    const card = event.target.closest('.flux-card[role="button"]');
+    if (!card) return;
+    event.preventDefault();
+    card.click();
+  });
+
   document.addEventListener('click', async event => {
     const nav = event.target.closest('#nav button');
     if (nav?.textContent.includes('Inventário')) { event.preventDefault(); event.stopImmediatePropagation(); openInventorySafely(); return; }
+    const tableStep = event.target.closest('[data-module-table-step]:enabled');
+    if (tableStep) {
+      void selectModuleTable(tableStep.dataset.tableId, tableStep.dataset.moduleTableStep);
+      return;
+    }
+    if (controlMode) {
+      const detailTab = event.target.closest('[data-control-case-tab]');
+      if (detailTab) {
+        renderControlCaseDetail(detailTab.closest('.inv-modal'), detailTab.dataset.controlCaseTab);
+        return;
+      }
+      const openCase = event.target.closest('[data-control-open-case]');
+      if (openCase) {
+        const itemId = openCase.closest('.inv-modal')?.dataset.itemId;
+        const item = activeTable()?.items.find(entry => entry.id === itemId);
+        if (item) void showControlCaseDetail(item, openCase.dataset.controlOpenCase);
+        return;
+      }
+    }
+    if (controlMode && !state.active) {
+      const tab = event.target.closest('[data-control-tab]');
+      if (tab) {
+        window.clearTimeout(controlOperationalSearchTimer);
+        controlOperational.tab = tab.dataset.controlTab;
+        controlOperational.page = 1;
+        controlOperational.listing = null;
+        if (controlOperational.tab === 'reports') controlOperational.report = null;
+        void refreshControlOperational();
+        return;
+      }
+      if (event.target.closest('[data-control-export-csv]')) {
+        downloadControlReportCsv();
+        return;
+      }
+      if (event.target.closest('[data-control-export-pdf]')) {
+        printControlReport();
+        return;
+      }
+      const printCase = event.target.closest('[data-report-print-id]');
+      if (printCase) { printControlReport(printCase.dataset.reportPrintId); return; }
+      const page = event.target.closest('[data-control-page]');
+      if (page && !page.disabled) {
+        controlOperational.page = Number(page.dataset.controlPage);
+        void refreshControlOperational();
+        return;
+      }
+      if (event.target.closest('[data-control-refresh]')) {
+        void refreshControlOperational();
+        return;
+      }
+    }
     const moduleHomeButton = event.target.closest('[data-inv-module-home]');
     if (moduleHomeButton && (controlMode || fluxMode)) {
-      state.active = null; state.sidebarOpen = true; state.query = ''; state.status = ''; state.situation = '';
-      globalState.query = ''; globalState.view = 'recent'; globalState.page = 1;
-      renderInventory(); return;
+      await showModuleHome();
+      return;
+    }
+    if (fluxMode && event.target.closest('[data-inv-module-all]')) {
+      globalState.view = 'all';
+      globalState.page = 1;
+      renderModuleHomeRows();
+      return;
     }
     const modulePage = event.target.closest('[data-inv-module-page]');
     if (modulePage && !modulePage.disabled && (controlMode || fluxMode)) {
@@ -2032,17 +3503,7 @@
       return;
     }
     if (event.target.closest('[data-inv-global-home]')) {
-      const previousTable = state.active;
-      const previousBranch = state.branchId;
-      const previousSidebarOpen = state.sidebarOpen;
-      state.active = null; state.branchId = null; state.page = 1;
-      state.sidebarOpen = true;
-      globalState.view = 'recent'; globalState.query = ''; globalState.page = 1;
-      try { if (await reloadGlobal()) renderInventory(); }
-      catch (error) {
-        state.active = previousTable; state.branchId = previousBranch; state.sidebarOpen = previousSidebarOpen;
-        window.AldeckotMessage.show(backendMessage(error));
-      }
+      await showModuleHome();
       return;
     }
     const branchCard = event.target.closest('[data-inv-branch]');
@@ -2120,8 +3581,25 @@
     const action = event.target.closest('[data-inv-action]');
     if (action) {
       const type = action.dataset.invAction;
-      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-add-menu', 'new-equipment', 'new-branch', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup']);
+      const restrictedActions = new Set(['add-table', 'add-item', 'toggle-add-menu', 'new-equipment', 'new-branch', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup', 'flux-new-send', 'flux-return', 'flux-delivery', 'flux-replace']);
       if (restrictedActions.has(type) && !canManage()) { event.preventDefault(); return; }
+      if (controlMode && type === 'control-report') { controlReportForm(); return; }
+      if (controlMode && canManage() && ['control-part', 'control-preventive'].includes(type)) {
+        controlActivityForm(type === 'control-part' ? 'part' : 'preventive');
+        return;
+      }
+      if (fluxMode && type === 'flux-new-send') { itemForm(); return; }
+      if (fluxMode && type === 'flux-delivery') { fluxDeliveryWizard(); return; }
+      if (fluxMode && type === 'flux-return') { fluxReturnWizard(); return; }
+      if (fluxMode && type === 'flux-history') { fluxHistoryModal(); return; }
+      if (fluxMode && type === 'flux-replace') {
+        try {
+          await window.AldeckotLocalRegularization.open({
+            onSaved: async () => { await reloadInventory(); renderInventory(); }
+          });
+        } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+        return;
+      }
       if (type === 'toggle-tables') { state.sidebarOpen = !state.sidebarOpen; state.tableMenu = null; state.tableMenuPosition = null; renderInventory(); }
       if (type === 'add-table') tableForm();
       if (type === 'add-item') itemForm();
@@ -2174,14 +3652,19 @@
         }
       }
       if (type === 'export-pdf') {
-        if (!controlMode && !fluxMode && activeTable()) {
+        if (controlMode) showControlPdf();
+        else if (!fluxMode && activeTable()) {
           const popup = window.open('', '_blank', 'width=1280,height=860');
           if (!popup) { window.AldeckotMessage.show('Permita a abertura da janela de impressão para gerar o PDF.'); return; }
           try { await ensureFullActiveTable(); exportPdf(popup); }
           catch (error) { popup.close(); window.AldeckotMessage.show(backendMessage(error)); }
         } else exportPdf();
       }
-      if (type === 'backup') backupModal();
+      if (type === 'backup') {
+        backupModal();
+        if (backupMeta.availability === 'unavailable') backupMetaLoadedAt = 0;
+        void refreshModuleBackupMeta();
+      }
       if (type === 'create-backup') backupChoice('create');
       if (type === 'restore-backup') backupChoice('restore');
       if (type === 'backup-local-create') createLocalBackup(action);
@@ -2243,6 +3726,12 @@
       }
       return;
     }
+    const promotion = event.target.closest('[data-inv-promote-verification]');
+    if (promotion && controlMode && canManage()) {
+      const item = activeTable()?.items.find(entry => entry.id === promotion.dataset.invPromoteVerification);
+      if (item) promotionForm(item);
+      return;
+    }
     const manageShares = event.target.closest('[data-inv-manage-shares]');
     if (manageShares && canManage()) {
       shareDialog(activeTable()?.items.find(item => item.id === manageShares.dataset.invManageShares));
@@ -2287,6 +3776,16 @@
     }
   }, true);
   document.addEventListener('input', event => {
+    if (controlMode && event.target.matches('[data-control-query]')) {
+      controlOperational.query = event.target.value.slice(0, 100);
+      controlOperational.page = 1;
+      window.clearTimeout(controlOperationalSearchTimer);
+      controlOperationalSearchTimer = window.setTimeout(() => {
+        controlOperational.listing = null;
+        void refreshControlOperational();
+      }, 260);
+      return;
+    }
     if (event.target.matches('[data-inv-module-search]') && (controlMode || fluxMode)) {
       globalState.query = event.target.value.slice(0, 100);
       globalState.page = 1;
@@ -2310,6 +3809,30 @@
     }
   });
   document.addEventListener('change', event => {
+    if (event.target.matches('[data-inv-replacement-select]')) {
+      updateReplacementPreview(event.target.closest('.inv-modal'),event.target.value);
+      return;
+    }
+    if (controlMode && event.target.matches('[data-report-filter]')) {
+      const key = event.target.dataset.reportFilter;
+      controlOperational.reportFilters[key] = event.target.value.trim();
+      controlOperational.report = null;
+      void refreshControlOperational();
+      return;
+    }
+    if (controlMode && event.target.matches('[data-control-state], [data-control-priority], [data-control-page-size]')) {
+      if (event.target.matches('[data-control-state]')) controlOperational.status = event.target.value;
+      if (event.target.matches('[data-control-priority]')) controlOperational.priority = event.target.value;
+      if (event.target.matches('[data-control-page-size]')) {
+        const size = Number(event.target.value);
+        if (!pageSizes.includes(size)) return;
+        controlOperational.pageSize = size;
+      }
+      controlOperational.page = 1;
+      controlOperational.listing = null;
+      void refreshControlOperational();
+      return;
+    }
     const globalFields = {
       '[data-inv-global-category]': 'category', '[data-inv-global-status]': 'status',
       '[data-inv-global-situation]': 'situation', '[data-inv-global-order]': 'order'
@@ -2332,6 +3855,14 @@
       else applyInventoryFilters();
       return;
     }
+    if (event.target.matches('[data-module-table-select]')) {
+      void selectModuleTable(event.target.value);
+      return;
+    }
+    if (event.target.matches('[data-module-home-table-select]')) {
+      if (event.target.value) void selectModuleTable(event.target.value);
+      return;
+    }
     if (event.target.matches('[data-inv-status-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('status', event.target.value));
     if (event.target.matches('[data-inv-situation-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('situation', event.target.value));
     if (event.target.matches('[data-inv-cleaning-choice]')) event.target.closest('[data-inv-choice-field]')?.setAttribute('data-tone', choiceTone('cleaning', event.target.value));
@@ -2345,6 +3876,373 @@
     if (event.target.matches('[data-inv-backup-frequency]')) updateBackupFrequency(event.target);
   });
   document.addEventListener('submit', event => {
+    if (event.target.matches('[data-control-case-resolution]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target,node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || form.dataset.busy==='true'
+        || ['Resolvido','Concluído','Cancelado'].includes(node.__caseDetail?.case?.ticket_state)) return;
+      const values=new FormData(form);
+      const payload=Object.fromEntries(['finalDiagnosis','solution','tests','failureCategory','finalCondition','observations']
+        .map(key=>[key,String(values.get(key)||'').trim()]));
+      if (payload.finalDiagnosis.length<3 || payload.solution.length<3 || payload.tests.length<3
+        || !window.AldeckotControlCaseDetail?.failureCategories?.includes(payload.failureCategory)
+        || (node.__caseDetail?.case?.source_module==='inventory'
+          && !['Ativo','Reserva'].includes(payload.finalCondition))) {
+        window.AldeckotMessage.show('Preencha diagnóstico, solução, testes, categoria e confirme Ativo ou Reserva para equipamento do Inventário.');
+        return;
+      }
+      const fingerprint=JSON.stringify(payload);
+      if (form.dataset.payload!==fingerprint) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.payload=fingerprint;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      moduleApi().resolveCase(node.dataset.caseId,payload,form.dataset.requestId)
+        .then(()=>moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail=>{
+          if (!node.isConnected) return;
+          node.__caseDetail=detail;
+          renderControlCaseDetail(node,'overview');
+          const notice=document.createElement('p');
+          notice.className='control-case-success';
+          notice.setAttribute('role','status');
+          notice.textContent='Resolução registrada e chamado marcado como Resolvido. O status do equipamento não foi alterado; a categoria técnica ficará disponível para comparação de reincidência.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+          if (!state.active) void refreshControlOperational();
+        }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-case-reopen]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target,node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || node.__caseDetail?.case?.ticket_state!=='Resolvido'
+        || form.dataset.busy==='true') return;
+      const reason=String(new FormData(form).get('reason') || '').trim();
+      if (reason.length<3 || reason.length>2000) {
+        window.AldeckotMessage.show('Informe o motivo da reabertura (3 a 2000 caracteres).');
+        return;
+      }
+      if (form.dataset.payload!==reason) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.payload=reason;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type=\"submit\"]');
+      submit.disabled=true;
+      moduleApi().reopenCase(node.dataset.caseId,reason,form.dataset.requestId)
+        .then(()=>moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail=>{
+          if (!node.isConnected) return;
+          node.__caseDetail=detail;
+          renderControlCaseDetail(node,'overview');
+          const notice=document.createElement('p');
+          notice.className='control-case-success';
+          notice.setAttribute('role','status');
+          notice.textContent='Chamado reaberto para diagnóstico. A solução anterior permanece no histórico.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+          if (!state.active) void refreshControlOperational();
+        }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-case-priority]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target,node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || form.dataset.busy==='true') return;
+      const priority=String(new FormData(form).get('priority') || '');
+      if (!['Baixa','Média','Alta','Crítica'].includes(priority)) {
+        window.AldeckotMessage.show('Selecione uma prioridade válida.');
+        return;
+      }
+      if (form.dataset.payload!==priority) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.payload=priority;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type=\"submit\"]');
+      submit.disabled=true;
+      moduleApi().setCasePriority(node.dataset.caseId,priority,form.dataset.requestId)
+        .then(()=>moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail=>{
+          if (!node.isConnected) return;
+          node.__caseDetail=detail;
+          renderControlCaseDetail(node,'overview');
+          const notice=document.createElement('p');
+          notice.className='control-case-success';
+          notice.setAttribute('role','status');
+          notice.textContent='Prioridade atualizada e registrada no histórico.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+          if (!state.active) void refreshControlOperational();
+        }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-task-create],[data-control-task-update]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target, node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || !node.__caseDetail?.tasksAvailable
+        || form.dataset.busy==='true') return;
+      const values=new FormData(form);
+      const dueText=String(values.get('dueAt') || '');
+      const dueAt=dueText ? new Date(dueText) : null;
+      if (dueAt && Number.isNaN(dueAt.getTime())) {
+        window.AldeckotMessage.show('Informe um prazo válido.');
+        return;
+      }
+      const payload={
+        description:String(values.get('description') || '').trim(),
+        priority:String(values.get('priority') || 'Média'),
+        dueAt:dueAt?.toISOString() || null,
+        notes:String(values.get('notes') || '').trim()
+      };
+      const update=form.matches('[data-control-task-update]');
+      if (update) Object.assign(payload,{
+        state:String(values.get('state') || ''),
+        completionNote:String(values.get('completionNote') || '').trim(),
+        revision:Number(values.get('revision'))
+      });
+      if (payload.description.length<3
+        || (update && payload.state==='Concluída' && payload.completionNote.length<3)) {
+        window.AldeckotMessage.show('Revise a descrição, o prazo e a conclusão da pendência.');
+        return;
+      }
+      const signature=JSON.stringify(payload);
+      if (form.dataset.payload!==signature) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.payload=signature;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      const action=update
+        ? moduleApi().updateCaseTask(form.dataset.taskId,payload,form.dataset.requestId)
+        : moduleApi().createCaseTask(node.dataset.caseId,payload,form.dataset.requestId);
+      action.then(()=>moduleApi().caseDetail(node.dataset.caseId)).then(detail=>{
+        if (!node.isConnected) return;
+        node.__caseDetail=detail;
+        renderControlCaseDetail(node,'pending');
+        const notice=document.createElement('p');
+        notice.className='control-case-success';
+        notice.setAttribute('role','status');
+        notice.textContent=update?'Pendência atualizada com histórico preservado.':'Pendência criada neste chamado.';
+        node.querySelector('.control-case-detail > header')?.after(notice);
+        if (!state.active) void refreshControlOperational();
+      }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-case-close]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target,node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || !node.__caseDetail?.tasksAvailable
+        || form.dataset.busy==='true') return;
+      const open=(node.__caseDetail.tasks || []).filter(t=>
+        ['Pendente','Em andamento'].includes(t.task_state));
+      const reason=String(new FormData(form).get('reason') || '').trim();
+      const keepOpen=Boolean(new FormData(form).get('keepOpen'));
+      if (reason.length<3 || (open.length && !keepOpen)) {
+        window.AldeckotMessage.show('Revise as pendências e confirme sua decisão.');
+        return;
+      }
+      const ids=open.map(t=>t.id).sort();
+      const decision=open.length?'Manter abertas':null;
+      const signature=JSON.stringify({reason,ids,decision});
+      if (form.dataset.payload!==signature) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.payload=signature;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      moduleApi().closeCaseWithTasks(node.dataset.caseId,reason,
+        form.dataset.requestId,ids,decision)
+        .then(()=>moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail=>{
+          if (!node.isConnected) return;
+          node.__caseDetail=detail;
+          renderControlCaseDetail(node,'overview');
+          const notice=document.createElement('p');
+          notice.className='control-case-success';
+          notice.setAttribute('role','status');
+          notice.textContent='Chamado concluído. Pendências abertas foram preservadas.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+          if (!state.active) void refreshControlOperational();
+        }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-component-form]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form=event.target,node=form.closest('.inv-modal');
+      if (!node?.dataset.caseId || !node.__caseDetail?.componentsAvailable
+        || form.dataset.busy==='true') return;
+      const values=new FormData(form);
+      const action=String(values.get('action') || '');
+      const occurred=new Date(String(values.get('occurredAt') || ''));
+      const expectedRaw=String(values.get('expectedReturnAt') || '');
+      const expected=expectedRaw ? new Date(expectedRaw) : null;
+      const inventoryItemId=String(values.get('inventoryItemId') || '').trim();
+      const supplyUnitId=String(values.get('supplyUnitId') || '').trim();
+      const replacementSupplyUnitId=String(values.get('replacementSupplyUnitId') || '').trim();
+      const stockDestination=String(values.get('stockDestination') || '');
+      const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const result=String(values.get('result') || '').trim();
+      const supplier=String(values.get('supplier') || '').trim();
+      const reason=String(values.get('reason') || '').trim();
+      const serviceStatus=String(values.get('serviceStatus') || '');
+      if (Number.isNaN(occurred.getTime()) || result.length<3
+        || (inventoryItemId && !uuid.test(inventoryItemId))
+        || (supplyUnitId && !uuid.test(supplyUnitId))
+        || (inventoryItemId && supplyUnitId)
+        || (replacementSupplyUnitId && !uuid.test(replacementSupplyUnitId))
+        || (inventoryItemId && ['Instalado','Removido','Substituído'].includes(action))
+        || (expected && Number.isNaN(expected.getTime()))
+        || (['Enviado ao fornecedor','Acompanhamento externo','Retornado do fornecedor'].includes(action)
+          && (!supplier || !reason))
+        || (action==='Enviado ao fornecedor' && !expected)
+        || (action==='Acompanhamento externo' && !serviceStatus)
+        || (action==='Retornado do fornecedor' && (!serviceStatus || serviceStatus!=='Concluído'))) {
+        window.AldeckotMessage.show('Revise identidade, resultado e dados obrigatórios do fornecedor.');
+        return;
+      }
+      if ((['Instalado','Removido','Substituído'].includes(action) && supplyUnitId && !reason)
+        || (action==='Removido' && supplyUnitId
+          && !['Em estoque','Reserva','Defeito','Inativo'].includes(stockDestination))
+        || (action==='Substituído' && supplyUnitId
+          && (!replacementSupplyUnitId || replacementSupplyUnitId===supplyUnitId
+            || !['Em estoque','Reserva','Defeito','Inativo'].includes(stockDestination)))
+        || (action!=='Substituído' && replacementSupplyUnitId)
+        || (!['Removido','Substituído'].includes(action) && stockDestination)) {
+        window.AldeckotMessage.show('Para movimentar uma unidade, informe o motivo e, quando aplicável, a nova unidade e o destino.');
+        return;
+      }
+      const component={
+        name:String(values.get('name') || '').trim(),
+        brand:String(values.get('brand') || '').trim(),
+        model:String(values.get('model') || '').trim(),
+        tag:String(values.get('tag') || '').trim(),
+        serial:String(values.get('serial') || '').trim(),
+        inventoryItemId:inventoryItemId || null,supplyUnitId:supplyUnitId || null
+      };
+      if (!component.name && !inventoryItemId && !supplyUnitId) {
+        window.AldeckotMessage.show('Informe o nome ou vincule um item existente.');
+        return;
+      }
+      const eventPayload={
+        action,occurredAt:occurred.toISOString(),result,
+        notes:String(values.get('notes') || '').trim(),supplier,reason,
+        protocol:String(values.get('protocol') || '').trim(),
+        expectedReturnAt:expected ? expected.toISOString() : null,
+        replacementSupplyUnitId:replacementSupplyUnitId || null,stockDestination,
+        serviceStatus:action==='Enviado ao fornecedor'?'Enviado'
+          :action==='Retornado do fornecedor'?'Retornado':serviceStatus
+      };
+      const signature=JSON.stringify({component,eventPayload});
+      if (form.dataset.payload!==signature) {
+        form.dataset.requestId=crypto.randomUUID();
+        form.dataset.componentRequestId=crypto.randomUUID();
+        form.dataset.payload=signature;
+      }
+      form.dataset.busy='true';
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      moduleApi().appendCaseComponentEvent(node.dataset.caseId,
+        {...component,requestId:form.dataset.componentRequestId},
+        eventPayload,form.dataset.requestId)
+        .then(()=>moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail=>{
+          if(!node.isConnected)return;
+          node.__caseDetail=detail;
+          renderControlCaseDetail(node,'components');
+          const notice=document.createElement('p');
+          notice.className='control-case-success';notice.setAttribute('role','status');
+          notice.textContent=['Instalado','Removido','Substituído'].includes(action) && supplyUnitId
+            ? 'Componente salvo; a movimentação de Suprimentos foi validada e registrada oficialmente.'
+            : 'Registro salvo no histórico; nenhum estoque ou evento de Flux foi criado implicitamente.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+        }).catch(error=>window.AldeckotMessage.show(backendMessage(error)))
+        .finally(()=>{delete form.dataset.busy;if(submit.isConnected)submit.disabled=false;});
+      return;
+    }
+    if (event.target.matches('[data-control-intervention-form]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form = event.target;
+      const node = form.closest('.inv-modal');
+      if (!node?.dataset.caseId || !node.__caseDetail?.interventionsAvailable
+        || form.dataset.busy === 'true') return;
+      const values = new FormData(form);
+      const occurred = new Date(String(values.get('occurredAt') || ''));
+      const description = String(values.get('description') || '').trim();
+      const result = String(values.get('result') || '').trim();
+      if (Number.isNaN(occurred.getTime()) || description.length < 3 || result.length < 3) {
+        window.AldeckotMessage.show('Informe data, descrição e resultado da intervenção.');
+        return;
+      }
+      const payload = {
+        occurredAt: occurred.toISOString(), type: String(values.get('type') || ''),
+        description, result,
+        technicalAuthor: String(values.get('technicalAuthor') || '').trim(),
+        referenceNote: String(values.get('referenceNote') || '').trim()
+      };
+      form.dataset.busy = 'true';
+      form.dataset.requestId ||= crypto.randomUUID();
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      moduleApi().appendCaseIntervention(node.dataset.caseId, payload, form.dataset.requestId)
+        .then(() => moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail => {
+          if (!node.isConnected) return;
+          node.__caseDetail = detail;
+          renderControlCaseDetail(node, 'interventions');
+          const notice = document.createElement('p');
+          notice.className = 'control-case-success';
+          notice.setAttribute('role', 'status');
+          notice.textContent = 'Intervenção registrada sem alterar o estado do chamado.';
+          node.querySelector('.control-case-detail > header')?.after(notice);
+          if (!state.active) void refreshControlOperational();
+        }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { delete form.dataset.busy; if (submit.isConnected) submit.disabled = false; });
+      return;
+    }
+    if (event.target.matches('[data-control-diagnostic-form]')) {
+      event.preventDefault();
+      if (!controlMode || !canManage()) return;
+      const form = event.target;
+      const node = form.closest('.inv-modal');
+      if (!node?.dataset.caseId || form.dataset.busy === 'true') return;
+      const values = new FormData(form);
+      const payload = Object.fromEntries(
+        ['symptom','hypothesis','tests','results','cause','finalDiagnosis']
+          .map(key => [key, String(values.get(key) || '').trim()]));
+      if (!Object.values(payload).some(Boolean)) {
+        window.AldeckotMessage.show('Informe ao menos um campo do diagnóstico.');
+        return;
+      }
+      form.dataset.busy = 'true';
+      form.dataset.requestId ||= crypto.randomUUID();
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      moduleApi().appendCaseDiagnostic(node.dataset.caseId, payload, form.dataset.requestId)
+        .then(() => moduleApi().caseDetail(node.dataset.caseId))
+        .then(detail => {
+          if (!node.isConnected) return;
+          node.__caseDetail = detail;
+          renderControlCaseDetail(node, 'diagnosis');
+          window.AldeckotMessage.show('Nova revisão do diagnóstico registrada.');
+        }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { delete form.dataset.busy; if (submit.isConnected) submit.disabled = false; });
+      return;
+    }
     if (event.target.matches('[data-flux-reversal-form]')) {
       event.preventDefault();
       if (!fluxMode || !canManage()) return;
@@ -2388,15 +4286,19 @@
       if (!item || item.situation !== 'Aquisição') return;
       const values = new FormData(form);
       const destination = String(values.get('destination') || '');
-      const tableId = destination === 'inventory' ? String(values.get('inventoryTableId') || '') : null;
-      const managementArea = destination === 'management' ? String(values.get('managementArea') || '') : null;
       const managementKind = destination === 'management' ? String(values.get('managementKind') || '') : null;
+      const peripheral = managementKind === 'peripheral';
+      const tableId = destination === 'inventory' || peripheral ? String(values.get('inventoryTableId') || '') : null;
+      const managementArea = managementKind === 'computer' ? String(values.get('managementArea') || '') : null;
+      const peripheralKind = peripheral ? String(values.get('peripheralKind') || '') : null;
+      const peripheralSector = peripheral ? String(values.get('peripheralSector') || '') : null;
       const supplyId = destination === 'supplies' ? String(values.get('supplyId') || '') : null;
       const supplyVariantId = destination === 'supplies' ? String(values.get('supplyVariantId') || '') || null : null;
       const supplyQuantity = destination === 'supplies' ? Number(values.get('supplyQuantity')) : null;
       if (!['inventory', 'management', 'supplies', 'none'].includes(destination) ||
           (destination === 'inventory' && !tableId) ||
-          (destination === 'management' && (!['Frente de Loja', 'Escritório', 'Estoque'].includes(managementArea) || managementKind !== 'computer')) ||
+          (destination === 'management' && (peripheral ? !tableId || !peripheralKind || !peripheralSector
+            : managementKind !== 'computer' || !['Frente de Loja', 'Escritório', 'Estoque'].includes(managementArea))) ||
           (destination === 'supplies' && (!supplyId || !Number.isSafeInteger(supplyQuantity) || supplyQuantity < 1 || supplyQuantity > 1000000 || item.sourceModule === 'inventory' || item.inventoryItemId))) {
         window.AldeckotMessage.show('Selecione um destino e os campos obrigatórios.');
         return;
@@ -2408,6 +4310,8 @@
       (async () => {
         if (destination === 'supplies') {
           await moduleApi().setSupplyAcquisitionIntent(itemId, supplyId, supplyVariantId, supplyQuantity);
+        } else if (peripheral) {
+          await moduleApi().setPeripheralAcquisitionIntent(itemId, tableId, peripheralKind, peripheralSector);
         } else {
           await moduleApi().setAcquisitionIntent(itemId, destination, tableId, managementArea, managementKind);
         }
@@ -2429,17 +4333,32 @@
         const supplies = destination === 'supplies';
         const preview = supplies
           ? await moduleApi().previewSupplyAcquisition(itemId)
-          : management ? await moduleApi().previewManagementAcquisition(itemId)
-            : await moduleApi().previewInventoryAcquisition(itemId);
+          : peripheral ? await moduleApi().previewPeripheralAcquisition(itemId)
+            : management ? await moduleApi().previewManagementAcquisition(itemId)
+              : await moduleApi().previewInventoryAcquisition(itemId);
         const moduleName = supplies ? 'Suprimentos' : management ? 'Gestão TI' : 'Inventário';
-        if (supplies && preview?.state !== 'ready') throw new Error('A prévia de estoque não está disponível; nenhuma entrada foi feita.');
-        if (preview?.state === 'invalid-identity') throw new Error(`Informe TAG e número de série válidos antes de cadastrar na ${moduleName}.`);
-        if (preview?.state === 'conflict') throw new Error(`Há conflito de TAG ou série na ${moduleName}. Revise a identidade antes de integrar.`);
+        if (supplies && preview?.state === 'awaiting-receipt') throw new Error('Registre a entrada física e a data de recebimento no Flux antes de creditar o estoque.');
+        if (supplies && preview?.state === 'completed') {
+          await finishSave?.();
+          finishSave = null;
+          await fluxAcquisitionWizard(item);
+          return;
+        }
+        if (supplies && (preview?.state !== 'ready' || !preview.token)) throw new Error('A prévia de saldo exige a migração 126. Nenhuma entrada foi efetuada.');
+        if (preview?.state === 'invalid-identity') throw new Error('Informe um número de série válido. A TAG pode ser vinculada depois.');
+        if (preview?.state === 'conflict') throw new Error('Há conflito de TAG, série ou vínculo entre módulos. Confira a identidade antes de integrar.');
+        if (preview?.state === 'invalid-type') throw new Error('A TAG informada não corresponde ao tipo de periférico escolhido.');
+        if (preview?.state === 'awaiting-receipt') throw new Error('Registre a entrada física no Flux antes de cadastrar o periférico.');
+        if (preview?.state === 'category-conflict') throw new Error(`Selecione a categoria “${preview.tableName || 'atual'}” para vincular ao patrimônio existente.`);
         if (preview?.state === 'area-conflict') throw new Error(`Este computador já existe na área “${preview.existingArea || 'não informada'}” da Gestão TI. Revise a área escolhida; nenhuma mudança de local será feita automaticamente.`);
         if (!supplies && !['new', 'existing'].includes(preview?.state)) throw new Error('Não foi possível confirmar a identidade do equipamento. Nenhum cadastro foi feito.');
         const action = supplies
-          ? `Confirmar entrada em Suprimentos: ${preview.itemName} · ${preview.variantName} · ${preview.quantity} unidade(s)? Saldo ${preview.previousStock} → ${preview.predictedStock}. O banco conferirá o saldo novamente antes de creditar.`
-          : preview.state === 'existing'
+          ? `Confirmar entrada em Suprimentos: ${preview.itemName} · ${preview.variantName} · ${preview.quantity} unidade(s)? Saldo ${preview.previousStock} → ${preview.predictedStock}. Se o saldo mudar, será necessário revisar novamente.`
+          : peripheral
+            ? preview.state === 'existing'
+              ? `Vincular a série ao ${preview.peripheralKind} da categoria “${preview.tableName}”? A classificação será registrada e o status e o local existentes serão preservados.`
+              : `Cadastrar ${preview.peripheralKind} em Reserva no Inventário, categoria “${preview.tableName}”, setor ${preview.sector}, na Sala CPD? A instalação será feita pela Conferência por PDV.`
+            : preview.state === 'existing'
           ? `O equipamento já existe em “${management ? managementArea : preview.tableName || 'Inventário'}”. Vincular esta aquisição ao registro existente, sem criar cópia nem alterar status/local?`
           : management
             ? `Cadastrar este computador em Reserva na Gestão TI (${managementArea}), ainda sem instalação em terminal ou PDV?`
@@ -2456,14 +4375,17 @@
         finishSave = window.AldeckotLoading?.beginSave?.('Concluindo aquisição…');
         const result = supplies
           ? await moduleApi().completeSupplyAcquisition(itemId, preview.token)
-          : management ? await moduleApi().completeManagementAcquisition(itemId)
-            : await moduleApi().completeInventoryAcquisition(itemId);
+          : peripheral ? await moduleApi().completePeripheralAcquisition(itemId, preview.token)
+            : management ? await moduleApi().completeManagementAcquisition(itemId)
+              : await moduleApi().completeInventoryAcquisition(itemId);
         await reloadInventory();
         renderInventory();
         const updatedItem = activeTable()?.items.find(entry => entry.id === itemId);
-        if (updatedItem) details(updatedItem);
+        if (updatedItem && peripheral) await fluxAcquisitionWizard(updatedItem);
+        else if (updatedItem) details(updatedItem);
         window.AldeckotMessage.show(result?.alreadyApplied ? 'Aquisição já integrada; nenhuma entrada foi repetida.' :
           supplies ? `Entrada registrada em Suprimentos: saldo ${result.previousStock} → ${result.newStock}.` :
+          peripheral ? (result?.linkedExisting ? 'Recebimento vinculado ao periférico no Inventário.' : 'Periférico cadastrado no Inventário, em Reserva na Sala CPD.') :
           result?.linkedExisting ? `Aquisição vinculada ao equipamento existente na ${moduleName}.` :
             `Equipamento cadastrado em Reserva na ${moduleName}.`);
       })().catch(error => window.AldeckotMessage.show(backendMessage(error)))
@@ -2474,7 +4396,24 @@
         });
       return;
     }
-    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form], [data-inv-branch-form], [data-inv-transfer-form]')) { event.preventDefault(); return; }
+    if (!canManage() && event.target.matches('[data-inv-table-form], [data-inv-item-form], [data-inv-log-form], [data-inv-replace-form], [data-inv-branch-form], [data-inv-transfer-form], [data-inv-promotion-form]')) { event.preventDefault(); return; }
+    if (event.target.matches('[data-inv-promotion-form]')) {
+      event.preventDefault();
+      const form = event.target; const node = form.closest('.inv-modal');
+      const reason = String(new FormData(form).get('reason') || '').trim();
+      if (reason.length < 3 || form.dataset.busy) return;
+      form.dataset.busy = 'true';
+      const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+      moduleApi().promoteVerification(node.dataset.itemId, reason, node.dataset.operationId)
+        .then(async result => {
+          await reloadInventory(); closeModal(); renderInventory();
+          window.AldeckotMessage.show(result?.alreadyApplied
+            ? 'Encaminhamento já registrado; nenhum chamado foi duplicado.'
+            : 'Verificação encerrada e manutenção aberta com histórico vinculado.');
+        }).catch(error => window.AldeckotMessage.show(backendMessage(error)))
+        .finally(() => { delete form.dataset.busy; if (submit.isConnected) submit.disabled = false; });
+      return;
+    }
     if (event.target.matches('[data-inv-branch-form]')) {
       event.preventDefault();
       const form = event.target; const name = String(new FormData(form).get('name') || '').trim();

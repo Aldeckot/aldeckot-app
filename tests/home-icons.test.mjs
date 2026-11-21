@@ -25,5 +25,5 @@ test('a busca e o calendário da Home usam ícones vetoriais consistentes', () =
   assert.match(agenda, /home-cal-title-icon/);
   assert.match(iconStyles, /\.home-cal-title > i::before/);
   assert.match(iconStyles, /\.home-search \.search-icon::before/);
-  assert.match(index, /home-icon-refresh\.css\?v=2\.0\.71/);
+  assert.match(index, /home-icon-refresh\.css\?v=2\.0\.\d+/);
 });

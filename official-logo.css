@@ -1,5 +1,7 @@
 /* Identidade visual oficial Aldeckot. */
 .official-logo-image{display:block;width:100%;height:100%;object-fit:contain}
+.pdf-export-icon{display:block;flex:none}
+body.theme-light .pdf-export-icon{filter:brightness(.61) saturate(1.35)}
 
 /* A marca usa só o símbolo e o nome, sem subtítulo ou versão. */
 .home-page .brand{display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:7px;row-gap:2px;padding:0 11px!important}

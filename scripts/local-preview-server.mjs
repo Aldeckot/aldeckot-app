@@ -11,10 +11,17 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number.parseInt(process.env.ALDECKOT_LOCAL_PORT || '4173', 10);
 const apiOrigin = String(process.env.ALDECKOT_PREVIEW_API_ORIGIN || 'https://aldeckot.vercel.app').replace(/\/+$/, '');
+const localApiMode = process.env.ALDECKOT_PREVIEW_LOCAL_API === '1';
+const require = createRequire(import.meta.url);
+const localApiHandlers = localApiMode ? Object.fromEntries([
+  'account', 'admin-users', 'auth-bootstrap', 'auth-login', 'auth-register',
+  'client-error', 'health', 'monthly-audit-finalize'
+].map(name => [name, require(`../api/${name}.js`)])) : null;
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -57,6 +64,24 @@ const proxyApi = async (request, response, requestUrl) => {
   send(response, remote.status, remoteBody, { 'Content-Type': contentType });
 };
 
+const serveLocalApi = async (request, response, requestUrl) => {
+  const name = requestUrl.pathname.match(/^\/api\/([a-z-]+)$/)?.[1];
+  const handler = localApiHandlers?.[name];
+  if (!handler) return send(response, 404, JSON.stringify({ error: 'Rota não encontrada.' }), { 'Content-Type': 'application/json; charset=utf-8' });
+  const body = await readRequestBody(request);
+  if (body && body.length > 1024 * 1024) return send(response, 413, JSON.stringify({ error: 'Solicitação muito grande.' }), { 'Content-Type': 'application/json; charset=utf-8' });
+  try { request.body = body?.length ? JSON.parse(body.toString('utf8')) : {}; }
+  catch { return send(response, 400, JSON.stringify({ error: 'JSON inválido.' }), { 'Content-Type': 'application/json; charset=utf-8' }); }
+  request.query = Object.fromEntries(requestUrl.searchParams);
+  response.status = code => { response.statusCode = code; return response; };
+  response.json = value => {
+    if (!response.headersSent) response.setHeader('Content-Type', 'application/json; charset=utf-8');
+    response.end(JSON.stringify(value));
+    return response;
+  };
+  await handler(request, response);
+};
+
 export const localFilePath = pathname => {
   const decoded = decodeURIComponent(pathname === '/' ? '/index.html' : pathname);
   const relative = normalize(decoded).replace(/^[/\\]+/, '');
@@ -75,7 +100,8 @@ const server = createServer(async (request, response) => {
   try {
     const requestUrl = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
     if (requestUrl.pathname.startsWith('/api/')) {
-      await proxyApi(request, response, requestUrl);
+      if (localApiMode) await serveLocalApi(request, response, requestUrl);
+      else await proxyApi(request, response, requestUrl);
       return;
     }
 
@@ -95,6 +121,6 @@ const server = createServer(async (request, response) => {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   server.listen(port, '127.0.0.1', () => {
     console.log(`Prévia local disponível em http://localhost:${port}/`);
-    console.log(`Autenticação encaminhada com segurança para ${apiOrigin}`);
+    console.log(localApiMode ? 'API local conectada ao projeto de testes.' : `Autenticação encaminhada com segurança para ${apiOrigin}`);
   });
 }

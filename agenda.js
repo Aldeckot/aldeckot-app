@@ -60,8 +60,7 @@
     for (let day = 1; day <= last; day++) {
       const key = iso(new Date(year, month, day));
       const hasEvents = sourceEvents.some(event => event.date === key);
-      const other = window.AldeckotHomeDashboard.calendarEntries(key);
-      const marked = hasEvents || Object.values(other).some(rows => Array.isArray(rows) && rows.length);
+      const marked = hasEvents;
       cells.push('<td><button type="button" class="agenda-date ' + (key === iso(today) ? 'today ' : '') + (key === selectedDate ? 'is-selected' : '')
         + '" data-date="' + key + '" aria-label="' + key + (marked ? ', com registros' : '') + '" aria-pressed="' + (key === selectedDate) + '">' + day
         + (marked ? '<span class="agenda-indicators"><i class="agenda-dot event"></i></span>' : '') + '</button></td>');
@@ -141,6 +140,7 @@
       if (!side.querySelector('.agenda-upcoming-panel')) {
         const upcoming = document.createElement('section');
         upcoming.className = 'agenda-upcoming-panel';
+        upcoming.hidden = true;
         side.appendChild(upcoming);
       }
       if (!document.body.classList.contains('home-operational') && !side.querySelector('.agenda-today-panel')) {
@@ -161,18 +161,20 @@
     if (window.AldeckotHomeDashboard) {
       const icons = window.AldeckotHomeDashboard.icons;
       document.querySelectorAll('.agenda-upcoming-panel').forEach(panel => {
+        panel.hidden = !upcoming.length;
+        if (!upcoming.length) { panel.replaceChildren(); return; }
         panel.innerHTML = '<div class="home-agenda-head"><h3>' + calendarIcon + 'Próximos agendamentos</h3><button type="button" class="home-small-button" data-agenda-all>Ver todos</button></div>'
           + (agendaUnavailable ? '<p class="home-source-note">Consulta da agenda indisponível.</p>' : '')
-          + (upcoming.length ? upcoming.map(item => '<button type="button" class="agenda-task agenda-task-compact" data-agenda-details="' + safe(item.id) + '">'
+          + upcoming.map(item => '<button type="button" class="agenda-task agenda-task-compact" data-agenda-details="' + safe(item.id) + '">'
             + (item.kind === 'task' ? icons.activity : icons.calendar) + '<span><b>' + safe(item.title) + '</b><small>' + (item.kind === 'task' ? 'Tarefa' : 'Compromisso') + '</small></span><time>'
-            + safe(new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')) + '<small>' + safe(item.time || 'Sem horário') + '</small></time></button>').join('')
-            : '<p class="home-state">' + (agendaUnavailable ? 'Aguardando consulta válida.' : 'Nenhum agendamento próximo.') + '</p>');
+            + safe(new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')) + '<small>' + safe(item.time || 'Sem horário') + '</small></time></button>').join('');
       });
       return;
     }
 
     document.querySelectorAll('.agenda-upcoming-panel').forEach(panel => {
-      panel.innerHTML = `<h3>Próximos agendamentos</h3>${upcoming.length ? `<div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '<p>Nenhum agendamento próximo.</p>'}`;
+      panel.hidden = !upcoming.length;
+      panel.innerHTML = upcoming.length ? `<h3>Próximos agendamentos</h3><div class="agenda-upcoming-list">${upcoming.map(event => `<button class="agenda-task agenda-task-compact ${event.kind === 'task' ? 'task' : 'event'}" data-agenda-details="${event.id}"><b>${safe(event.title)}</b><span>${safe(formatShort(event))}</span></button>`).join('')}</div>` : '';
     });
     document.querySelectorAll('.agenda-today-panel').forEach(panel => {
       panel.hidden = !todays.length;

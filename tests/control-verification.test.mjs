@@ -9,6 +9,47 @@ function apiFor(client) {
   runInNewContext(source, { window, console, Headers, Request, URLSearchParams });
   return window.AldeckotSupabase;
 }
+
+test('Inventário inicia verificação por RPC com motivo e sem enviar status ou local', async () => {
+  const calls = [];
+  const item = { id: 'item-1', status: 'Ativo', location: 'PDV 04', situation: 'Verificando' };
+  const chain = { select() { return chain; }, eq() { return chain; },
+    single: async () => ({ data: item, error: null }) };
+  const api = apiFor({
+    rpc: async (name, args) => { calls.push({ name, args }); return { data: { caseId: 'case-1' }, error: null }; },
+    from: () => chain
+  });
+  const result = await api.inventory.startVerification(
+    'item-1', 'Tela piscando', '2026-10-24T10:00:00Z', 'request-1');
+  assert.equal(result.status, 'Ativo');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'start_inventory_verification');
+  assert.equal(calls[0].args.p_reason, 'Tela piscando');
+  assert.equal(calls[0].args.p_expected_updated_at, '2026-10-24T10:00:00Z');
+  assert.equal(calls[0].args.status, undefined);
+  assert.equal(calls[0].args.location, undefined);
+});
+
+test('Inventário não perde o motivo em fallback quando a migração 096 falta', async () => {
+  const api = apiFor({ rpc: async () => ({ data: null,
+    error: { code: 'PGRST202', message: 'Function not found' } }) });
+  await assert.rejects(api.inventory.startVerification('item-1', 'Tela piscando',
+    '2026-10-24T10:00:00Z', 'request-1'), /migração 096/);
+});
+test('promoção da verificação envia justificativa e identificador à RPC dedicada', async () => {
+  const calls = [];
+  const api = apiFor({ rpc: async (name,args) => {
+    calls.push({ name,args });
+    return { data: { caseId:'maintenance-case',alreadyApplied:false },error:null };
+  } });
+  const result = await api.control.promoteVerification('verification-item','Falha elétrica','request-2');
+  assert.equal(result.caseId,'maintenance-case');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].name,'promote_inventory_verification_to_maintenance');
+  assert.equal(calls[0].args.p_control_item_id,'verification-item');
+  assert.equal(calls[0].args.p_reason,'Falha elétrica');
+  assert.equal(calls[0].args.p_request_id,'request-2');
+});
 test('conclusão de verificação usa uma RPC e não transmite mudança de status, TAG ou localização do equipamento', async () => {
   const calls = [];
   const api = apiFor({ rpc: async (name,args) => { calls.push({name,args}); return { data:{eventId:'event',alreadyApplied:false},error:null }; } });
@@ -43,7 +84,7 @@ test('backup com acompanhamento técnico é preservado antes de qualquer exclus�
   const chain={select(){return chain;},eq(){return chain;},limit(){return Promise.resolve({data:[{id:'verification'}],error:null});}};
   const api=apiFor({from(table){calls.push(table);return chain;}});
   await assert.rejects(api.control.replace({tables:[]}),/Backup preservado/);
-  assert.deepEqual(calls,['control_items']);
+  assert.deepEqual(calls,[]);
 });
 test('histórico técnico e movimentos compartilham navegação por UUID, sem duplicar eventos', async () => {
   const api=apiFor({rpc:async(name,args)=>({error:null,data:name==='management_movement_history'

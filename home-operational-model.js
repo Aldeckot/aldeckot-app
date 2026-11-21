@@ -184,6 +184,10 @@
       const old = pending.get(alert.key);
       if (!old) { pending.set(alert.key, viewRow({ ...alert, reasons: alert.reasons || [] })); return; }
       old.reasons = [...(old.reasons || []), ...(alert.reasons || [])];
+      if (alert.ticketPriority) old.ticketPriority = alert.ticketPriority;
+      if (alert.maintenanceSeverity) old.maintenanceSeverity = alert.maintenanceSeverity;
+      if (alert.module === 'control' && alert.targetUrl
+        && (alert.reasons || []).some(reason => reason.code === 'maintenance-age')) old.targetUrl = alert.targetUrl;
       if (alert.priority > old.priority) {
         old.priority = alert.priority;
         old.title = alert.title;
@@ -257,6 +261,28 @@
           startedAt:technicalAt, elapsedDays:days }]
       });
     }
+    for (const duration of rows('caseAging')) {
+      if (duration.state !== 'Em manutenção' || !duration.id) continue;
+      const days = Math.floor(Number(duration.maintenanceMinutes || 0) / 1440);
+      const priority = duration.priorityLevel || 'Média';
+      const priorityLevel = { 'Baixa':1,'Média':1,'Alta':2,'Crítica':3 }[priority] || 1;
+      const level = duration.maintenanceSeverity === 'Crítica' ? 3
+        : duration.maintenanceSeverity === 'Atenção' ? 2 : 1;
+      if (level === 1 && priorityLevel === 1) continue;
+      addAlert({
+        id:duration.id,module:'control',tableId:duration.tableId || '',equipment:duration.equipment || 'Chamado técnico',
+        tag:duration.tag || '',priority:Math.max(level,priorityLevel),ticketPriority:priority,
+        key:'case:control:'+(duration.controlItemId || duration.id),
+        title:(duration.equipment || 'Chamado técnico')+' — '+(level===1
+          ? 'prioridade '+priority : 'manutenção '+duration.maintenanceSeverity.toLowerCase()),
+        detail:'Prioridade '+priority+' · '+days+' dia(s) acumulados em manutenção',
+        occurredAt:duration.openedAt || '',targetUrl:'control.html?'+new URLSearchParams({
+          ...(duration.tableId ? { table:duration.tableId } : {}),case:duration.id
+        }),
+        reasons:[{code:'maintenance-age',text:days+' dia(s) acumulados em manutenção (atenção: 15; crítico: 30).',
+          elapsedDays:days,priority,maintenanceSeverity:duration.maintenanceSeverity}]
+      });
+    }
     for (const alert of rows('nfeRecurring')) {
       if (!alert.id || !alert.pdv) continue;
       addAlert({ id: alert.id, module: 'nfe', key: 'nfe:recurring:' + alert.id,
@@ -283,7 +309,7 @@
       reasons:[{ code:'data-quality', text:warning.message }] });
     const alerts = [...pending.values()].sort((a, b) => b.priority - a.priority
       || (epoch(a.occurredAt) ?? Infinity) - (epoch(b.occurredAt) ?? Infinity) || a.key.localeCompare(b.key));
-    put('alerts', alerts, ['inventory', 'management', 'control', 'controlLogs', 'events', 'stock', 'effects']);
+    put('alerts', alerts, ['inventory', 'management', 'control', 'controlLogs', 'caseAging', 'events', 'stock', 'effects']);
     const activities = rows('effects').filter(row => ['applied', 'failed'].includes(row.status) && epoch(row.processedAt) != null)
       .map(row => viewRow({ ...row, key: 'effect:' + row.id, title: 'Integração ' + (labels[row.module] || row.module) + (row.status === 'applied' ? ' concluída' : ' com falha'),
         detail: 'Evento ' + row.eventId, occurredAt: row.processedAt, technical: true, targetUrl: '' }));

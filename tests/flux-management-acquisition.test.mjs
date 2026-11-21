@@ -43,7 +43,7 @@ test('assistente oferece computador apenas com a migração e pede confirmação
   const api = read('supabase-client.js');
   assert.match(ui, /if \(intent\?\.managementAvailable\)/);
   assert.match(ui, /managementOption\.disabled = false/);
-  assert.match(ui, /Periférico — próxima etapa/);
+  assert.match(ui, /<option value="computer">Computador<\/option>/);
   assert.match(ui, /previewManagementAcquisition\(itemId\)/);
   assert.match(ui, /completeManagementAcquisition\(itemId\)/);
   assert.match(ui, /ainda sem instalação em terminal ou PDV/);

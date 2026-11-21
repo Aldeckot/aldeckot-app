@@ -112,7 +112,7 @@
     const counter = root.querySelector('[data-module-notification-count]');
     const clear = root.querySelector('[data-module-notification-clear]');
     counter.textContent = error ? 'Atualização indisponível' : (notifications.length ? `${notifications.length} alerta${notifications.length === 1 ? '' : 's'} para ação` : 'Sem alertas pendentes');
-    clear.hidden = !notifications.length;
+    clear.hidden = !notifications.some(notification => notification.acknowledgeable !== false);
     if (error) {
       list.innerHTML = '<div class="module-notification-empty"><span>!</span><div><b>Atualização indisponível</b><p>Não foi possível consultar os alertas deste módulo.</p></div></div>';
     } else if (loading) {
@@ -122,14 +122,14 @@
     } else {
       list.innerHTML = notifications.map((notification, index) => {
         const item = notification.item;
-        const identifiers = key === 'supplies'
+        const identifiers = notification.identifiers || (key === 'supplies'
           ? (item.code || `Disponível ${item.available_stock} · mínimo ${item.minimum_stock}`)
           : key === 'nfe'
           ? `PDV ${item.pdv || 'não informado'} · ${notification.occurrences || '4+'} ocorrências na semana`
-          : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas');
+          : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas'));
         const action = notification.action || 'Analisar item';
         const equipmentName = item.equipment || 'equipamento';
-        return `<article class="module-notification-entry${notification.urgent ? ' is-urgent' : ''}"><button class="module-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-module-notification-item="${index}" data-level="${notification.level.toLowerCase()}"><span class="module-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${escape(notification.level)}</em></span><span class="module-notification-description">${escape(notification.description)}</span><span class="module-notification-action"><i>Próximo passo</i><b>${escape(action)}</b></span>${notification.urgent ? '<span class="module-notification-urgent">⚠ Atenção urgente</span>' : ''}<span class="module-notification-module">${escape(labels[key])}<i>›</i></span></button><button class="module-notification-dismiss" type="button" data-module-notification-dismiss="${index}" title="Marcar este alerta como acompanhado" aria-label="Marcar alerta de ${escape(equipmentName)} como acompanhado">×</button></article>`;
+        return `<article class="module-notification-entry${notification.urgent ? ' is-urgent' : ''}"><button class="module-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-module-notification-item="${index}" data-level="${notification.level.toLowerCase()}"><span class="module-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${escape(notification.level)}</em></span><span class="module-notification-description">${escape(notification.description)}</span><span class="module-notification-action"><i>Próximo passo</i><b>${escape(action)}</b></span>${notification.urgent ? '<span class="module-notification-urgent">⚠ Atenção urgente</span>' : ''}<span class="module-notification-module">${escape(labels[key])}<i>›</i></span></button>${notification.acknowledgeable === false ? '' : `<button class="module-notification-dismiss" type="button" data-module-notification-dismiss="${index}" title="Marcar este alerta como acompanhado" aria-label="Marcar alerta de ${escape(equipmentName)} como acompanhado">×</button>`}</article>`;
       }).join('');
       list.querySelectorAll('[data-module-notification-item]').forEach(button => button.addEventListener('click', () => openNotification(notifications[Number(button.dataset.moduleNotificationItem)])));
       list.querySelectorAll('[data-module-notification-dismiss]').forEach(button => button.addEventListener('click', event => {
@@ -166,7 +166,7 @@
   }
 
   function acknowledge(notification) {
-    if (!notification) return;
+    if (!notification || notification.acknowledgeable === false) return;
     const stateKey = notificationKey(notification);
     dismissed.add(stateKey);
     notifications = notifications.filter(entry => notificationKey(entry) !== stateKey);
@@ -273,8 +273,17 @@
       }));
     }
     const source = api[key];
-    const payload = await source?.load?.();
-    return itemEntries(payload).map(notificationFor).filter(Boolean).sort((first, second) => second.weight - first.weight);
+    const cleaning = (key === 'management' || key === 'inventory') && window.AldeckotEquipmentCleaning;
+    const [payload, rows] = await Promise.all([
+      source?.load?.(),
+      cleaning ? api.cleaning.alerts().catch(error => {
+        console.warn('Não foi possível consultar os alertas de limpeza.', error);
+        return [];
+      }) : []
+    ]);
+    const alerts = itemEntries(payload).map(notificationFor).filter(Boolean);
+    if (cleaning) alerts.push(...cleaning.groupAlerts(rows, key));
+    return alerts.sort((first, second) => second.weight - first.weight);
   }
 
   async function refresh() {
@@ -284,7 +293,7 @@
     try {
       const all = await fetchNotifications();
       await hydrateAcknowledgements();
-      notifications = all.filter(notification => !dismissed.has(notificationKey(notification))).slice(0, 5);
+      notifications = all.filter(notification => notification.acknowledgeable === false || !dismissed.has(notificationKey(notification))).slice(0, 5);
     } catch (refreshError) {
       console.warn('Não foi possível atualizar a Central de Notificações do módulo.', refreshError);
       error = true;
@@ -319,7 +328,7 @@
       : key === 'nfe'
       ? ['nfe_occurrences', 'nfe_investigation_resolutions', 'notification_acknowledgements']
       : key === 'management'
-        ? ['module_records', 'notification_acknowledgements']
+        ? ['module_records', 'inventory_items', 'notification_acknowledgements']
         : ['module_tables', `${key}_items`, 'notification_acknowledgements'];
     if (!relevant.includes(event.detail?.table)) return;
     window.clearTimeout(refreshTimer);
@@ -327,6 +336,9 @@
   });
 
   ensureToggle();
+  if (window.AldeckotEquipmentCleaning && ['inventory', 'management'].includes(key)) {
+    window.setInterval(refresh, 15 * 60_000);
+  }
   window.addEventListener('aldeckot:auth-ready', refresh, { once: true });
   (window.AldeckotAuthReady || Promise.resolve()).then(refresh).catch(() => {});
 })();

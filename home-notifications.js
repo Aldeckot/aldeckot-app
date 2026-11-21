@@ -23,6 +23,9 @@
   let badge;
   let notifications = [];
   let allNotifications = [];
+  let cleaningNotifications = [];
+  let cleaningRefreshTimer;
+  let cleaningRequest = 0;
   let operationalNotifications = [];
   let dismissed = new Set();
   let acknowledgementsLoaded = false;
@@ -123,7 +126,7 @@
     return `${item.module}:${identity}:${normalize(item.status)}:${normalize(item.priority)}:${item.updatedAt || item.createdAt || item.date || ''}`;
   };
   const showCurrentNotifications = () => {
-    notifications = [...operationalNotifications, ...allNotifications]
+    notifications = [...operationalNotifications, ...allNotifications, ...cleaningNotifications]
       .filter(notification => !notification.acknowledgeable || !dismissed.has(notificationKey(notification)))
       .sort((first, second) => second.weight - first.weight || Number(second.urgent) - Number(first.urgent))
       // A Central prioriza os avisos mais importantes sem sobrecarregar a Home.
@@ -187,12 +190,12 @@
     }
     list.innerHTML = notifications.map((notification, index) => {
       const item = notification.item;
-      const identifiers = item.module === 'operations'
+      const identifiers = notification.identifiers || (item.module === 'operations'
         ? 'Indicador consolidado em tempo real'
         : item.module === 'nfe'
         ? `Ocorrências na semana: ${notification.item ? String(notification.description).match(/\d+/)?.[0] || '4+' : '4+'}`
-        : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas');
-      const urgency = notification.urgent ? `<span class="home-notification-urgent" aria-label="Alerta urgente">${item.module === 'nfe' ? '⚠ Investigar PDV' : item.module === 'operations' ? '⚠ Ação necessária' : '🚨 Sem resposta'}</span>` : '';
+        : ([item.tag && `TAG ${item.tag}`, item.serial && `Série ${item.serial}`].filter(Boolean).join(' · ') || 'TAG e série não informadas'));
+      const urgency = notification.urgent ? `<span class="home-notification-urgent" aria-label="Alerta urgente">${item.module === 'nfe' ? '⚠ Investigar PDV' : item.module === 'operations' || notification.rule === 'cleaning' ? '⚠ Ação necessária' : '🚨 Sem resposta'}</span>` : '';
       return `<button class="home-notification-item${notification.urgent ? ' is-urgent' : ''}" type="button" data-home-notification-item="${index}" data-level="${notification.level.toLowerCase()}" data-urgent="${notification.urgent}"><span class="home-notification-item-head"><span><b>${escape(item.equipment || 'Equipamento sem nome')}</b><small>${escape(identifiers)}</small></span><em>${notification.level}</em></span><span class="home-notification-description">${escape(notification.description)}</span>${urgency}<span class="home-notification-module">${escape(moduleInfo(item.module))}<i>›</i></span></button>`;
     }).join('');
     list.querySelectorAll('[data-home-notification-item]').forEach(item => item.addEventListener('click', () => {
@@ -257,7 +260,24 @@
     document.addEventListener('keydown', event => { if (event.key === 'Escape') closePanel(); });
   }
 
+  async function refreshCleaningNotifications() {
+    if (!window.AldeckotAuth?.session) return;
+    const request = ++cleaningRequest;
+    try {
+      const rows = await window.AldeckotSupabase.cleaning.alerts();
+      if (request !== cleaningRequest) return;
+      cleaningNotifications = window.AldeckotEquipmentCleaning.groupAlerts(rows);
+      showCurrentNotifications();
+      render();
+    } catch (error) {
+      console.warn('Não foi possível atualizar os alertas de limpeza.', error);
+    }
+  }
+
   mount();
+  (window.AldeckotAuthReady || Promise.resolve()).then(refreshCleaningNotifications).catch(() => {});
+  window.addEventListener('aldeckot:auth-ready', refreshCleaningNotifications, { once: true });
+  window.setInterval(refreshCleaningNotifications, 15 * 60_000);
   if (window.AldeckotOperationalAlerts) {
     operationalNotifications = operationNotifications(window.AldeckotOperationalAlerts);
     showCurrentNotifications();
@@ -278,6 +298,10 @@
     render();
   });
   window.addEventListener('aldeckot:realtime-change', event => {
+    if (['inventory_items', 'module_records'].includes(event.detail?.table)) {
+      window.clearTimeout(cleaningRefreshTimer);
+      cleaningRefreshTimer = window.setTimeout(refreshCleaningNotifications, 180);
+    }
     if (event.detail?.table !== 'notification_acknowledgements') return;
     hydrateAcknowledgements(true).then(() => { showCurrentNotifications(); render(); }).catch(() => {});
   });

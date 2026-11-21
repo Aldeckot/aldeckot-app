@@ -7,17 +7,16 @@ import test from 'node:test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => readFileSync(resolve(root, file), 'utf8');
 
-test('a tabela do Flux usa setas com nomes acessíveis sem alterar os dados', () => {
+test('os cartões do Flux mostram direção e mantêm abertura acessível', () => {
   const script = read('inventory.js');
-  const indicator = script.split('function fluxMovementIndicator(movement)')[1]
-    .split('function fluxTableMarkup(table, visible)')[0];
-  const table = script.split('function fluxTableMarkup(table, visible)')[1]
-    .split('function tableMarkup(')[0];
-  assert.match(indicator, /label !== 'Envio' && label !== 'Recebimento'/);
-  assert.ok(indicator.includes('role="img" aria-label="${label}" title="${label}"'));
-  assert.match(indicator, /<svg[^>]+aria-hidden="true"/);
-  assert.ok(table.includes('<td>${fluxMovementIndicator(item.movement)}</td>'));
-  assert.ok(!table.includes('<span class="inventory-movement ${className(item.movement)}">${escape(item.movement)}</span>'));
+  const cards = script.split('function fluxCardMarkup(group)')[1]
+    .split('function fluxSidebarMarkup(')[0];
+  assert.match(cards, /item\.movement === 'Recebimento' \? 'entry' : 'send'/);
+  assert.match(cards, /class="flux-card-direction[^`]+aria-hidden="true"/);
+  assert.match(cards, /role="button" aria-label="Abrir histórico de/);
+  assert.match(cards, /fluxIcon\('direction'\)/);
+  assert.match(cards, /fluxIcon\('send'\)[^\n]+<b>Saída<\/b>/);
+  assert.match(cards, /fluxIcon\('entry'\)[^\n]+<b>\$\{arrivalLabel\}<\/b>/);
   assert.match(script, /movements: \['Envio', 'Recebimento'\]/);
 });
 

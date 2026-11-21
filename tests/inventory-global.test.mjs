@@ -84,5 +84,5 @@ test('migração mantém um registro original, RLS e vínculos da mesma categori
   assert.match(sql, /create or replace function public\.inventory_global_page\(/i);
   assert.doesNotMatch(sql, /insert into public\.inventory_items/i);
   assert.match(client, /sharedBranchIds: sharesByItem\.get\(row\.id\) \|\| \[\]/);
-  assert.match(client, /for \(const sharedId of new Set\(sourceItem\.sharedBranchIds \|\| \[\]\)\)/);
+  assert.match(client, /Restauração do Inventário indisponível/);
 });

@@ -46,7 +46,6 @@
   const missingPriorityColumn = error => /(?:priority.*(?:column|schema cache)|column.*priority)/i.test(error?.message || '');
   const missingAgendaCompletionColumn = error => /(?:is_completed|completed_at).*?(?:column|schema cache)|(?:column|schema cache).*?(?:is_completed|completed_at)/i.test(error?.message || '');
   const missingAgendaCompletionFunction = error => /(?:set_agenda_(?:task|entry)_completion|function.*does not exist|schema cache)/i.test(error?.message || '');
-  const missingAgendaRetentionFunction = error => /(?:purge_expired_agenda_entries|function.*does not exist|schema cache)/i.test(error?.message || '');
   const missingAgendaPostitColumns = error => /(?:postit_level|postit_tasks).*?(?:column|schema cache)|(?:column|schema cache).*?(?:postit_level|postit_tasks)/i.test(error?.message || '');
   const missingAgendaPostitLayoutColumn = error => /postit_layout.*?(?:column|schema cache)|(?:column|schema cache).*?postit_layout/i.test(error?.message || '');
   const splitLegacyPriority = notes => {
@@ -177,6 +176,49 @@
   let inventoryBranchSchema = null;
   let inventorySharingSchema = null;
   const inventory = {
+    async previewLocalRegularization(itemId, values) {
+      await init();
+      return check(await client.rpc('preview_local_regularization', {
+        p_item_id: itemId,
+        p_target_location: String(values.location || '').trim(),
+        p_target_sector: String(values.sector || '').trim(),
+        p_status: values.status,
+        p_intent: values.intent
+      }));
+    },
+    async confirmLocalRegularization(itemId, values, previewToken, requestId) {
+      await init();
+      return check(await client.rpc('confirm_local_regularization', {
+        p_item_id: itemId,
+        p_target_location: String(values.location || '').trim(),
+        p_target_sector: String(values.sector || '').trim(),
+        p_status: values.status,
+        p_intent: values.intent,
+        p_reason: String(values.reason || '').trim(),
+        p_review_token: previewToken,
+        p_request_id: requestId
+      }));
+    },
+    async previewLocalReplacement(incomingId, outgoingId, values) {
+      await init();
+      return check(await client.rpc('preview_local_replacement', {
+        p_incoming_id: incomingId, p_outgoing_id: outgoingId,
+        p_removed_status: values.removedStatus,
+        p_removed_location: String(values.removedLocation || '').trim(),
+        p_removed_sector: String(values.removedSector || '').trim()
+      }));
+    },
+    async confirmLocalReplacement(incomingId, outgoingId, values, previewToken, requestId) {
+      await init();
+      return check(await client.rpc('confirm_local_replacement', {
+        p_incoming_id: incomingId, p_outgoing_id: outgoingId,
+        p_removed_status: values.removedStatus,
+        p_removed_location: String(values.removedLocation || '').trim(),
+        p_removed_sector: String(values.removedSector || '').trim(),
+        p_reason: String(values.reason || '').trim(),
+        p_review_token: previewToken, p_request_id: requestId
+      }));
+    },
     async peripheralInstallation(itemId) {
       await init();
       const tables = check(await client.from('module_tables').select('id').eq('module', 'management'));
@@ -431,6 +473,19 @@
       ));
     },
 
+    async startVerification(itemId, reason, expectedUpdatedAt, requestId) {
+      await init();
+      const response = await client.rpc('start_inventory_verification', {
+        p_item_id: itemId, p_reason: reason, p_request_id: requestId,
+        p_expected_updated_at: expectedUpdatedAt
+      });
+      if (response.error?.code === 'PGRST202') {
+        throw new Error('A migração 096 é necessária para iniciar verificações com motivo.');
+      }
+      check(response);
+      return check(await client.from('inventory_items').select('*').eq('id', itemId).single());
+    },
+
     async saveItem(tableId, values, existingId, logMessage, movementContext = null) {
       await init();
       const payload = {
@@ -539,70 +594,7 @@
     },
 
     async replace(snapshot) {
-      await init();
-      const hasBranches = snapshot.tables?.some(table => table.branches?.length || table.items?.some(item => item.branchId || item.sharedBranchIds?.length));
-      const hasShares = snapshot.tables?.some(table => table.items?.some(item => item.sharedBranchIds?.length));
-      if (hasBranches) {
-        const probe = await client.from('inventory_branches').select('id').limit(1);
-        if (probe.error) throw new Error('Restauração interrompida: a migração 079 de ramificações precisa estar disponível.');
-      }
-      if (hasShares) {
-        for (const table of snapshot.tables || []) {
-          const branchIds = new Set((table.branches || []).map(branch => branch.id));
-          for (const item of table.items || []) {
-            if ((item.sharedBranchIds || []).some(id => !branchIds.has(id))) {
-              throw new Error('Restauração interrompida: backup contém vínculo com ramificação ausente.');
-            }
-          }
-        }
-        const probe = await client.from('inventory_branch_memberships').select('item_id').limit(1);
-        if (probe.error) throw new Error('Restauração interrompida: a migração 080 de compartilhamento precisa estar disponível.');
-      }
-      const existing = check(await client.from('module_tables').select('id').eq('module', 'inventory'));
-      if (existing.length) check(await client.from('module_tables').delete().in('id', existing.map(table => table.id)));
-      for (const sourceTable of snapshot.tables || []) {
-        const table = await this.createTable(sourceTable);
-        const restoredBranchIds = new Map();
-        for (const branch of sourceTable.branches || []) {
-          restoredBranchIds.set(branch.id, await this.createBranch(table.id, branch.name, branch.classificationKey || null));
-        }
-        for (const sourceItem of sourceTable.items || []) {
-          const restored = check(await client.from('inventory_items').insert({
-            table_id: table.id,
-            equipment: sourceItem.equipment,
-            model: sourceItem.model,
-            brand: sourceItem.brand || '',
-            serial: sourceItem.serial || '',
-            tag: sourceItem.tag || '',
-            sector: sourceItem.sector || '',
-            location: sourceItem.location || '',
-            status: sourceItem.status || 'Ativo',
-            situation: sourceItem.situation || 'Normal',
-            cleaning_type: sourceItem.cleaning || 'Não realizada',
-            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
-            ...(sourceItem.branchId ? { branch_id: restoredBranchIds.get(sourceItem.branchId) || null } : {}),
-            position: 0
-          }).select().single());
-          const logs = sourceItem.logs?.length ? sourceItem.logs : [{ text: 'Equipamento restaurado a partir de backup.' }];
-          check(await client.from('inventory_item_logs').insert(logs.map(log => ({
-            inventory_item_id: restored.id,
-            action: 'restore',
-            message: log.at && log.at !== 'Backup antigo' ? `${log.at} — ${log.text || 'Histórico restaurado.'}` : (log.text || 'Histórico restaurado.')
-          }))));
-          for (const sharedId of new Set(sourceItem.sharedBranchIds || [])) {
-            if (sharedId !== sourceItem.branchId) {
-              await this.shareAdd(restored.id, restoredBranchIds.get(sharedId));
-            }
-          }
-          await recordItemActivity({
-            module: 'inventory',
-            itemId: restored.id,
-            operation: 'update',
-            description: 'Equipamento restaurado a partir de backup.'
-          });
-        }
-      }
-      return this.load();
+      fail('Backup preservado. Restauração do Inventário indisponível: o formato atual não garante transação, vínculos e histórico completos. Nenhum registro foi alterado.');
     }
   };
 
@@ -626,26 +618,270 @@
     exitDate: row.exit_date || '',
     status: row.status,
     situation: row.cleaning_type,
+    operationalStatus: row.operational_status || '',
+    operationalSituation: row.operational_situation || '',
     priority: splitItemPriority(row.notes).priority,
     notes: splitItemPriority(row.notes).notes,
     date: row.updated_at ? row.updated_at.slice(0, 10) : '',
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.control_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message }))
+      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message, eventId: log.event_id || '' }))
   });
 
   const control = {
+    async caseDetail(caseId) {
+      await init();
+      const detail = check(await client.rpc('get_control_case_detail', { p_case_id: caseId }));
+      const durationRows = check(await client.rpc('control_case_duration_summary', { p_case_id: caseId }));
+      let enriched = { ...detail, duration: durationRows[0] || null };
+      try {
+        const recurrence = check(await client.rpc('control_case_recurrence', { p_case_id: caseId }));
+        enriched = { ...enriched, recurrence, recurrenceAvailable: true };
+      } catch (error) {
+        if (!/42883|PGRST202/.test(String(error?.code || ''))
+          && !/control_case_recurrence.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, recurrence: null, recurrenceAvailable: false };
+      }
+      try {
+        const resolutions = check(await client.from('control_case_resolutions')
+          .select('id,case_id,final_diagnosis,solution,tests,final_condition,observations,actor_id,created_at')
+          .eq('case_id', caseId).order('created_at', { ascending: false }).order('id', { ascending: false }));
+        enriched = { ...enriched, resolutions, resolutionsAvailable: true };
+      } catch (error) {
+        if (!/42P01|PGRST205/.test(String(error?.code || ''))
+          && !/control_case_resolutions.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, resolutions: [], resolutionsAvailable: false };
+      }
+      try {
+        const priorityChanges = check(await client.from('control_case_priority_changes')
+          .select('id,case_id,previous_priority,next_priority,actor_id,created_at')
+          .eq('case_id', caseId).order('created_at', { ascending: true }).order('id', { ascending: true }));
+        enriched = { ...enriched, priorityChanges };
+      } catch (error) {
+        if (!/42P01|PGRST205/.test(String(error?.code || ''))
+          && !/control_case_priority_changes.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, priorityChanges: [] };
+      }
+      try {
+        const interventions = check(await client.from('control_case_interventions')
+          .select('id,case_id,occurred_at,intervention_type,description,result,contextual_state,technical_author,reference_note,recorded_by,recorded_at')
+          .eq('case_id', caseId).order('occurred_at', { ascending: true })
+          .order('id', { ascending: true }));
+        enriched = { ...enriched, interventions, interventionsAvailable: true };
+      } catch (error) {
+        if (!/42P01|PGRST205/.test(String(error?.code || ''))
+          && !/control_case_interventions.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, interventions: [], interventionsAvailable: false };
+      }
+      try {
+        const components = check(await client.from('control_case_components')
+          .select('id,case_id,inventory_item_id,supply_unit_id,component_name,brand,model,tag,serial,recorded_at')
+          .eq('case_id', caseId).order('recorded_at', { ascending: true }).order('id', { ascending: true }));
+        const componentIds = components.map(component => component.id);
+        const events = componentIds.length ? check(await client.from('control_case_component_events')
+          .select('id,case_id,component_id,action,occurred_at,result,notes,supplier,reason,protocol,expected_return_at,service_status,replacement_supply_unit_id,stock_destination')
+          .in('component_id', componentIds).order('occurred_at', { ascending: true }).order('id', { ascending: true })) : [];
+        const inventoryOptions=check(await client.from('inventory_items')
+          .select('id,equipment,brand,model,tag,serial,status').order('equipment').limit(500));
+        const units=check(await client.from('supply_units')
+          .select('id,supply_id,code,serial_number,status').order('code').limit(500));
+        const supplyIds=[...new Set(units.map(unit=>unit.supply_id))];
+        const supplies=supplyIds.length ? check(await client.from('supplies')
+          .select('id,name,brand,model,category').in('id',supplyIds)) : [];
+        const supplyById=new Map(supplies.map(supply=>[supply.id,supply]));
+        const supplyOptions=units.map(unit=>({...unit,...(supplyById.get(unit.supply_id)||{})}));
+        const unitById=new Map(supplyOptions.map(unit=>[unit.id,unit]));
+        enriched = { ...enriched, components: components.map(component => ({
+          ...component, events: events.filter(event => event.component_id === component.id)
+            .map(event=>({...event,replacementUnit:unitById.get(event.replacement_supply_unit_id)||null}))
+        })), inventoryOptions, supplyOptions, componentsAvailable: true };
+      } catch (error) {
+        if (!/42P01|PGRST205/.test(String(error?.code || ''))
+          && !/control_case_component(?:_events)?.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, components: [], inventoryOptions: [], supplyOptions: [], componentsAvailable: false };
+      }
+      try {
+        const tasks = check(await client.from('control_case_tasks')
+          .select('id,case_id,description,due_at,priority,task_state,completion_note,notes,completed_at,revision,created_at,updated_at')
+          .eq('case_id', caseId).order('created_at', { ascending: true })
+          .order('id', { ascending: true }));
+        const taskEvents = check(await client.from('control_case_task_events')
+          .select('id,case_id,task_id,action,before_snapshot,after_snapshot,created_at')
+          .eq('case_id', caseId).order('created_at', { ascending: true })
+          .order('id', { ascending: true }));
+        return { ...enriched, tasks, taskEvents, tasksAvailable: true };
+      } catch (error) {
+        if (!/42P01|PGRST205/.test(String(error?.code || ''))
+          && !/(?:control_case_tasks|control_case_task_events).*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        return { ...enriched, tasks: [], taskEvents: [], tasksAvailable: false };
+      }
+    },
+
+    async appendCaseDiagnostic(caseId, payload, requestId) {
+      await init();
+      return check(await client.rpc('append_control_case_diagnostic', {
+        p_case_id: caseId, p_payload: payload, p_request_id: requestId
+      }));
+    },
+
+    async setCasePriority(caseId, priority, requestId) {
+      await init();
+      return check(await client.rpc('set_control_case_priority', {
+        p_case_id: caseId, p_priority: priority, p_request_id: requestId
+      }));
+    },
+
+    async reopenCase(caseId, reason, requestId) {
+      await init();
+      return check(await client.rpc('reopen_control_case', {
+        p_case_id: caseId, p_reason: reason, p_request_id: requestId
+      }));
+    },
+
+    async resolveCase(caseId, payload, requestId) {
+      await init();
+      return check(await client.rpc('resolve_control_case', {
+        p_case_id: caseId, p_payload: payload, p_request_id: requestId
+      }));
+    },
+
+    async appendCaseIntervention(caseId, payload, requestId) {
+      await init();
+      return check(await client.rpc('append_control_case_intervention', {
+        p_case_id: caseId, p_payload: payload, p_request_id: requestId
+      }));
+    },
+
+    async appendCaseComponentEvent(caseId, component, event, requestId) {
+      await init();
+      return check(await client.rpc('append_control_case_component_event', {
+        p_case_id: caseId, p_component: component, p_event: event, p_request_id: requestId
+      }));
+    },
+
+    async createCaseTask(caseId, payload, requestId) {
+      await init();
+      return check(await client.rpc('create_control_case_task', {
+        p_case_id: caseId, p_payload: payload, p_request_id: requestId
+      }));
+    },
+
+    async updateCaseTask(taskId, payload, requestId) {
+      await init();
+      return check(await client.rpc('update_control_case_task', {
+        p_task_id: taskId, p_payload: payload, p_request_id: requestId
+      }));
+    },
+
+    async closeCaseWithTasks(caseId, reason, requestId, openTaskIds, decision) {
+      await init();
+      return check(await client.rpc('close_control_case_with_tasks', {
+        p_case_id: caseId, p_reason: reason, p_request_id: requestId,
+        p_open_task_ids: openTaskIds, p_decision: decision
+      }));
+    },
+
+    async operationalOverview(periodStart = null) {
+      await init();
+      const overview = check(await client.rpc('control_operational_overview', {
+        p_period_start: periodStart
+      }));
+      let enriched = overview;
+      try {
+        const interventions = check(await client.rpc('recent_control_case_interventions'));
+        enriched = { ...enriched, interventions, interventionsAvailable: true };
+      } catch (error) {
+        if (!/42883|PGRST202/.test(String(error?.code || ''))
+          && !/recent_control_case_interventions.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        enriched = { ...enriched, interventions: [], interventionsAvailable: false };
+      }
+      try {
+        const overdue = check(await client.rpc('control_overdue_case_tasks'));
+        return { ...enriched, overdueTasks: overdue.items || [], tasksAvailable: true,
+          metrics: { ...enriched.metrics, overdue: overdue.count } };
+      } catch (error) {
+        if (!/42883|PGRST202/.test(String(error?.code || ''))
+          && !/control_overdue_case_tasks.*(?:does not exist|schema cache)/i.test(error?.message || '')) throw error;
+        return { ...enriched, overdueTasks: [], tasksAvailable: false };
+      }
+    },
+
+    async operationalCases(filters = {}) {
+      await init();
+      return check(await client.rpc('list_control_cases', {
+        p_tab: filters.tab || 'all',
+        p_query: filters.query || '',
+        p_state: filters.status || '',
+        p_priority: filters.priority || '',
+        p_page: filters.page || 1,
+        p_page_size: filters.pageSize || 25
+      }));
+    },
+
+    async controlCaseReport(filters = {}) {
+      await init();
+      return check(await client.rpc('control_case_report', { p_filters: filters }));
+    },
+
+    async listCases(controlItemId) {
+      await init();
+      const fields = 'id,control_item_id,source_module,source_id,followup_kind,ticket_state,legacy_status,requires_review,equipment,tag,serial,sector,priority,solution,related_case_id,opened_at,resolved_at,closed_at,updated_at';
+      const own = check(await client.from('control_cases').select(fields)
+        .eq('control_item_id', controlItemId).order('opened_at', { ascending: false }));
+      const source = own[0];
+      if (!source) return [];
+      return check(await client.from('control_cases').select(fields)
+        .eq('source_module', source.source_module).eq('source_id', source.source_id)
+        .order('opened_at', { ascending: false }));
+    },
+
+    async transitionCase(caseId, nextState, reason, requestId) {
+      await init();
+      return check(await client.rpc('transition_control_case', {
+        p_case_id: caseId, p_next_state: nextState,
+        p_reason: reason, p_request_id: requestId
+      }));
+    },
+
+    async promoteVerification(itemId, reason, requestId) {
+      await init();
+      return check(await client.rpc('promote_inventory_verification_to_maintenance', {
+        p_control_item_id: itemId, p_reason: String(reason).trim(), p_request_id: requestId
+      }));
+    },
+
     async load() {
       await init();
-      const loadRows = extra => client.from('module_tables')
-        .select('id, name, icon, position, created_at, control_items(id, inventory_item_id, management_record_id, supply_unit_id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at' + extra + ', control_item_logs(id, message, created_at))')
+      const loadRows = (extra, logExtra = ', event_id') => client.from('module_tables')
+        .select('id, name, icon, position, created_at, control_items(id, inventory_item_id, management_record_id, supply_unit_id, equipment, model, brand, serial, tag, sector, entry_date, exit_date, status, cleaning_type, notes, position, created_at, updated_at' + extra + ', control_item_logs(id, message, created_at' + logExtra + '))')
         .eq('module', 'control').order('position', { ascending: true }).order('created_at', { ascending: false });
-      let response = await loadRows(',followup_kind,verification_inventory_item_id,verification_computer_id,verification_started_at,verification_completed_at');
-      if (response.error && /42703|PGRST204/.test(String(response.error.code || ''))
-        && /followup_kind|verification_/.test(response.error.message || '')) response = await loadRows('');
+      const verification = ',followup_kind,verification_inventory_item_id,verification_computer_id,verification_started_at,verification_completed_at';
+      const missing = (response, columns) => response.error && /42703|PGRST204/.test(String(response.error.code || ''))
+        && columns.test(response.error.message || '');
+      let response = await loadRows(verification + ',operational_status,operational_situation');
+      const controlBoardReady = !response.error;
+      if (missing(response, /operational_status|operational_situation|followup_kind|verification_|event_id/))
+        response = await loadRows(verification);
+      if (missing(response, /followup_kind|verification_|event_id/)) response = await loadRows('', '');
       const rows = check(response);
+      const linked = rows.flatMap(table => (table.control_items || []).filter(row =>
+        row.inventory_item_id || row.management_record_id || row.verification_computer_id || row.verification_inventory_item_id));
+      const conditions = new Map();
+      if (linked.length && window.AldeckotEquipmentCleaning) {
+        for (let start = 0; start < linked.length; start += 100) {
+          const state = await client.rpc('control_source_equipment_state', {
+            p_ticket_ids: linked.slice(start, start + 100).map(row => row.id)
+          });
+          if (state.error) {
+            if (state.error.code !== 'PGRST202') console.warn('Situação física indisponível no Controle TI.', state.error);
+            break;
+          }
+          for (const row of state.data || []) conditions.set(row.ticket_id, row);
+        }
+      }
       return {
+        controlBoardReady,
         tables: rows.map(table => ({
           id: table.id,
           name: table.name,
@@ -653,7 +889,7 @@
           items: withoutDuplicateItems(
             (table.control_items || [])
               .sort((a, b) => (a.position - b.position) || String(b.updated_at).localeCompare(String(a.updated_at)))
-              .map(controlItemFromRow),
+              .map(row => ({ ...controlItemFromRow(row), equipmentState: conditions.get(row.id) })),
             ['equipment', 'model', 'brand', 'sector', 'entryDate', 'exitDate', 'status', 'situation', 'notes', 'followUpKind', 'verificationInventoryItemId', 'verificationComputerId']
           )
         }))
@@ -700,22 +936,44 @@
       }));
       return { id: itemId, eventId: result?.eventId, alreadyApplied: Boolean(result?.alreadyApplied) };
     },
+    async previewPeripheralCompletion(itemId, values) {
+      await init();
+      return check(await client.rpc('preview_control_peripheral_completion', {
+        p_control_item_id: itemId,
+        p_equipment_status: values.status,
+        p_target_location: values.location,
+        p_target_sector: values.sector
+      }));
+    },
     async completeMaintenance(itemId, values, equipmentStatus, requestId) {
       await init();
-      const result = check(await client.rpc('complete_control_maintenance', {
+      const fields = {
+        equipment: values.equipment.trim(), model: values.model.trim(),
+        brand: values.brand || '', sector: values.sector || '',
+        entryDate: values.entryDate || null, exitDate: values.exitDate || null,
+        cleaningType: values.situation, notes: storeItemPriority(values.notes, values.priority),
+        ...(hasOwn(values, 'tag') ? { tag: values.tag || '' } : {}),
+        ...(hasOwn(values, 'serial') ? { serial: values.serial || '' } : {})
+      };
+      const peripheral = equipmentStatus && typeof equipmentStatus === 'object';
+      const result = check(await client.rpc(peripheral
+        ? 'complete_control_peripheral_with_destination' : 'complete_control_maintenance', peripheral ? {
+        p_control_item_id: itemId,
+        p_equipment_status: equipmentStatus.status,
+        p_target_location: equipmentStatus.location,
+        p_target_sector: equipmentStatus.sector,
+        p_reason: equipmentStatus.reason,
+        p_review_token: equipmentStatus.token,
+        p_request_id: requestId,
+        p_control_fields: fields
+      } : {
         p_control_item_id: itemId,
         p_equipment_status: equipmentStatus,
         p_request_id: requestId,
-        p_control_fields: {
-          equipment: values.equipment.trim(), model: values.model.trim(),
-          brand: values.brand || '', sector: values.sector || '',
-          entryDate: values.entryDate || null, exitDate: values.exitDate || null,
-          cleaningType: values.situation, notes: storeItemPriority(values.notes, values.priority),
-          ...(hasOwn(values, 'tag') ? { tag: values.tag || '' } : {}),
-          ...(hasOwn(values, 'serial') ? { serial: values.serial || '' } : {})
-        }
+        p_control_fields: fields
       }));
-      return { id: itemId, eventId: result?.eventId, equipmentStatus };
+      return { id: itemId, eventId: result?.eventId,
+        equipmentStatus: peripheral ? equipmentStatus.status : equipmentStatus };
     },
 
     async saveItem(tableId, values, existingId, logMessage) {
@@ -733,6 +991,11 @@
         notes: storeItemPriority(values.notes, values.priority),
         position: 0
       };
+      if (hasOwn(values, 'inventoryItemId')) payload.inventory_item_id = values.inventoryItemId || null;
+      if (hasOwn(values, 'managementRecordId')) payload.management_record_id = values.managementRecordId || null;
+      if (hasOwn(values, 'supplyUnitId')) payload.supply_unit_id = values.supplyUnitId || null;
+      if (!existingId && hasOwn(values, 'operationalStatus')) payload.operational_status = values.operationalStatus || null;
+      if (!existingId && hasOwn(values, 'operationalSituation')) payload.operational_situation = values.operationalSituation || null;
       if (!existingId || hasOwn(values, 'serial')) payload.serial = values.serial || '';
       if (!existingId || hasOwn(values, 'tag')) payload.tag = values.tag || '';
       const result = existingId
@@ -752,6 +1015,28 @@
         description: logMessage || (existingId ? 'Equipamento atualizado.' : 'Equipamento adicionado ao Controle TI.')
       });
       return saved;
+    },
+
+    async saveBoardClassification(item, values) {
+      await init();
+      const row = check(await client.from('control_items').update({
+        operational_status: values.operationalStatus || null,
+        operational_situation: values.operationalSituation || null
+      }).eq('id', item.id).eq('updated_at', item.updatedAt).select('id').maybeSingle());
+      if (!row) fail('O registro mudou. Reabra os detalhes para conferir a classificação atual.');
+      return row;
+    },
+
+    async recordBoardActivity(itemId, kind, fields, requestId) {
+      await init();
+      return check(await client.rpc('control_record_board_activity', {
+        p_item_id: itemId, p_kind: kind, p_fields: fields, p_request_id: requestId
+      }));
+    },
+
+    async boardTimeline(itemId) {
+      await init();
+      return check(await client.rpc('control_board_timeline', { p_item_id: itemId }));
     },
 
     async addLog(itemId, message) {
@@ -795,56 +1080,7 @@
     },
 
     async replace(snapshot) {
-      await init();
-      // A rotina legada recria tabelas/UUIDs; acompanhamentos técnicos exigem preservação de identidade.
-      const verification = await client.from('control_items').select('id').eq('followup_kind','verification').limit(1);
-      if (verification.error && !(/42703|PGRST204/.test(String(verification.error.code || ''))
-        && /followup_kind/.test(verification.error.message || ''))) check(verification);
-      if (verification.data?.length || (snapshot?.tables || []).some(table =>
-        (table.items || []).some(item => item.followUpKind === 'verification'))) {
-        fail('Backup preservado. A restauração legada do Controle TI não pode recriar IDs de verificações técnicas. Nenhum registro foi alterado.');
-      }
-      const existing = check(await client.from('module_tables').select('id').eq('module', 'control'));
-      if (existing.length) check(await client.from('module_tables').delete().in('id', existing.map(table => table.id)));
-      const restoredTables = [];
-      for (const sourceTable of snapshot.tables || []) {
-        const table = await this.createTable(sourceTable);
-        restoredTables.push(table.id);
-        const restoredItems = [];
-        for (const sourceItem of sourceTable.items || []) {
-          const restored = check(await client.from('control_items').insert({
-            table_id: table.id,
-            equipment: sourceItem.equipment,
-            model: sourceItem.model,
-            brand: sourceItem.brand || '',
-            serial: sourceItem.serial || '',
-            tag: sourceItem.tag || '',
-            sector: sourceItem.sector || '',
-            entry_date: sourceItem.entryDate || null,
-            exit_date: sourceItem.exitDate || null,
-            status: sourceItem.status || 'Em manutenção',
-            cleaning_type: sourceItem.situation || 'Não realizada',
-            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
-            position: 0
-          }).select().single());
-          restoredItems.push(restored.id);
-          const logs = sourceItem.logs?.length ? sourceItem.logs : [{ text: 'Equipamento restaurado a partir de backup.' }];
-          check(await client.from('control_item_logs').insert(logs.map(log => ({
-            control_item_id: restored.id,
-            action: 'restore',
-            message: log.at && log.at !== 'Backup antigo' ? `${log.at} — ${log.text || 'Histórico restaurado.'}` : (log.text || 'Histórico restaurado.')
-          }))));
-          await recordItemActivity({
-            module: 'control',
-            itemId: restored.id,
-            operation: 'update',
-            description: 'Equipamento restaurado a partir de backup.'
-          });
-        }
-        await Promise.all(restoredItems.map((id, position) => client.from('control_items').update({ position }).eq('id', id).then(check)));
-      }
-      await Promise.all(restoredTables.map((id, position) => client.from('module_tables').update({ position }).eq('id', id).then(check)));
-      return this.load();
+      fail('Backup preservado. Restauração do Controle TI indisponível: o formato atual não garante transação, vínculos e histórico completos. Nenhum registro foi alterado.');
     }
   };
 
@@ -853,12 +1089,25 @@
     sourceModule: row.source_module || null,
     sourceRecordId: row.source_record_id || null,
     inventoryItemId: row.inventory_item_id || null,
+    equipmentUid: row.equipment_uid || null,
+    managementComputerId: row.management_computer_id || null,
+    returnOf: row.return_of || null,
+    deliveredAt: row.delivered_at || null,
+    deliveredBy: row.delivered_by || '',
+    deliveryCarrier: row.delivery_carrier || '',
+    deliveryNote: row.delivery_note || '',
+    receivedAt: row.received_at || null,
+    returnReason: row.return_reason || '',
+    postReceiptStatus: row.post_receipt_status || null,
+    resolutionState: row.resolution_state || null,
     movement: row.movement,
     equipment: row.equipment,
     model: row.model,
     brand: row.brand,
     serial: row.serial,
     tag: row.tag,
+    sector: row.sector || '',
+    location: row.location || '',
     senderCompany: row.sender_company,
     destinationCompany: row.destination_company,
     senderResponsible: row.sender_responsible,
@@ -874,7 +1123,7 @@
     updatedAt: row.updated_at || row.created_at || '',
     logs: (row.flux_item_logs || [])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message }))
+      .map(log => ({ id: log.id, at: dateLabel(log.created_at), createdAt: log.created_at, text: log.message, eventId: log.event_id || null }))
   });
 
   const managementItemFromRow = row => {
@@ -894,20 +1143,26 @@
       processor: payload.processor || '', memory: payload.memory || '', storage: payload.storage || '',
       type: payload.type || 'Escritório', category: payload.category || (payload.equipment ? 'Computador' : ''), company: payload.company || '', sector: payload.sector || '', location: payload.location || '',
       responsible: payload.responsible || '', user: payload.user || '', notes: payload.notes || '', status: payload.status || 'Ativo', priority: payload.priority || 'Estável',
-      situation: payload.situation || 'Em Uso', cleaning: payload.cleaning || 'Preventiva', area: payload.area || 'Escritório',
+      situation: payload.situation || 'Em Uso', cleaning: globalThis.AldeckotEquipmentCleaning?.canonicalType(payload.cleaning) || payload.cleaning || 'Não realizada', area: payload.area || 'Escritório',
       isFixed: Boolean(payload.isFixed), peripherals, monitoring: {
         cpu: Number(metrics.cpu) || 0, ram: Number(metrics.ram) || 0, disk: Number(metrics.disk) || 0,
         network: Number(metrics.network) || 0, temperature: Number(metrics.temperature) || 0, ping: Number(metrics.ping) || 0
       },
       registeredAt: payload.registeredAt || row.created_at?.slice(0, 10) || '', updatedAt: row.updated_at || row.created_at || '',
-      logs: logs.map((log, index) => ({
-        id: log.id || `${row.id}-${index}`,
-        at: log.at || log.createdAt || log.timestamp || row.updated_at || row.created_at,
-        text: log.text || log.action || 'Registro atualizado.',
-        eventId: log.eventId || '',
-        sourceModule: log.sourceModule || (log.controlLogId ? 'control' : ''),
-        sourceLogId: log.sourceLogId || log.controlLogId || ''
-      })).sort((first, second) => String(second.at).localeCompare(String(first.at)))
+      logs: logs.map((log, index) => {
+        const at = log.at || log.createdAt || log.timestamp || row.updated_at || row.created_at;
+        // A função app.management_movement_log gravou "at" em UTC sem o sufixo de fuso.
+        const legacyUtc = log.sourceModule === 'management' && log.eventId
+          && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(log.at);
+        return {
+          id: log.id || `${row.id}-${index}`,
+          at: legacyUtc ? `${at}Z` : at,
+          text: log.text || log.action || 'Registro atualizado.',
+          eventId: log.eventId || '',
+          sourceModule: log.sourceModule || (log.controlLogId ? 'control' : ''),
+          sourceLogId: log.sourceLogId || log.controlLogId || ''
+        };
+      }).sort((first, second) => String(second.at).localeCompare(String(first.at)))
     };
   };
 
@@ -918,10 +1173,33 @@
     processor: String(item.processor || '').trim(), memory: String(item.memory || '').trim(), storage: String(item.storage || '').trim(),
     type: item.type || 'Escritório', category: String(item.category || '').trim(), company: String(item.company || '').trim(), sector: String(item.sector || '').trim(), location: String(item.location || '').trim(),
     responsible: String(item.responsible || '').trim(), user: String(item.user || '').trim(), notes: String(item.notes || '').trim(), status: item.status || 'Ativo', priority: item.priority || 'Estável',
-    situation: item.situation || 'Em Uso', cleaning: item.cleaning || 'Preventiva', area: item.area || 'Escritório', isFixed: Boolean(item.isFixed),
+    situation: item.situation || 'Em Uso', cleaning: item.cleaning || 'Não realizada', area: item.area || 'Escritório', isFixed: Boolean(item.isFixed),
     peripherals: Array.isArray(item.peripherals) ? item.peripherals : [], monitoring: item.monitoring || {}, registeredAt: item.registeredAt || new Date().toISOString().slice(0, 10),
     logs: Array.isArray(item.logs) ? item.logs : [], lastActivity: String(activityDescription || '').trim()
   });
+
+  const cleaning = {
+    async peripherals(positionId) {
+      await init();
+      return this.requireMigration(await client.rpc('management_cleaning_peripherals', { p_position: positionId }));
+    },
+    async record({ module, item, type, selected, id }) {
+      await init();
+      return this.requireMigration(await client.rpc('record_equipment_cleaning', {
+        p_module: module, p_source: item.id, p_expected_updated_at: item.updatedAt,
+        p_type: type, p_selected: selected, p_request_id: id
+      }));
+    },
+    async alerts() {
+      await init();
+      const response = await client.rpc('equipment_cleaning_alerts');
+      return response.error?.code === 'PGRST202' ? [] : check(response);
+    },
+    requireMigration(response) {
+      if (response.error?.code === 'PGRST202') fail('O registro automatizado de limpeza requer a migração 129.');
+      return check(response);
+    }
+  };
 
   const management = {
     async ensureTable() {
@@ -953,8 +1231,8 @@
       const sourceTags = [...new Set(tags.map(tag => String(tag || '').trim().toUpperCase()).filter(Boolean))];
       const batches = (values, size = 80) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
       const queries = [
-        ...batches(sourceIds).map(batch => client.from('inventory_items').select('id, tag, equipment, status').in('id', batch).then(check)),
-        ...batches(sourceTags).map(batch => client.from('inventory_items').select('id, tag, equipment, status').in('tag', batch).then(check))
+        ...batches(sourceIds).map(batch => client.from('inventory_items').select('id, tag, equipment, status, situation, cleaning_type').in('id', batch).then(check)),
+        ...batches(sourceTags).map(batch => client.from('inventory_items').select('id, tag, equipment, status, situation, cleaning_type').in('tag', batch).then(check))
       ];
       const rows = (await Promise.all(queries)).flat();
       return [...new Map(rows.map(row => [row.id, row])).values()];
@@ -1090,6 +1368,9 @@
   };
 
   let fluxSourceAvailable = null;
+  let fluxSectorAvailable = null;
+  let fluxLifecycleAvailable = null;
+  let fluxReturnAvailable = null;
   const missingFluxSourceColumns = error => /(?:source_module|source_record_id|inventory_item_id)/i.test(error?.message || '') &&
     /(?:column|schema cache|could not find)/i.test(error?.message || '');
   const fluxPayload = (tableId, values) => {
@@ -1104,11 +1385,13 @@
       sender_responsible: values.senderResponsible.trim(),
       receiver_responsible: values.receiverResponsible.trim(),
       send_date: values.sendDate,
-      received_date: values.receivedDate,
+      received_date: values.receivedDate || null,
       shipping_type: values.shippingType,
       reason: values.situation,
       status: values.status,
       notes: storeItemPriority(values.notes, values.priority),
+      sector: String(values.sector || '').trim(),
+      location: String(values.location || '').trim(),
       position: 0
     };
     if (hasOwn(values, 'sourceModule')) {
@@ -1125,9 +1408,27 @@
       await init();
       const fields = 'id, name, icon, position, created_at, flux_items(id, movement, equipment, model, brand, serial, tag, sender_company, destination_company, sender_responsible, receiver_responsible, send_date, received_date, shipping_type, reason, status, notes, position, created_at, updated_at, flux_item_logs(id, message, created_at))';
       const withSource = fields.replace('flux_item_logs(', 'source_module, source_record_id, inventory_item_id, flux_item_logs(');
+      const withSector = withSource.replace('flux_item_logs(', 'sector, location, flux_item_logs(');
+      const withLifecycle = withSector.replace('flux_item_logs(', 'equipment_uid, return_of, delivered_at, delivered_by, delivery_carrier, delivery_note, flux_item_logs(').replace('flux_item_logs(id, message, created_at)', 'flux_item_logs(id, message, created_at, event_id)');
+      const withReturn = withLifecycle.replace('flux_item_logs(', 'received_at, return_reason, post_receipt_status, resolution_state, flux_item_logs(');
+      const withComputerReturn = withReturn.replace('flux_item_logs(', 'management_computer_id, flux_item_logs(');
       const loadRows = select => client.from('module_tables').select(select).eq('module', 'flux')
         .order('position', { ascending: true }).order('created_at', { ascending: false });
-      let response = await loadRows(withSource);
+      let response = await loadRows(withComputerReturn);
+      if (response.error && /management_computer_id/i.test(response.error.message || ''))
+        response = await loadRows(withReturn);
+      if (response.error && /(?:received_at|return_reason|post_receipt_status|resolution_state)/i.test(response.error.message || '')) {
+        fluxReturnAvailable = false;
+        response = await loadRows(withLifecycle);
+      } else if (!response.error) fluxReturnAvailable = true;
+      if (response.error && /(?:equipment_uid|return_of|delivered_at|delivered_by|delivery_carrier|delivery_note).*?(?:column|schema cache)|(?:column|schema cache).*?(?:equipment_uid|return_of|delivered_at|delivered_by|delivery_carrier|delivery_note)/i.test(response.error.message || '')) {
+        fluxLifecycleAvailable = false;
+        response = await loadRows(withSector);
+      } else if (!response.error) fluxLifecycleAvailable = true;
+      if (response.error && /(?:sector|location).*?(?:column|schema cache)|(?:column|schema cache).*?(?:sector|location)/i.test(response.error.message || '')) {
+        fluxSectorAvailable = false;
+        response = await loadRows(withSource);
+      } else if (!response.error) fluxSectorAvailable = true;
       if (response.error && missingFluxSourceColumns(response.error)) {
         fluxSourceAvailable = false;
         response = await loadRows(fields);
@@ -1189,6 +1490,88 @@
       return check(result);
     },
 
+    async confirmDelivery(item, values, requestId) {
+      await init();
+      if (!fluxLifecycleAvailable) fail('Confirmação de entrega aguarda a migração 112 no banco de testes. Nenhum dado foi alterado.');
+      const result = await client.rpc('flux_confirm_delivery', {
+        p_flux_item_id: item.id,
+        p_expected_updated_at: item.updatedAt,
+        p_request_id: requestId,
+        p_delivered_at: values.deliveredAt,
+        p_received_by: values.receivedBy,
+        p_carrier: values.carrier || '',
+        p_notes: values.notes || ''
+      });
+      if (result.error?.code === 'PGRST202') fail('Confirmação de entrega aguarda a migração 112 no banco de testes. Nenhum dado foi alterado.');
+      return fluxItemFromRow(check(result));
+    },
+
+    async registerReturn(item, targetTableId, values, requestId) {
+      await init();
+      if (!fluxReturnAvailable) fail('Registro de retorno aguarda a migração 113 no banco. Nenhum dado foi alterado.');
+      const result = await client.rpc('flux_register_return', {
+        p_send_id: item.id,
+        p_target_table_id: targetTableId,
+        p_expected_updated_at: item.updatedAt,
+        p_request_id: requestId,
+        p_received_at: values.receivedAt,
+        p_received_by: values.receivedBy,
+        p_origin_company: values.originCompany,
+        p_destination_company: values.destinationCompany,
+        p_return_reason: values.returnReason,
+        p_post_receipt_status: values.postReceiptStatus,
+        p_carrier: values.carrier || '',
+        p_notes: values.notes || ''
+      });
+      if (result.error?.code === 'PGRST202') fail('Registro de retorno aguarda a migração 113 no banco. Nenhum dado foi alterado.');
+      return fluxItemFromRow(check(result));
+    },
+
+    async previewReturnDestination(item, { location, sector }) {
+      await init();
+      const rpc = item.managementComputerId ? 'preview_flux_computer_return' : 'preview_flux_return_destination';
+      return check(await client.rpc(rpc, {
+        p_return_id: item.id, p_location: location, p_sector: sector
+      }));
+    },
+
+    async confirmReturnDestination(item, { location, sector, reason }, token, requestId) {
+      await init();
+      const rpc = item.managementComputerId ? 'confirm_flux_computer_return' : 'confirm_flux_return_destination';
+      return check(await client.rpc(rpc, {
+        p_return_id: item.id, p_location: location, p_sector: sector,
+        p_reason: reason, p_review_token: token, p_request_id: requestId
+      }));
+    },
+
+    async equipmentEvents(inventoryItemId) {
+      await init();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(inventoryItemId || ''))) return [];
+      const result = await client.from('equipment_events')
+        .select('id, source_module, source_id, action, previous_status, new_status, previous_location, new_location, previous_assignment, new_assignment, origin_location, destination_location, reason, affected_modules, processing_result, metadata, actor_id, created_at')
+        .eq('inventory_item_id', inventoryItemId)
+        .neq('source_module', 'flux')
+        .order('created_at', { ascending: false }).limit(201);
+      return check(result);
+    },
+
+    async equipmentEventsForItems(inventoryItemIds) {
+      await init();
+      const ids = [...new Set((inventoryItemIds || []).filter(id =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id))))];
+      if (!ids.length) return [];
+      const rows = [];
+      for (let start = 0; start < ids.length; start += 40) {
+        const result = await client.from('equipment_events')
+          .select('id, inventory_item_id, source_module, source_id, action, previous_status, new_status, previous_location, new_location, previous_assignment, new_assignment, origin_location, destination_location, reason, affected_modules, processing_result, metadata, created_at')
+          .in('inventory_item_id', ids.slice(start, start + 40))
+          .neq('source_module', 'flux')
+          .order('created_at', { ascending: false }).limit(1001);
+        rows.push(...check(result));
+      }
+      return rows.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
+    },
+
     async previewReversal(itemId) {
       await init();
       const result = await client.rpc('flux_preview_reversal', { p_flux_item_id: itemId });
@@ -1206,6 +1589,14 @@
 
     async saveItem(tableId, values, existingId, logMessage, review = null) {
       await init();
+      if (fluxSectorAvailable === null && (hasOwn(values, 'sector') || hasOwn(values, 'location'))) {
+        const probe = await client.from('flux_items').select('id, sector, location').limit(1);
+        if (probe.error && /(?:sector|location).*?(?:column|schema cache)|(?:column|schema cache).*?(?:sector|location)/i.test(probe.error.message || '')) fluxSectorAvailable = false;
+        else { check(probe); fluxSectorAvailable = true; }
+      }
+      if (!fluxSectorAvailable && (String(values.sector || '').trim() || String(values.location || '').trim())) {
+        fail('O Setor/Local no Flux ainda não está disponível no banco. Aplique a migração 109 antes de salvar esses dados.');
+      }
       if (fluxSourceAvailable === null && hasOwn(values, 'sourceModule')) {
         const probe = await client.from('flux_items').select('id, source_module').limit(1);
         if (probe.error && missingFluxSourceColumns(probe.error)) fluxSourceAvailable = false;
@@ -1214,6 +1605,7 @@
       if (values.sourceModule && !values.sourceRecordId) fail('Selecione novamente o equipamento de origem.');
       if (values.sourceModule && !fluxSourceAvailable) fail('O vínculo ainda não está disponível no banco. Aplique a migração 068 ou remova a seleção e salve manualmente.');
       const payload = fluxPayload(tableId, values);
+      if (!fluxSectorAvailable) { delete payload.sector; delete payload.location; }
       if (!fluxSourceAvailable) {
         delete payload.source_module;
         delete payload.source_record_id;
@@ -1262,16 +1654,22 @@
         .select('flux_item_id, destination, inventory_table_id, management_area, management_kind, status, inventory_item_id, management_record_id')
         .eq('flux_item_id', itemId).maybeSingle();
       if (!extended.error) {
-        const supplyProbe = await client.from('flux_acquisition_intents')
-          .select('supply_id').limit(0);
+        const [supplyProbe, peripheralFields] = await Promise.all([
+          client.from('flux_acquisition_intents').select('supply_id').limit(0),
+          client.from('flux_acquisition_intents').select('peripheral_kind,peripheral_sector')
+            .eq('flux_item_id', itemId).maybeSingle()
+        ]);
         if (supplyProbe.error && !/(?:supply_id).*?(?:column|schema cache)|(?:column|schema cache).*?(?:supply_id)/i.test(supplyProbe.error.message)) {
           fail(supplyProbe.error.message);
         }
         const supplyFields = supplyProbe.error ? null : check(await client.from('flux_acquisition_intents')
           .select('supply_id,supply_variant_id,supply_quantity,supply_movement_id')
           .eq('flux_item_id', itemId).maybeSingle());
-        return { ...extended.data, ...supplyFields, managementAvailable: true,
-          supplyAvailable: !supplyProbe.error };
+        if (peripheralFields.error && !/(?:peripheral_kind|peripheral_sector).*?(?:column|schema cache)|(?:column|schema cache).*?(?:peripheral_kind|peripheral_sector)/i.test(peripheralFields.error.message)) {
+          fail(peripheralFields.error.message);
+        }
+        return { ...extended.data, ...supplyFields, ...peripheralFields.data, managementAvailable: true,
+          supplyAvailable: !supplyProbe.error, peripheralAvailable: !peripheralFields.error };
       }
       if (!/(?:management_area|management_kind|management_record_id).*?(?:column|schema cache)|(?:column|schema cache).*?(?:management_area|management_kind|management_record_id)/i.test(extended.error.message)) {
         fail(extended.error.message);
@@ -1318,6 +1716,23 @@
       return check(await client.rpc('flux_complete_management_acquisition', { p_flux_item_id: itemId }));
     },
 
+    async setPeripheralAcquisitionIntent(itemId, inventoryTableId, kind, sector) {
+      await init();
+      return check(await client.rpc('flux_set_peripheral_acquisition_intent', {
+        p_flux_item_id: itemId, p_inventory_table_id: inventoryTableId, p_kind: kind, p_sector: sector
+      }));
+    },
+
+    async previewPeripheralAcquisition(itemId) {
+      await init();
+      return check(await client.rpc('flux_preview_peripheral_acquisition', { p_flux_item_id: itemId }));
+    },
+
+    async completePeripheralAcquisition(itemId, token) {
+      await init();
+      return check(await client.rpc('flux_complete_peripheral_acquisition', { p_flux_item_id: itemId, p_token: token }));
+    },
+
     async supplyAcquisitionOptions() {
       await init();
       const collect = async query => {
@@ -1358,9 +1773,7 @@
 
     async completeSupplyAcquisition(itemId, token) {
       await init();
-      const parameters = { p_flux_item_id: itemId };
-      if (token) parameters.p_token = token;
-      return check(await client.rpc('flux_complete_supply_acquisition', parameters));
+      return check(await client.rpc('flux_complete_supply_acquisition', { p_flux_item_id: itemId, p_token: token }));
     },
 
     async addLog(itemId, message) {
@@ -1404,48 +1817,7 @@
     },
 
     async replace(snapshot) {
-      await init();
-      const existing = check(await client.from('module_tables').select('id').eq('module', 'flux'));
-      if (existing.length) check(await client.from('module_tables').delete().in('id', existing.map(table => table.id)));
-      const restoredTables = [];
-      for (const sourceTable of snapshot.tables || []) {
-        const table = await this.createTable(sourceTable);
-        restoredTables.push(table.id);
-        const restoredItems = [];
-        for (const sourceItem of sourceTable.items || []) {
-          const restored = check(await client.from('flux_items').insert({
-            table_id: table.id,
-            movement: sourceItem.movement || 'Envio',
-            equipment: sourceItem.equipment,
-            model: sourceItem.model,
-            brand: sourceItem.brand,
-            serial: sourceItem.serial,
-            tag: sourceItem.tag,
-            sender_company: sourceItem.senderCompany,
-            destination_company: sourceItem.destinationCompany,
-            sender_responsible: sourceItem.senderResponsible,
-            receiver_responsible: sourceItem.receiverResponsible,
-            send_date: sourceItem.sendDate,
-            received_date: sourceItem.receivedDate,
-            shipping_type: sourceItem.shippingType || 'Motoboy',
-            reason: sourceItem.situation || 'Manutenção',
-            status: sourceItem.status || 'Pendente',
-            notes: storeItemPriority(sourceItem.notes, sourceItem.priority),
-            position: 0
-          }).select().single());
-          restoredItems.push(restored.id);
-          const logs = sourceItem.logs?.length ? sourceItem.logs : [{ text: 'Movimentação restaurada a partir de backup.' }];
-          check(await client.from('flux_item_logs').insert(logs.map(log => ({
-            flux_item_id: restored.id,
-            action: 'restore',
-            message: log.at && log.at !== 'Backup antigo' ? `${log.at} — ${log.text || 'Histórico restaurado.'}` : (log.text || 'Histórico restaurado.')
-          }))));
-          await recordItemActivity({ module: 'flux', itemId: restored.id, operation: 'update', description: 'Movimentação restaurada a partir de backup.' });
-        }
-        await Promise.all(restoredItems.map((id, position) => client.from('flux_items').update({ position }).eq('id', id).then(check)));
-      }
-      await Promise.all(restoredTables.map((id, position) => client.from('module_tables').update({ position }).eq('id', id).then(check)));
-      return this.load();
+      fail('Backup preservado. Restauração do Flux indisponível: o formato atual não garante transação, vínculos e histórico completos. Nenhum registro foi alterado.');
     }
   };
 
@@ -1520,10 +1892,6 @@
   const agenda = {
     async load() {
       await init();
-      const cleanup = await client.rpc('purge_expired_agenda_entries');
-      if (cleanup.error && !missingAgendaRetentionFunction(cleanup.error)) {
-        console.warn('Não foi possível remover os agendamentos expirados.', cleanup.error);
-      }
      let response = await client.from('agenda_entries')
        .select('id, kind, title, due_date, due_time, reminder_minutes, priority, notes, is_completed, completed_at, postit_level, postit_tasks, postit_layout')
         .order('due_date', { ascending: true })
@@ -1951,35 +2319,7 @@
     },
 
     async restoreBackup(backup) {
-      await init();
-      const rows = Array.isArray(backup?.snapshot?.occurrences) ? backup.snapshot.occurrences : null;
-      if (!rows) fail('Este backup Fiscal NF-e é inválido.');
-      const investigationResolutions = Array.isArray(backup?.snapshot?.investigationResolutions) ? backup.snapshot.investigationResolutions : [];
-      check(await client.from('nfe_occurrences').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
-      if (rows.length) {
-        const payload = rows.map(item => ({
-          id: item.id, operator: item.operator, operator_code: item.operatorCode, fiscal: item.fiscal,
-          occurred_at: item.occurredAt, pdv: item.pdv, nfe_number: item.nfeNumber, reason: item.reason,
-          total_value: item.totalValue ?? null, pending_value: item.pendingValue ?? null,
-          notes: item.notes || '', pdf_path: item.pdfPath, pdf_name: item.pdfName, pdf_size: item.pdfSize,
-          created_at: item.createdAt || undefined, updated_at: item.updatedAt || undefined
-        }));
-        check(await client.from('nfe_occurrences').insert(payload));
-      }
-      if (investigationResolutions.length) {
-        check(await client.from('nfe_investigation_resolutions').insert(investigationResolutions.map(resolution => ({
-          id: resolution.id,
-          occurrence_id: resolution.occurrence_id,
-          solution: resolution.solution,
-          pc_replacement: Boolean(resolution.pc_replacement),
-          nfe_paid_pos: Boolean(resolution.nfe_paid_pos),
-          resolved_by: resolution.resolved_by || null,
-          resolved_at: resolution.resolved_at || undefined,
-          created_at: resolution.created_at || undefined,
-          updated_at: resolution.updated_at || undefined
-        }))));
-      }
-      await events.record('nfe', 'restore', { backupId: backup.id });
+      fail('Backup preservado. Restauração do Fiscal NF-e indisponível: o formato atual não garante transação, vínculos e histórico completos. Nenhum registro foi alterado.');
     }
   };
 
@@ -2275,7 +2615,11 @@
       await init();
       const term = String(searchTerm || '').trim().slice(0, 120);
       if (!term) return [];
-      return check(await client.rpc('central_equipment_search', { search_term: term }));
+      const rows = check(await client.rpc('central_equipment_search', { search_term: term }));
+      return rows.map(row => ({ ...row,
+        sector: row.sector || row.metadata?.sector || row.metadata?.setor || '',
+        location: row.location || row.metadata?.location || row.metadata?.local || ''
+      }));
     },
 
     async timeline(selection, matches = []) {
@@ -2332,5 +2676,5 @@
     }
   };
 
-  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, control, flux, nfe, agenda, backups, managementBackups, controlBackups, fluxBackups, events, auditReports, notificationAcknowledgements, operations, central };
+  window.AldeckotSupabase = { configured, init, auth, realtime, inventory, management, cleaning, control, flux, nfe, agenda, backups, managementBackups, controlBackups, fluxBackups, events, auditReports, notificationAcknowledgements, operations, central };
 })();

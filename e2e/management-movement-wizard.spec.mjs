@@ -300,7 +300,10 @@ test('históricos do PC e do PDV são separados e evento automático não é edi
   await expect(page.locator('.management-movement-history-group')).toHaveCount(1);
   await expect(page.locator('.management-movement-history-group')).toContainText('Entrada de Caixa 01');
   await expect(page.locator('.management-movement-history-group')).toContainText('Saída de Caixa 15');
-  await expect(page.locator('.management-movement-history-group')).toContainText('Entrada de Impressora MPR2 · TAG IMPR002');
+  const peripheral = page.locator('.management-movement-event').filter({ hasText: 'Entrada de periférico' });
+  await expect(peripheral).toContainText('Impressora MPR2 · TAG IMPR002');
+  await expect(peripheral).toContainText('PDV 04');
+  await expect(peripheral).toContainText('PDV 01');
   expect(await page.evaluate(() => window.__historyQueries)).toEqual([
     { computerId: '00000000-0000-4000-8000-000000000201' },
     { positionId: '00000000-0000-4000-8000-000000000101' }

@@ -167,6 +167,69 @@ A migração preserva computadores, locais e periféricos; diferencia verificaç
 
 Auditoria, arquivos, testes e limites de aceite estão em [HOME_REFORMULATION.md](../docs/HOME_REFORMULATION.md).
 
+## Etapas 2–14 do Controle TI em preparação local
+
+As migrações `095`–`105` estão no repositório e ainda **não foram aplicadas ao Supabase principal**. As `095`–`101` estruturam episódios, verificação, Central, diagnóstico, intervenções, tarefas e componentes. A `102` calcula prioridade/severidade e tempos por estado; a `103` permite reabertura somente manual de chamado resolvido; a `104` exige diagnóstico final, solução, testes e condição confirmada antes da conclusão formal; a `105` registra categorias técnicas e aponta reincidências prováveis apenas quando coincidem UUID de origem e categoria. TAG e série não unem históricos, categorias textuais semelhantes não provam recorrência e a condição final registrada não altera o status do equipamento nem gera movimentação. Inspeções não mexem no estoque; operações explícitas de componente usam os RPCs oficiais e não criam Flux automaticamente. Valide primeiro em banco isolado: `tests/sql/run-local-migrations.ps1` aplica toda a sequência em PostgreSQL efêmero, sem rede, com dados fictícios e cenários com rollback. Reconciliações históricas específicas da produção são omitidas e requerem auditoria própria antes de qualquer aplicação real.
+
+A Central não confunde mudanças de estado com intervenções. Tarefas sem prazo não são marcadas como vencidas. O detalhe do chamado preserva sete abas e limita movimentações a eventos físicos oficiais. O encerramento com pendências abertas exige decisão explícita. A resolução é imutável, e a reincidência apresenta referências anteriores, intervalos, tempos de manutenção e peças substituídas quando disponíveis. Veja [`CONTROLE_TI_ETAPA_04_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_04_IMPLEMENTACAO.md), [`CONTROLE_TI_ETAPA_05_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_05_IMPLEMENTACAO.md), [`CONTROLE_TI_ETAPA_06_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_06_IMPLEMENTACAO.md) e [`CONTROLE_TI_ETAPA_07_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_07_IMPLEMENTACAO.md).
+
+O detalhe do chamado mantém sete abas; diagnóstico, intervenções, pendências, componentes e histórico usam dados da própria ocorrência, enquanto movimentações mostram apenas eventos físicos oficiais associados à identidade do equipamento. Componentes possuem registro formal desde a 101. Envios externos exigem fornecedor, motivo e resultado; protocolo, previsão e acompanhamentos também são auditados. O encerramento com pendências abertas exige que o usuário revise a lista atual e escolha explicitamente mantê-las abertas; nunca as conclui automaticamente. O bloqueio vale também para transições legadas, não só para o botão na interface.
+
+### Etapa 12 — relatórios
+
+A migração `106_control_case_reporting.sql` adiciona filtros de período, setor, categoria, estado, prioridade, origem e manutenção interna/externa. Os relatórios respeitam o acesso por tabela, contam chamados distintos e exibem intervenções e tarefas como métricas separadas. Exportação de tabela usa CSV; relatórios e fichas individuais podem ser impressos ou salvos como PDF pelo navegador. A `106`, como as anteriores, continua local e não foi aplicada ao Supabase principal.
+
+A Etapa 13 reutiliza a fundação de eventos `063` e os fluxos transacionais/idempotentes das migrações `069`–`078`, `088`, `090` e `094`–`103`; a auditoria e os testes de regressão estão em [`CONTROLE_TI_ETAPA_13_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_13_IMPLEMENTACAO.md). Nenhuma migração adicional foi necessária para essa etapa.
+
+A Etapa 14 não altera o banco. A revisão de responsividade, filtros, paginação e testes de interface está documentada em [`CONTROLE_TI_ETAPA_14_IMPLEMENTACAO.md`](../CONTROLE_TI_ETAPA_14_IMPLEMENTACAO.md); a execução Playwright ficou pendente porque o servidor de teste não concluiu nesta rodada.
+
+### Etapas 15–16 — Inventário
+
+A `107_inventory_replacement_sector_transfer.sql` registra substituições entre setores e transfere o substituto para o setor/local atendidos, sem copiar identidade. O teste offline confirma a troca e o rollback em falha. A `108_organizational_sectors.sql` cria o catálogo central de nove setores e mapeia apenas correspondências conhecidas ao Inventário, sem reescrever rótulos legados ou tocar em ramificações/compartilhamentos. O catálogo alimenta seletores compartilhados de Inventário e Gestão TI; valores históricos fora da lista continuam preservados para revisão explícita. As duas migrações continuam locais e não foram aplicadas ao Supabase principal.
+
+### Etapa 15 — substituição de equipamentos no Inventário
+
+A substituição mantém a regra de mesma tabela e permite selecionar reservas de qualquer setor ou ramificação dessa tabela. A migração `107_inventory_replacement_sector_transfer.sql` transfere o substituto para o setor e local do ativo retirado, preservando TAG, série, UUIDs e ramificações dos dois equipamentos. O setor anterior e o final ficam na trilha de substituição e nos históricos; condição final, destino e motivo continuam obrigatórios. A transação é atômica. A migração e o cenário de sucesso entre setores distintos, além de uma falha simulada que deve reverter tudo, são exercitados apenas no PostgreSQL local e isolado por `tests/sql/run-local-migrations.ps1`; nada foi aplicado ao Supabase principal.
+
+### Auditoria 07/11/2026 — migrações pendentes
+
+As migrações `095`–`111` estão preparadas localmente e **não foram aplicadas à produção**. O catálogo do projeto confirmou a ausência das tabelas e colunas centrais de `095`–`109`; `094` e seus pré requisitos estão presentes. A `109` acrescenta Setor e Local independentes no Flux, preservando movimentações históricas.
+
+A `108` preserva `inventory_items.updated_at` durante o preenchimento de `sector_code`, pois classificar metadados legados não é uma edição operacional. O teste isolado insere um item histórico antes da `108`, confere que a data não muda e verifica que o gatilho volta a funcionar para alterações posteriores. Rótulos fora do catálogo continuam sem mapeamento automático.
+
+A `110` substitui a função de retenção da agenda por uma versão auditada que remove somente eventos e tarefas vencidos; notas são preservadas. A `111` exige a `110`, habilita `pg_cron` se disponível e agenda a execução às 03:05 UTC. No Supabase de produção, `pg_cron` está disponível mas ainda não instalado. A criação efetiva do job não é exercitada pelo PostgreSQL isolado sem essa extensão e exige verificação posterior.
+
+**Não aplicar nenhuma dessas migrações em produção antes de backup PostgreSQL e Storage validado, teste de restauração e comparação com o esquema atual.** O painel Free não disponibiliza backup automático do projeto. A auditoria atual e a situação do backup estão registradas fora do repositório em `reports/ALDECKOT_PROGRESSO_2026-11-07.md` no espelho local da tarefa.
+### Pacote Flux e Regularização de Local (cópia de desenvolvimento, 14/11/2026)
+
+As migrações `112`–`120` deste checkout estão **somente no projeto Supabase de testes** `upxoyfivwuaqfnwfsrhw`; não foram aplicadas à produção. `112`–`114` separam envio, entrega e retorno entre meses. `115`, `117` e `118` implementam prévia, confirmação de localização e substituição de periféricos em PDV, com destino explícito do retirado. `116` permite aquisição recebida sem TAG no Inventário quando há série válida; `119` faz o mesmo para computador da Gestão TI e corrige a compatibilidade de `owner_id` em estrutura centralizada. `120` acrescenta conclusão de manutenção de periférico vinculado ao Inventário com destino físico explícito, conferência de slot, transação e eventos correlacionados. Os ensaios SQL desta etapa ficam em `tests/sql` e usam transações revertidas no projeto de testes. O encerramento de manutenção de outros tipos ainda usa a função anterior e precisa de avaliação separada antes da publicação do pacote.
+
+As notas históricas acima sobre migrações anteriores descrevem o estado no dia em que foram escritas; o estado atual de produção deve ser conferido no histórico de migrações antes de qualquer implantação.
+
+Em 15/11/2026, as migrações `121` e `122` foram instaladas no projeto de testes. A `121` inclui correções de local e regularizações após retorno no histórico dos PDVs vinculados ao evento. A `122` acrescenta os IDs patrimoniais, dos computadores e dos equipamentos do Flux à consulta central existente. Ambas foram verificadas no projeto de testes com transações revertidas e sem alteração nas contagens do banco.
+
+A migração `123`, instalada no projeto de testes, adiciona conferência e confirmação do destino de retornos do Flux com vínculo explícito no Inventário. Reutiliza a conferência de ocupação, sincronização de periféricos e as operações do Controle TI. A confirmação registra um único evento de regularização vinculado ao retorno e às ações técnicas correspondentes. O ensaio `tests/sql/flux-return-123-transaction.sql` cobre os cinco destinos e reverte o PDV, remessas e chamados usados no teste.
+
+A migração `124` usa o ID permanente da Gestão TI em novos envios de computador e propaga esse ID ao retorno. A regularização reaproveita a movimentação da Gestão TI e as operações técnicas do Controle TI. Foi instalada e verificada no projeto de testes com o ensaio `tests/sql/flux-computer-return-124-transaction.sql`. Registros históricos sem ID permanente continuam exigindo conferência da origem.
+
+A migração `125` adiciona a aquisição **Gestão TI → Periférico**. A série identifica o item patrimonial, que fica em Reserva na Sala CPD quando novo. A classificação preserva a categoria do Inventário, permite cadastro sem TAG e valida a TAG antes da instalação pelo motor de Regularização de Local. O ensaio `tests/sql/flux-peripheral-125-transaction.sql` foi executado com rollback antes e depois da instalação no projeto de testes.
+
+A migração `126` exige recebimento físico com data válida e a revisão atual do destino, da quantidade e do saldo para creditar Suprimentos pelo Flux. A confirmação recebe o token da prévia. O estoque base ou a variação escolhida é atualizada uma vez, com o mesmo evento nos dois módulos. O ensaio `tests/sql/flux-supplies-126-transaction.sql` verificou o saldo agregado, a rejeição de uma prévia antiga e a proteção do patrimônio espelhado antes e depois da instalação no projeto de testes, com rollback.
+
+A migração `127` inclui as condições anterior e final do periférico na resposta do histórico do PDV. A consulta usa os eventos existentes, mantém a RLS e exige execução autenticada para o frontend. O ensaio `tests/sql/management-127-transaction.sql` verificou substituições com destino Reserva e Manutenção, além de uma correção cadastral entre os dois PDVs com o mesmo evento no Inventário.
+
+### Automação de limpeza (129)
+
+O registro explícito inicia o prazo de dois meses calendário para o computador da Gestão TI e de um mês para o item do Inventário. A data de vencimento segue o calendário de São Paulo. O horário, a autoria, a classificação e a correlação da operação ficam nos eventos e históricos existentes. Os registros legados continuam com o valor que tinham, sem preenchimento de datas a partir de cadastro, edição ou movimentação.
+
+Os avisos são consultados pelo sino existente e agrupados por PDV. A antecedência inicial é de 7 dias para Gestão TI e 3 para Inventário. Um administrador pode ajustar `warning_days` na tabela privada `app.equipment_cleaning_settings`. O job `aldeckot-expire-equipment-cleaning` chama a função privada a cada 15 minutos usando o `pg_cron` já habilitado pela 111. Confira `cron.job` e `cron.job_run_details` no ambiente de destino antes de ativar essa rotina. O roteiro `tests/sql/equipment-cleaning-129-transaction.sql` usa registros de ensaio e deve rodar com rollback.
+
+### Acesso de leitura operacional (130)
+
+A migração 130 alinha as consultas operacionais à leitura que as políticas das tabelas já permitem para contas ativas. Ela corrige relatórios, tempos e reincidências do Controle TI e consultas de limpeza. As operações de gravação continuam usando as permissões por módulo.
+
+O ensaio `tests/sql/operational-read-access-130-transaction.sql` roda após o cenário da 129 na mesma transação revertida. Verifica um perfil padrão sem permissões de gravação e um perfil bloqueado. A 130 não depende da 128.
+
 ## Dados sensíveis
 
 Nunca registre no Git, em prints ou em mensagens:

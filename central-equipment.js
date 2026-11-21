@@ -22,38 +22,15 @@
   let results = [];
   let modalState = null;
 
-  function identity(item) {
-    const tag = norm(item.tag);
-    const serial = norm(item.serial);
-    return tag ? 'tag:' + tag : 'serial:' + serial;
-  }
-
-  function sameEquipment(item, selected) {
-    const tag = norm(selected.tag);
-    const serial = norm(selected.serial);
-    return Boolean(tag && norm(item.tag) === tag) || Boolean(serial && norm(item.serial) === serial);
-  }
-
   function ordered(items) {
     return [...items].filter(Boolean).sort((a, b) => String(b.updated_at || b.occurredAt || b.created_at || '').localeCompare(String(a.updated_at || a.occurredAt || a.created_at || '')));
   }
 
-  function uniqueResults(rows) {
-    if (document.body.classList.contains('home-operational')) {
-      return [...new Map(rows.filter(row => row.id && row.module).map(row => [row.module + ':' + row.id, { ...row, modules: [row.module] }])).values()];
-    }
-    const groups = new Map();
-    rows.forEach(row => {
-      const key = identity(row);
-      if (key === 'serial:') return;
-      const current = groups.get(key);
-      if (!current) groups.set(key, { ...row, modules: new Set([row.module]) });
-      else {
-        current.modules.add(row.module);
-        if (String(row.updated_at).localeCompare(String(current.updated_at)) > 0) Object.assign(current, row);
-      }
-    });
-    return [...groups.values()].map(row => ({ ...row, modules: [...row.modules] }));
+  function uniqueResults(rows, term) {
+    const unique = [...new Map(rows.filter(row => row.id && row.module)
+      .map(row => [row.module + ':' + row.id, row])).values()];
+    return window.AldeckotFluxSearch?.prepare(unique, term, { allowLegacyPair: false })
+      || unique.map(row => ({ ...row, modules: [row.module], members: [row] }));
   }
 
   function message(text, error) {
@@ -86,10 +63,10 @@
     }
     openCentral(row);
   }
-  function renderResults(rows) {
+  function renderResults(rows, term) {
     const panel = $('[data-central-search-results]');
     if (!panel) return;
-    results = uniqueResults(rows);
+    results = uniqueResults(rows, term);
     if (!results.length) return message('Nenhum equipamento encontrado para esta TAG ou nº de série.');
     panel.hidden = false;
     panel.innerHTML = results.map((row, index) => {
@@ -108,7 +85,7 @@
     message('Consultando TAG e nº de série…');
     try {
       const rows = await service().search(term);
-      if (request === searchVersion) renderResults(rows);
+      if (request === searchVersion) renderResults(rows, term);
     } catch (error) {
       if (request !== searchVersion) return;
       console.warn('Falha ao pesquisar na Central do Equipamento.', error);
@@ -118,10 +95,10 @@
 
   async function matchesFor(selected) {
     const terms = [...new Set([selected.tag, selected.serial].filter(Boolean))];
-    const rows = (await Promise.all(terms.map(term => service().search(term)))).flat().filter(row => sameEquipment(row, selected));
-    const unique = new Map();
-    [...rows, selected].forEach(row => unique.set(row.module + ':' + row.id, row));
-    return ordered([...unique.values()]);
+    const rows = (await Promise.all(terms.map(term => service().search(term)))).flat();
+    const group = uniqueResults([selected, ...rows], selected.tag || selected.serial).find(result =>
+      result.members.some(row => row.id === selected.id && row.module === selected.module));
+    return ordered(group?.members || [selected]);
   }
 
   function records(matches, selected) {
@@ -138,6 +115,8 @@
   function summary(matches, selected) {
     const source = records(matches, selected);
     const read = extractor => first(source.map(extractor));
+    const physical = source.filter(row => ['inventory', 'management'].includes(row.module));
+    const readPhysical = extractor => first(physical.map(extractor));
     return {
       equipment: read(row => row.equipment),
       tag: read(row => row.tag),
@@ -147,8 +126,11 @@
       company: read(row => getMeta(row, ['company', 'empresa', 'companyName', 'razaoSocial', 'razãoSocial'])),
       location: read(row => row.location || getMeta(row, ['sector', 'setor', 'location', 'local'])),
       responsible: read(row => row.responsible || getMeta(row, ['responsible', 'responsavel', 'responsável'])),
-      status: read(row => row.status),
-      cleaning: read(row => row.cleaning || getMeta(row, ['cleaning', 'cleaningType', 'tipoLimpeza', 'limpeza', 'situation', 'situacao'])),
+      status: readPhysical(row => row.status) || read(row => row.status),
+      situation: readPhysical(row => getMeta(row, ['situation', 'situacao'])),
+      cleaning: readPhysical(row => window.AldeckotEquipmentCleaning?.canonicalType(
+        getMeta(row, ['cleaning', 'cleaningType', 'tipoLimpeza', 'limpeza']) || row.cleaning))
+        || (physical.length ? '' : first(source.filter(row => row.module === 'control').map(row => row.cleaning))),
       updatedAt: recentDate(source.map(row => row.updated_at))
     };
   }
@@ -181,7 +163,7 @@
     const value = keys => first(metadata.map(row => first(keys.map(key => row[key]))));
     const maintenanceRecord = source.find(row => /manutencao/.test(norm(row.status)));
     const maintenance = ordered([...events, ...logs].filter(row => /manutenc|reparo|revis/.test(norm(row.description))));
-    const cleaningLogs = ordered([...events, ...logs].filter(row => /limpez|higien/.test(norm(row.description))));
+    const cleaningLogs = ordered([...events, ...logs].filter(row => /^limpeza registrada:/.test(norm(row.description))));
     const movements = ordered(events.filter(row => row.module === 'flux'));
     const priority = norm(value(['priority', 'prioridade', 'criticality', 'criticidade']));
     const pdv = value(['pdv', 'pdvName', 'pdvNome', 'pointOfSale', 'pontoDeVenda']);
@@ -190,7 +172,7 @@
     if (/defeito|descart/.test(state)) list.push({ tone: 'critical', icon: '!', title: 'Situação crítica', text: 'Status atual: ' + current.status + '.' });
     if (/aguard|atencao|verific/.test(state)) list.push({ tone: 'attention', icon: '!', title: 'Requer atenção', text: 'Status atual: ' + current.status + '.' });
     if (/alta|high|urgent|critica|critico/.test(priority)) list.push({ tone: 'critical', icon: '↑', title: 'Prioridade alta', text: 'Indicada no cadastro do equipamento.' });
-    if (/nao realizada|não realizada|pendente|sem limpeza/.test(cleaning)) list.push({ tone: 'attention', icon: '◌', title: 'Limpeza pendente', text: 'Sem limpeza concluída registrada ' + (elapsed(cleaningLogs[0]?.occurredAt || current.updatedAt) || 'nos dados disponíveis') + '.' });
+    if (/nao realizada|não realizada|pendente|sem limpeza/.test(cleaning)) list.push({ tone: 'attention', icon: '◌', title: 'Limpeza pendente', text: cleaningLogs.length ? 'Última limpeza confirmada: ' + dateTime(cleaningLogs[0].occurredAt) + '.' : 'Sem data confiável de limpeza nos dados disponíveis.' });
     else if (cleaningLogs[0]) list.push({ tone: 'normal', icon: '✓', title: 'Última limpeza', text: 'Registro de limpeza ' + (elapsed(cleaningLogs[0].occurredAt) || dateTime(cleaningLogs[0].occurredAt)) + '.' });
     if (maintenance[0] && !/manutencao/.test(state)) list.push({ tone: 'normal', icon: '✓', title: 'Última manutenção', text: dateTime(maintenance[0].occurredAt) + ' - ' + (maintenance[0].description || 'Registro técnico atualizado.') });
     if (movements[0]) list.push({ tone: 'followup', icon: '↔', title: 'Última movimentação', text: dateTime(movements[0].occurredAt) + ' - ' + (movements[0].description || 'Movimentação registrada.') });
@@ -399,7 +381,7 @@
 
   function shell(selected) {
     const identifiers = [selected.tag && 'TAG ' + selected.tag, selected.serial && 'Série ' + selected.serial].filter(Boolean).join(' · ');
-    return '<div class="central-equipment-dialog" role="dialog" aria-modal="true" aria-labelledby="central-equipment-title"><header class="central-head"><div><p class="central-eyebrow"><i>◈</i>Central do Equipamento</p><h2 id="central-equipment-title">' + esc(selected.equipment || 'Equipamento') + '</h2><p class="central-identity"><span>' + esc(identifiers || 'Identificador não informado') + '</span><span>' + esc(selected.brand || 'Marca não informada') + '</span></p></div><div class="central-head-actions"><button class="central-export-pdf" type="button" data-central-export-pdf aria-label="Exportar prontuário em PDF">⇩ Exportar PDF</button><button class="central-close" type="button" data-central-close aria-label="Fechar Central do Equipamento">×</button></div></header><div class="central-loading"><i></i><span>Carregando informações integradas…</span></div></div>';
+    return '<div class="central-equipment-dialog" role="dialog" aria-modal="true" aria-labelledby="central-equipment-title"><header class="central-head"><div><p class="central-eyebrow"><i>◈</i>Central do Equipamento</p><h2 id="central-equipment-title">' + esc(selected.equipment || 'Equipamento') + '</h2><p class="central-identity"><span>' + esc(identifiers || 'Identificador não informado') + '</span><span>' + esc(selected.brand || 'Marca não informada') + '</span></p></div><div class="central-head-actions"><button class="central-export-pdf" type="button" data-central-export-pdf aria-label="Exportar prontuário em PDF"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="20" height="20" alt=""> Exportar PDF</button><button class="central-close" type="button" data-central-close aria-label="Fechar Central do Equipamento">×</button></div></header><div class="central-loading"><i></i><span>Carregando informações integradas…</span></div></div>';
   }
 
   function closeCentral() {
@@ -413,9 +395,16 @@
       ['TAG', current.tag || 'Não informada'], ['Nº de série', current.serial || 'Não informado'], ['Marca', current.brand || 'Não informada'],
       ['Modelo', current.model || 'Não informado'], ['Empresa', current.company || 'Não informada'], ['Localização atual', current.location || 'Não informada'],
       ['Responsável', current.responsible || 'Não informado'], ['Status', current.status || 'Não informado', 'status ' + statusTone(current.status), statusTone(current.status)],
-      ['Situação da limpeza', current.cleaning || 'Não informada'], ['Última atualização', dateTime(current.updatedAt)]
+      ['Situação física', current.situation || 'Não informada'],
+      ['Situação da limpeza', current.cleaning || 'Não informada', current.cleaning ? 'cleaning' : ''],
+      ['Última atualização', dateTime(current.updatedAt)]
     ];
-    return items.map(item => '<article class="central-summary-card ' + (item[2] || '') + '" data-tone="' + esc(item[3] || '') + '"><i>' + esc(item[0]) + '</i><b>' + esc(item[1]) + '</b></article>').join('');
+    return items.map(([label, value, style = '', tone = '']) => {
+      const display = style === 'cleaning'
+        ? '<span class="cleaning-pill" data-cleaning="' + esc(value) + '">' + esc(value) + '</span>'
+        : esc(value);
+      return '<article class="central-summary-card ' + style + '" data-tone="' + esc(tone) + '"><i>' + esc(label) + '</i><b>' + display + '</b></article>';
+    }).join('');
   }
 
   async function render(selected, node) {
@@ -423,7 +412,7 @@
     if (!dialog) return;
     try {
       const matches = await matchesFor(selected);
-      const fetched = await Promise.all([service().timeline(selected, matches), service().technicalHistory(matches)]);
+      const fetched = await Promise.all([service().timeline({}, matches), service().technicalHistory(matches)]);
       if (!node.isConnected) return;
       const current = summary(matches, selected);
       const logs = fetched[1];
@@ -435,7 +424,7 @@
       const sources = [...new Set(matches.map(row => row.module))];
       const identifiers = [current.tag && 'TAG ' + current.tag, current.serial && 'Série ' + current.serial].filter(Boolean).join(' · ');
       if (modalState?.node === node) modalState.data = { selected, matches, summary: current, events, technicalLogs: logs, signals: information, audit: entries, operational };
-      dialog.innerHTML = '<header class="central-head"><div><p class="central-eyebrow"><i>◈</i>Central do Equipamento</p><h2 id="central-equipment-title">' + esc(current.equipment || selected.equipment || 'Equipamento') + '</h2><p class="central-identity"><span>' + esc(identifiers || 'Identificador não informado') + '</span><span>' + esc(current.brand || 'Marca não informada') + '</span></p><div class="central-module-list">' + sources.map(module => '<span class="central-module-chip" data-module="' + esc(module) + '">' + esc(MODULE(module).icon) + ' ' + esc(MODULE(module).label) + '</span>').join('') + '</div></div><div class="central-head-actions"><span class="central-severity-badge central-overall-badge" data-tone="' + esc(criticality.tone) + '">' + esc(criticality.label) + '</span><button class="central-export-pdf" type="button" data-central-export-pdf>⇩ Exportar PDF</button><button class="central-close" type="button" data-central-close aria-label="Fechar Central do Equipamento">×</button></div></header><section class="central-summary" aria-label="Resumo atual do equipamento">' + cardsMarkup(current) + '</section><section class="central-panel central-information"><header class="central-panel-header"><div><h3>Central de Informações Inteligente</h3><p>Condições calculadas somente com os registros disponíveis do equipamento</p></div><span class="central-live"><i></i>Ao vivo</span></header><div class="central-insights">' + insightMarkup(information) + '</div></section><section class="central-content"><section class="central-panel"><header class="central-panel-header"><div><h3>Últimas movimentações por módulo</h3><p>Até três registros recentes em cada módulo integrado</p></div></header><div class="central-movements">' + movementMarkup(events) + '</div></section><aside class="central-panel"><header class="central-panel-header"><div><h3>Histórico técnico</h3><p>Ficha consolidada de cadastro, manutenção e limpeza</p></div></header><div class="central-technical">' + technicalMarkup(technicalCards(matches)) + '</div></aside></section>' + operationalMarkup(operational) + auditMarkup(entries);
+      dialog.innerHTML = '<header class="central-head"><div><p class="central-eyebrow"><i>◈</i>Central do Equipamento</p><h2 id="central-equipment-title">' + esc(current.equipment || selected.equipment || 'Equipamento') + '</h2><p class="central-identity"><span>' + esc(identifiers || 'Identificador não informado') + '</span><span>' + esc(current.brand || 'Marca não informada') + '</span></p><div class="central-module-list">' + sources.map(module => '<span class="central-module-chip" data-module="' + esc(module) + '">' + esc(MODULE(module).icon) + ' ' + esc(MODULE(module).label) + '</span>').join('') + '</div></div><div class="central-head-actions"><span class="central-severity-badge central-overall-badge" data-tone="' + esc(criticality.tone) + '">' + esc(criticality.label) + '</span><button class="central-export-pdf" type="button" data-central-export-pdf><img class="pdf-export-icon" src="assets/pdf-export.svg" width="20" height="20" alt=""> Exportar PDF</button><button class="central-close" type="button" data-central-close aria-label="Fechar Central do Equipamento">×</button></div></header><section class="central-summary" aria-label="Resumo atual do equipamento">' + cardsMarkup(current) + '</section><section class="central-panel central-information"><header class="central-panel-header"><div><h3>Central de Informações Inteligente</h3><p>Condições calculadas somente com os registros disponíveis do equipamento</p></div><span class="central-live"><i></i>Ao vivo</span></header><div class="central-insights">' + insightMarkup(information) + '</div></section><section class="central-content"><section class="central-panel"><header class="central-panel-header"><div><h3>Últimas movimentações por módulo</h3><p>Até três registros recentes em cada módulo integrado</p></div></header><div class="central-movements">' + movementMarkup(events) + '</div></section><aside class="central-panel"><header class="central-panel-header"><div><h3>Histórico técnico</h3><p>Ficha consolidada de cadastro, manutenção e limpeza</p></div></header><div class="central-technical">' + technicalMarkup(technicalCards(matches)) + '</div></aside></section>' + operationalMarkup(operational) + auditMarkup(entries);
       dialog.querySelector('[data-central-close]')?.focus();
     } catch (error) {
       console.warn('Falha ao carregar a Central do Equipamento.', error);
@@ -466,7 +455,7 @@
   }
 
   function animateSearchPlaceholder(input) {
-    if (input.dataset.homeSearch) { input.placeholder = 'Buscar no sistema…'; return; }
+    if (input.dataset.homeSearch) { input.placeholder = 'TAG, série ou equipamento'; return; }
     const text = 'Seeking...';
     const staticHint = 'TAG ou série';
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');

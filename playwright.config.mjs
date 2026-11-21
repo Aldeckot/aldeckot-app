@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const baseURL = 'http://127.0.0.1:4174';
+const port = process.env.ALDECKOT_E2E_PORT || '4174';
+const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -11,7 +12,7 @@ export default defineConfig({
     command: 'node scripts/local-preview-server.mjs',
     url: `${baseURL}/login.html`,
     env: {
-      ALDECKOT_LOCAL_PORT: '4174',
+      ALDECKOT_LOCAL_PORT: port,
       ALDECKOT_PREVIEW_API_ORIGIN: 'http://127.0.0.1:9'
     },
     reuseExistingServer: false,

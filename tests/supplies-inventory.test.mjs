@@ -174,7 +174,7 @@ test('substituição patrimonial é executada na fonte Inventário, não em Supr
   const suppliesUi = readFileSync(new URL('../supplies.js', import.meta.url), 'utf8');
   assert.match(inventoryUi, /data-inv-replace-form/);
   assert.match(inventoryUi, /<option value="" selected disabled>Selecione o substituto<\/option>/);
-  assert.match(inventoryUi, /<option value="" selected disabled>Selecione o status<\/option>/);
+  assert.match(inventoryUi, /Condição final do retirado \*<\/span><select name="removed_status" required><option value="" selected disabled>Selecione a condição<\/option>/);
   assert.match(inventoryUi, /moduleApi\(\)\.replaceEquipment/);
   assert.match(api, /client\.rpc\('inventory_replace_equipment', values\)/);
   assert.doesNotMatch(suppliesUi, /inventory-replace|inventoryReplaceDialog/);

@@ -51,7 +51,7 @@ test('status dos periféricos usa o registro vinculado do Inventário sem gravar
   const source = read('management.js');
   const api = read('supabase-client.js');
   assert.match(api, /async peripheralInventoryStatuses\(\{ ids = \[\], tags = \[\] \} = \{\}\)/);
-  assert.match(api, /from\('inventory_items'\)\.select\('id, tag, equipment, status'\)/);
+  assert.match(api, /from\('inventory_items'\)\.select\('id, tag, equipment, status, situation, cleaning_type'\)/);
   assert.match(source, /entry\.sourceModule === 'inventory' && sourceId/);
   assert.match(source, /matches\.length === 1 \? matches\[0\] : null/);
   assert.match(source, /inventoryItem\?\.status/);

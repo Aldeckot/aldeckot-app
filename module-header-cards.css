@@ -1,14 +1,4 @@
 /* Resumo visual reutilizado nos cabeçalhos dos módulos. */
-.management-header .management-pdf-action svg,
-.sp-header-actions .sp-export-action svg {
-  width: 27px;
-  height: 27px;
-}
-.nfe-export-menu [data-nfe-export="pdf"] svg {
-  width: 20px;
-  height: 20px;
-}
-
 .module-header-summary {
   display: grid;
   grid-template-columns: minmax(0, 205px) minmax(170px, 210px);

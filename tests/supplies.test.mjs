@@ -195,7 +195,7 @@ test('indicadores e imagens sem foto usam ícones distintos e acessíveis', () =
   for (const name of ['total', 'stock', 'warning', 'empty']) assert.match(ui, new RegExp(`${name}: '<svg`));
   assert.match(ui, /const imagePlaceholder = '<svg/);
   assert.match(ui, /node\.innerHTML = imagePlaceholder/);
-  assert.match(ui, /sp-export-action.*<svg/);
+  assert.match(ui, /sp-export-action.*<img class="pdf-export-icon" src="assets\/pdf-export\.svg"/);
   assert.match(ui, /sp-backup-action.*Sistema de backup/);
 });
 

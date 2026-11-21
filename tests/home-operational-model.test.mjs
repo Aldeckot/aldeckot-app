@@ -120,6 +120,30 @@ test('limites de 14/15/29/30 dias e atualização técnica de 6/7/14/15 dias', (
   }
 });
 
+test('prioridade do chamado é separada da severidade e a Central deduplica intervalos acumulados', () => {
+  const source = empty();
+  source.control = [{ id:'legacy-case', inventoryItemId:'inv', status:'Em manutenção', entryDate:'2026-10-01' }];
+  source.inventory = [{ id:'inv', equipment:'Impressora', status:'Manutenção' }];
+  source.caseAging = [{ id:'case-1', controlItemId:'legacy-case', tableId:'control-table',
+    state:'Em manutenção', equipment:'Impressora', priorityLevel:'Baixa', maintenanceMinutes:30*1440,
+    maintenanceSeverity:'Crítica', openedAt:'2026-09-01T12:00:00Z' }];
+  const alerts = build(source,now).sets.alerts.filter(row => row.key === 'case:control:legacy-case');
+  assert.equal(alerts.length,1);
+  assert.equal(alerts[0].priority,3);
+  assert.equal(alerts[0].ticketPriority,'Baixa');
+  assert.equal(alerts[0].reasons.filter(reason => reason.code === 'maintenance-age').length,2);
+  assert.match(alerts[0].targetUrl,/case=case-1/);
+
+  for (const [days,severity] of [[14,'Normal'],[15,'Atenção'],[29,'Atenção'],[30,'Crítica']]) {
+    const aging = { id:'case-'+days,state:'Em manutenção',maintenanceMinutes:days*1440,
+      maintenanceSeverity:days >= 30 ? 'Crítica' : days >= 15 ? 'Atenção' : 'Normal' };
+    const result = build({ ...empty(),caseAging:[aging] },now);
+    const alert = result.sets.alerts.find(row => row.key === 'case:control:'+aging.id);
+    assert.equal(Boolean(alert),severity !== 'Normal');
+    if (alert) assert.equal(alert.reasons[0].maintenanceSeverity,severity);
+  }
+});
+
 test('duas causas do mesmo chamado preservam motivos e vence a maior gravidade', () => {
   const source = empty();
   source.inventory = [{ id:'inv', equipment:'Pin Pad', status:'Manutenção', situation:'Verificando' }];

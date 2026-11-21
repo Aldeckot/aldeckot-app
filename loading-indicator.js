@@ -7,7 +7,6 @@
   let revealFrame = 0;
   let shownAt = 0;
   let overlay;
-  let label;
   const minimumVisibleDuration = 260;
 
   function ensureOverlay() {
@@ -17,8 +16,7 @@
     overlay.setAttribute('role', 'status');
     overlay.setAttribute('aria-live', 'polite');
     overlay.setAttribute('aria-label', 'Carregando');
-    overlay.innerHTML = '<div class="aldeckot-loading-card"><span class="aldeckot-loading-orbit" aria-hidden="true"></span><p class="aldeckot-loading-label">Carregando…</p><span class="aldeckot-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>';
-    label = overlay.querySelector('.aldeckot-loading-label');
+    overlay.innerHTML = '<div class="aldeckot-loading-card" aria-hidden="true"><span class="aldeckot-loading-halo"></span><span class="aldeckot-loading-orbit"></span><span class="aldeckot-loading-wave"></span><span class="aldeckot-loading-particles"><i></i><i></i><i></i><i></i></span></div>';
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -42,7 +40,7 @@
     window.clearTimeout(hideTimer);
     const current = ensureOverlay();
     current.hidden = false;
-    label.textContent = active.at(-1)?.message || 'Carregando…';
+    current.setAttribute('aria-label', active.at(-1)?.message || 'Carregando');
     if (current.classList.contains('is-visible') || revealFrame) return;
     revealFrame = window.requestAnimationFrame(() => {
       revealFrame = 0;

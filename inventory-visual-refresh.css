@@ -1,0 +1,139 @@
+/* Apresentação exclusiva do Inventário. */
+body.inventory-open .inventory-layout.inventory-no-sidebar,
+body.inventory-open .inventory-layout.inventory-no-sidebar.tables-open {
+  grid-template-columns: minmax(0, 1fr) 224px;
+}
+
+body.inventory-open .inventory-pie-chart {
+  min-height: 0;
+  padding: 12px 11px 13px;
+}
+body.inventory-open .inventory-pie-chart h3 { margin-bottom: 11px; }
+body.inventory-open .inventory-pie-layout {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+body.inventory-open .inventory-pie-visual {
+  position: relative;
+  width: 88px;
+  aspect-ratio: 1;
+  border: 2px solid #9bdfff80;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #40c5ff5e, 0 0 23px #1f8ec548, inset 0 0 15px #0614269c;
+}
+body.inventory-open .inventory-pie-sheen {
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: linear-gradient(145deg, #ffffff36, transparent 42%, #0613294a);
+}
+body.inventory-open .inventory-pie-legend {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+}
+body.inventory-open .inventory-pie-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+body.inventory-open .inventory-pie-legend i { flex: 0 0 7px; width: 7px !important; height: 7px !important; margin: 0; }
+body.inventory-open .inventory-pie-legend em { overflow: hidden; flex: 1; font-size: 9px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+body.inventory-open .inventory-pie-legend b { flex: 0 0 auto; font-size: 9px; font-weight: 700; }
+
+body.inventory-open .inventory-header-tracking-scene {
+  background: radial-gradient(ellipse at 50% 50%, #134b7670, transparent 62%);
+}
+body.inventory-open .inventory-header-tracking-scene::before { display: none; }
+body.inventory-open .inventory-tracking-art {
+  width: min(100%, 600px);
+  height: 106px;
+  overflow: visible;
+  filter: drop-shadow(0 0 8px #17b9ff5c);
+}
+.inventory-tracking-route { fill: none; stroke: url(#inv-track-line); stroke-width: 1.6; stroke-dasharray: 6 8; animation: inv-tracking-flow 10s linear infinite; }
+.inventory-tracking-route-low { opacity: .5; animation-direction: reverse; }
+.inventory-tracking-node { fill: #36d8ff; stroke: #64e9ff; stroke-width: 1; filter: drop-shadow(0 0 5px #31dfff); animation: inv-tracking-pulse 3.2s ease-in-out infinite; }
+.inventory-tracking-node-violet { fill: #ac76ff; stroke: #d0aaff; animation-delay: -1.6s; }
+.inventory-tracking-package { fill: #0c3c56b0; stroke: #43e4e2; stroke-width: 2; stroke-linejoin: round; filter: drop-shadow(0 0 5px #36d9e3); animation: inv-tracking-float 5s ease-in-out infinite; }
+.inventory-tracking-package-check { fill: none; stroke: #9bffca; stroke-width: 2.2; stroke-linecap: round; }
+.inventory-tracking-pin { fill: #143562; stroke: #bc84ff; stroke-width: 2; filter: drop-shadow(0 0 6px #ae6dff); animation: inv-tracking-float 4.6s ease-in-out -2s infinite; }
+.inventory-tracking-pin circle { fill: #6e51c8; stroke: #dbc1ff; }
+.inventory-tracking-tag { fill: #122b46; stroke: #37caff; stroke-width: 1.6; stroke-linecap: round; filter: drop-shadow(0 0 4px #36c8ff); animation: inv-tracking-float 4.7s ease-in-out -1s infinite; }
+.inventory-tracking-tag-right { stroke: #af7bff; animation-delay: -2.8s; }
+.inventory-tracking-console { fill: url(#inv-track-screen); stroke: #48caff; stroke-width: 1.8; filter: drop-shadow(0 0 10px #27bfffab); }
+.inventory-tracking-console rect:nth-child(2) { fill: #081d34; stroke: #345e91; }
+.inventory-tracking-console path { fill: none; stroke: #59bfe3; stroke-width: 1.4; stroke-linecap: round; }
+.inventory-tracking-console circle { fill: #69e8ca; stroke: none; }
+.inventory-tracking-console-box { fill: #227a95a8; stroke: #70f5ec; stroke-width: 1.4; filter: drop-shadow(0 0 5px #59eaff); }
+.inventory-tracking-scan { fill: none; stroke: #73fff5; stroke-width: 2; filter: drop-shadow(0 0 4px #69fff1); animation: inv-tracking-scan 3.8s ease-in-out infinite; }
+.inventory-tracking-spark { fill: #7ee9ff; filter: drop-shadow(0 0 4px #4beaff); animation: inv-tracking-pulse 2.7s ease-in-out -1s infinite; }
+.inventory-tracking-packet { fill: #79f5ff; color: #79f5ff; filter: drop-shadow(0 0 5px #6aefff); offset-path: path('M10 54h67l25-23h95l33 25h160l31-25h96l25 23h68'); offset-rotate: 0deg; animation: inv-tracking-packet 8s linear infinite; }
+.inventory-tracking-packet-two { fill: #d8a7ff; color: #d8a7ff; animation-delay: -4s; }
+@keyframes inv-tracking-flow { to { stroke-dashoffset: -140; } }
+@keyframes inv-tracking-float { 0%,100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes inv-tracking-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes inv-tracking-scan { 0%,100% { transform: translateY(0); opacity: .2; } 50% { transform: translateY(57px); opacity: .9; } }
+@keyframes inv-tracking-packet { from { offset-distance: 0%; opacity: 0; } 10%,90% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+
+body.theme-light.inventory-open .inventory-header-tracking-scene { background: radial-gradient(ellipse at 50% 50%, #6bc8f345, transparent 62%); }
+body.theme-light.inventory-open .inventory-pie-visual { border-color: #2c82b483; box-shadow: 0 0 12px #3c91be52; }
+@media (max-width: 1000px) {
+  body.inventory-open .inventory-layout.inventory-no-sidebar,
+  body.inventory-open .inventory-layout.inventory-no-sidebar.tables-open { grid-template-columns: minmax(0, 1fr); }
+  body.inventory-open .inventory-no-sidebar .inventory-charts { grid-column: 1; }
+}
+@media (max-width: 700px) {
+  body.inventory-open .inventory-no-sidebar .inventory-charts { grid-template-columns: 1fr; }
+  body.inventory-open .inventory-tracking-art { height: 82px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inventory-tracking-route,.inventory-tracking-node,.inventory-tracking-package,.inventory-tracking-pin,
+  .inventory-tracking-tag,.inventory-tracking-scan,.inventory-tracking-spark,.inventory-tracking-packet { animation: none !important; }
+  .inventory-tracking-packet { display: none; }
+}
+
+/* Home: leitura de situação em barras, no padrão da Central Operacional. */
+.inventory-global-charts .inventory-situation-summary { padding: 12px 11px 15px; }
+.inventory-situation-summary-bars { display: grid; gap: 9px; margin-top: 14px; }
+.inventory-situation-summary-row { display: grid; grid-template-columns: minmax(64px,1fr) minmax(48px,1.15fr) 25px; align-items: center; gap: 7px; font-size: 10px; }
+.inventory-situation-summary-row span { overflow: hidden; color: #c7dff0; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-situation-summary-row b { color: #f3faff; text-align: right; font-size: 11px; }
+.inventory-situation-summary-track { height: 9px; overflow: hidden; border: 1px solid #346485; border-radius: 99px; background: #06192d; }
+.inventory-situation-summary-track i { display: block; height: 100%; border-radius: inherit; background: var(--chart-color); box-shadow: 0 0 8px var(--chart-color); }
+.theme-light .inventory-situation-summary-row span,.theme-light .inventory-situation-summary-row b { color: #244860; }
+.theme-light .inventory-situation-summary-track { background: #c9deeb; }
+
+/* Novo cenário do cabeçalho: estante de ativos sob leitura e localização. */
+body.inventory-open .inventory-scan-art { width: min(100%,600px); height: 106px; overflow: visible; filter: drop-shadow(0 0 7px #1bbaff66); }
+.inventory-scan-floor { fill: none; stroke: #2f90be; stroke-width: 1; opacity: .38; }
+.inventory-scan-input { fill: #0b2a45; stroke: #42b5df; stroke-width: 1.8; filter: drop-shadow(0 0 5px #30c8ff88); }
+.inventory-scan-input path { fill: none; stroke: #7cdbfb; stroke-width: 1.5; }
+.inventory-scan-input circle { fill: #37dfa7; stroke: none; animation: inventory-scan-blink 2.8s ease-in-out infinite; }
+.inventory-scan-route { fill: none; stroke: #52c5ee; stroke-width: 1.8; stroke-dasharray: 7 6; animation: inventory-scan-route 6s linear infinite; }
+.inventory-scan-route circle { fill: #6eeeff; stroke: none; filter: drop-shadow(0 0 5px #61e9ff); }
+.inventory-scan-rack { fill: #091c35cf; stroke: #459cce; stroke-width: 2; filter: drop-shadow(0 0 9px #167ccb88); }
+.inventory-scan-rack path { fill: none; stroke: #3878ad; stroke-width: 1.5; }
+.inventory-scan-asset { fill: #0c3453; stroke: #65d3f1; stroke-width: 1.4; animation: inventory-scan-asset 5.4s ease-in-out infinite; }
+.inventory-scan-asset path { fill: none; stroke: #94e9fc; stroke-width: 1; }
+.inventory-scan-asset.b { fill: #113d65; stroke: #a7a1ff; filter: drop-shadow(0 0 5px #9384ff); }
+.inventory-scan-asset.c,.inventory-scan-asset.f { stroke: #73e6bc; }
+.inventory-scan-asset.d { animation-delay: -1s; }.inventory-scan-asset.e { animation-delay: -2s; }.inventory-scan-asset.f { animation-delay: -3s; }
+.inventory-scan-sweep { fill: none; stroke: #8dfffb; stroke-width: 1.7; filter: drop-shadow(0 0 5px #49f4ff); animation: inventory-scan-sweep 4.8s ease-in-out infinite; }
+.inventory-scan-location { fill: #112a50; stroke: #be91ff; stroke-width: 2; filter: drop-shadow(0 0 7px #b079ff); animation: inventory-scan-location 4s ease-in-out infinite; }
+.inventory-scan-location circle { fill: #7964d6; stroke: #e1c7ff; }
+.inventory-scan-signal { fill: #64f6e3; filter: drop-shadow(0 0 5px #39ffda); animation: inventory-scan-blink 2.5s ease-in-out infinite; }
+@keyframes inventory-scan-route { to { stroke-dashoffset: -78; } }
+@keyframes inventory-scan-sweep { 0%,100% { transform: translateX(0); opacity: .35; } 50% { transform: translateX(186px); opacity: .95; } }
+@keyframes inventory-scan-asset { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+@keyframes inventory-scan-location { 0%,100% { transform: translateY(2px); } 50% { transform: translateY(-3px); } }
+@keyframes inventory-scan-blink { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+@media (max-width:700px) { body.inventory-open .inventory-scan-art { height: 82px; } }
+@media (prefers-reduced-motion:reduce) { .inventory-scan-route,.inventory-scan-sweep,.inventory-scan-asset,.inventory-scan-location,.inventory-scan-signal,.inventory-scan-input circle { animation: none; } }

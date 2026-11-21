@@ -7,7 +7,7 @@
   const route = new URLSearchParams(window.location.search);
   const statuses = ['Ativo', 'Reserva', 'Defeito', 'Manutenção', 'Inativo'];
   const situations = ['Em Sala', 'Em Uso', 'Estoque', 'Em Manutenção'];
-  const cleanings = ['Preventiva', 'Completa', 'Não Realizada'];
+  const cleanings = window.AldeckotEquipmentCleaning.types;
   const priorities = ['Alta', 'Média', 'Estável'];
   const areas = ['Escritório', 'Estoque', 'Frente de Loja'];
   const peripheralTypes = ['Impressora', 'Pin Pad', 'Gaveta', 'Balança', 'Monitor', 'Teclado', 'Leitor'];
@@ -39,7 +39,12 @@
   };
   const statusColors = Object.fromEntries(Object.entries(statusPresentation).map(([status, presentation]) => [status, presentation.color]));
   const situationColors = { 'Em Sala': '#9d6cff', 'Em Uso': '#36c8f4', Estoque: '#e582ff', 'Em Manutenção': '#ff6d47' };
-  const cleaningColors = { Preventiva: '#4d8dff', Completa: '#58e6bd', 'Não Realizada': '#d486ff' };
+  const cleaningColors = {
+    Preventiva: 'var(--cleaning-preventive)',
+    Completa: 'var(--cleaning-complete)',
+    Regular: 'var(--cleaning-regular)',
+    'Não realizada': 'var(--cleaning-missed)'
+  };
   const priorityColors = { Alta: '#ff6674', 'Média': '#ffce59', 'Estável': '#3de5d3' };
   const areaIcons = { 'Escritório': 'building', Estoque: 'warehouse', 'Frente de Loja': 'store' };
   let payload = { table: null, items: [] };
@@ -64,7 +69,6 @@
       home: '<path d="m3 11 9-8 9 8v9H3v-9Z"/><path d="M9 20v-6h6v6"/>',
       plus: '<path d="M12 5v14M5 12h14"/>',
       export: '<path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/>',
-      pdf: '<path d="M3.5 4.3 16.8 2l.7 3.5H5.2Z" fill="#b90c29" stroke="none"/><path d="M6.1 4.5h12.8v14H6.1Z" fill="#f9fafb" stroke="none"/><path d="M4.2 6.1h13v13.8c0 .9-.6 1.5-1.5 1.5h-10c-.9 0-1.5-.6-1.5-1.5Z" fill="#ff3048" stroke="none"/><path d="M5.8 11.9V7.8h1.7c1.1 0 1.7.5 1.7 1.35s-.6 1.35-1.7 1.35H5.8M10 7.8v4.1h1c1.3 0 2-.7 2-2.05s-.7-2.05-2-2.05ZM13.8 11.9V7.8h2.4M13.8 9.8H16" fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.8" cy="17.8" r="5.3" fill="#35d82e" stroke="#24a61e" stroke-width=".5"/><path d="M17.8 14.5v4.2m-2-1.9 2 2 2-2m-4.6 3.6h5.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
       backup: '<ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/>',
       database: '<ellipse cx="10" cy="5" rx="5.5" ry="2.5"/><path d="M4.5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.2 0 2.3-.2 3.2-.5M15.5 5v7M4.5 10c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5M18.5 16v6m-3-3h6"/>',
       download: '<path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4"/>',
@@ -139,10 +143,14 @@
     toastTimer = setTimeout(() => toastNode.classList.remove('show'), 3200);
   };
   const uniqueLog = text => ({ id: `management-log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: new Date().toISOString(), text });
+  function resetMovementHistory() {
+    movementHistoryRequest += 1;
+    movementHistory = { key: '', loading: false, loaded: false, computer: [], position: [], error: '' };
+  }
   async function loadMovementHistory(item) {
     if (!item) return;
     const key = `${item.id}:${item.computerId || ''}`;
-    if (movementHistory.key === key && (movementHistory.loading || movementHistory.loaded || movementHistory.error)) return;
+    if (movementHistory.key === key && (movementHistory.loading || movementHistory.loaded)) return;
     const request = ++movementHistoryRequest;
     movementHistory = { key, loading: true, loaded: false, computer: [], position: [], error: '' };
     renderModal();
@@ -200,6 +208,9 @@
     const terminal = terminalName(item);
     const computer = computerName(item);
     const tag = String(item.tag || '').trim().toUpperCase() || '—';
+    const overdue = overduePeripheralCounts.get(item.id) || 0;
+    const cleaningAlert = overdue === 1 ? '1 periférico com limpeza vencida'
+      : overdue > 1 ? overdue + ' periféricos com limpeza vencida' : '';
     const tooltip = `<span class="mini-tooltip"><b>${escape(fixedTerminal ? terminal : item.equipment)}</b>${fixedTerminal ? `<span>Computador: ${escape(computer)}</span>` : ''}${occupied ? `<span>TAG ${escape(display(item.tag))} · ${escape(display(item.ip))}</span><span>${escape(display(item.operatingSystem))} · ${escape(display(item.model))}</span><span>${escape(display(item.user))} · ${escape(item.status)}</span>` : ''}</span>`;
     const identity = fixedTerminal
       ? `<b class="mini-computer-label mini-terminal-label">${escape(terminal)}</b><span class="mini-status"><i></i>${occupied ? escape(item.status) : 'Vazio'}</span><span class="mini-assigned-computer" title="${escape(computer)}">${escape(computer)}</span>`
@@ -207,7 +218,7 @@
     const ariaLabel = fixedTerminal
       ? `Terminal ${terminal}. Computador: ${computer}.${occupied ? ` TAG: ${tag}. Status: ${item.status}.` : ''} Ativar para ver detalhes.`
       : `Equipamento ${item.equipment}. TAG: ${tag}. Status: ${item.status}. Ativar para ver detalhes.`;
-    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${occupied ? escape(item.status) : 'Vazio'}" style="--status-color:${color};--situation-color:${situationColor};--area-color:${areaColor};--category-color:${color}" aria-label="${escape(ariaLabel)}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(occupied ? statusIcon(item.status) : 'offline', 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis" title="${occupied ? `TAG do PC: ${escape(tag)}` : 'Sem computador instalado'}"><span class="mini-tag-readout">${occupied ? escape(tag) : '—'}</span></span>${identity}${tooltip}</button>`;
+    return `<button class="mini-computer${compact ? ' compact' : ''}${fixedTerminal ? ' is-fixed-terminal' : ''}" type="button" data-management-open="${escape(item.id)}" data-status="${occupied ? escape(item.status) : 'Vazio'}" style="--status-color:${color};--situation-color:${situationColor};--area-color:${areaColor};--category-color:${color}" aria-label="${escape([ariaLabel, cleaningAlert].filter(Boolean).join(' '))}"><span class="mini-category">${escape(item.area || 'Escritório')}</span><span class="mini-screen"><span class="mini-screen-hud" aria-hidden="true"><b>${escape(readout.code)}</b><i>${escape(readout.value)}</i></span><span class="mini-screen-mark">${svg(occupied ? statusIcon(item.status) : 'offline', 28)}</span><span class="mini-screen-telemetry" aria-hidden="true"><i></i><i></i><i></i></span><span class="mini-led"></span></span><span class="mini-neck"></span><span class="mini-base"></span><span class="mini-chassis" title="${occupied ? `TAG do PC: ${escape(tag)}` : 'Sem computador instalado'}"><span class="mini-tag-readout">${occupied ? escape(tag) : '—'}</span></span>${identity}${cleaningAlert ? '<span class="mini-cleaning-overdue">' + escape(cleaningAlert) + '</span>' : ''}${tooltip}</button>`;
   }
 
   function areaMarkup(area, items) {
@@ -215,7 +226,10 @@
   }
 
   function chartMarkup(title, items, key, labels, colors) {
-    const counts = Object.fromEntries(labels.map(label => [label, items.filter(item => item[key] === label).length]));
+    const matches = key === 'cleaning'
+      ? (item, label) => normalize(item.cleaning) === normalize(label)
+      : (item, label) => item[key] === label;
+    const counts = Object.fromEntries(labels.map(label => [label, items.filter(item => matches(item, label)).length]));
     const max = Math.max(...Object.values(counts), 1);
     return `<section class="management-chart"><h3>${escape(title)}</h3><div class="management-chart-stage">${labels.map(label => `<div class="management-chart-bar" style="--chart-color:${colors[label]};height:${Math.max(4, Math.round(counts[label] / max * 116))}px" title="${escape(label)}: ${counts[label]}"></div>`).join('')}</div><div class="management-chart-legend">${labels.map(label => `<span style="--chart-color:${colors[label]}"><i></i><em>${escape(label)}</em><b>${counts[label]}</b></span>`).join('')}</div></section>`;
   }
@@ -228,7 +242,7 @@
   const managementHeaderSummaryMarkup = () => `<div class="management-heading module-header-summary module-header-summary-management"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">Gestão TI</h1><p class="module-header-summary-description">Monitoramento de PCs ativos em tempo real.</p><div class="module-header-summary-tags"><span>Monitoramento</span><span>Status</span><span>Desempenho</span></div></div><span class="module-header-summary-art management" aria-hidden="true"></span></div>`;
 
   function headerMarkup() {
-    return `<header class="management-header"><div class="management-heading"><span class="management-heading-icon">${svg('monitor', 20)}</span><div><h1>GESTÃO TI</h1><p>Aldeckot — Central de Monitoramento Computacional</p></div></div><div class="management-header-actions" role="toolbar" aria-label="Ações da Gestão TI"><button class="management-action icon management-pdf-action" type="button" data-management-action="export" title="Exportar em PDF" aria-label="Exportar em PDF">${svg('pdf')}</button><button class="management-action icon management-backup-action" type="button" data-management-action="backup" title="Sistema de backup" aria-label="Sistema de backup">${svg('backup')}</button><button class="management-action icon management-home-action" type="button" data-management-action="home" title="Voltar ao início" aria-label="Voltar ao início">${svg('home')}</button></div></header>`;
+    return `<header class="management-header"><div class="management-heading"><span class="management-heading-icon">${svg('monitor', 20)}</span><div><h1>GESTÃO TI</h1><p>Aldeckot — Central de Monitoramento Computacional</p></div></div><div class="management-header-actions" role="toolbar" aria-label="Ações da Gestão TI"><button class="management-action icon management-pdf-action" type="button" data-management-action="export" title="Exportar em PDF" aria-label="Exportar em PDF"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button><button class="management-action icon management-backup-action" type="button" data-management-action="backup" title="Sistema de backup" aria-label="Sistema de backup">${svg('backup')}</button><button class="management-action icon management-home-action" type="button" data-management-action="home" title="Voltar ao início" aria-label="Voltar ao início">${svg('home')}</button></div></header>`;
   }
 
   function applyManagementFilters() {
@@ -308,16 +322,33 @@
     const matches = inventoryPeripheralRows.filter(row => String(row.tag || '').trim().toUpperCase() === tag);
     return matches.length === 1 ? matches[0] : null;
   };
+  let overduePeripherals = new Set();
+  let overduePeripheralCounts = new Map();
   async function refreshPeripheralStatuses() {
     const entries = payload.items.flatMap(peripheralList);
     const ids = entries.filter(entry => entry.sourceModule === 'inventory' && entry.sourceItemId).map(entry => entry.sourceItemId);
     const tags = entries.filter(entry => !entry.sourceItemId && peripheralTagRules[entry.type || entry.tipo]?.pattern.test(peripheralInventoryTag(entry))).map(peripheralInventoryTag);
     try {
-      const rows = await window.AldeckotSupabase.management.peripheralInventoryStatuses({ ids, tags });
+      const api = window.AldeckotSupabase;
+      const [rows, alerts] = await Promise.all([
+        api.management.peripheralInventoryStatuses({ ids, tags }),
+        api.cleaning?.alerts?.().catch(() => []) || []
+      ]);
+      const overdue = new Set();
+      const counts = new Map();
+      for (const row of alerts) {
+        if (row.source_module !== 'inventory' || !row.overdue || !row.position_id) continue;
+        overdue.add(row.equipment_id);
+        counts.set(row.position_id, (counts.get(row.position_id) || 0) + 1);
+      }
+      const changedOverdue = overdue.size !== overduePeripherals.size || [...overdue].some(id => !overduePeripherals.has(id))
+        || counts.size !== overduePeripheralCounts.size || [...counts].some(([id, count]) => overduePeripheralCounts.get(id) !== count);
+      overduePeripheralCounts = counts;
+      overduePeripherals = overdue;
       const next = rows.sort((first, second) => String(first.id).localeCompare(String(second.id)));
       const changed = JSON.stringify(next) !== JSON.stringify(inventoryPeripheralRows);
       inventoryPeripheralRows = next;
-      return changed;
+      return changed || changedOverdue;
     } catch (error) {
       console.warn('Status dos periféricos no Inventário indisponível:', error);
       inventoryPeripheralRows = [];
@@ -349,10 +380,13 @@
       const inventoryLinked = entry.sourceModule === 'inventory' || Boolean(peripheralTagRules[type]?.pattern.test(peripheralInventoryTag(entry)));
       const condition = inventoryItem?.status || (!inventoryLinked ? entry.condition || entry.operationalStatus || (healthStates.includes(normalize(rawStatus)) ? rawStatus : '') : '');
       const identifier = inventoryItem?.tag || entry.tag || (!condition ? rawStatus : '');
+      const cleaning = inventoryItem?.cleaning_type;
+      const situation = inventoryItem?.situation;
+      const overdue = inventoryItem && overduePeripherals.has(inventoryItem.id);
       const model = [entry.brand, entry.model].filter(hasDetailValue).join(' ');
       const normalizedCondition = normalize(condition);
       const tone = ['ativo', 'funcionando', 'operacional'].includes(normalizedCondition) ? 'ok' : ['defeito', 'manutencao', 'inativo', 'desativado', 'offline'].includes(normalizedCondition) ? 'fault' : normalizedCondition === 'reserva' ? 'warn' : 'unverified';
-      return `<article class="management-asset-peripheral"><span class="management-asset-data-icon icon-${peripheralIcon(type)}">${svg(peripheralIcon(type), 24)}</span><div><strong>${escape(type)}</strong>${model ? `<span>${escape(model)}</span>` : ''}${identifier && normalize(identifier) !== 'nao informado' ? `<small>TAG ${escape(identifier)}</small>` : ''}<em class="${tone}">${escape(condition || (inventoryLinked ? 'Status indisponível no Inventário' : 'Estado não informado'))}</em></div></article>`;
+      return `<article class="management-asset-peripheral"><span class="management-asset-data-icon icon-${peripheralIcon(type)}">${svg(peripheralIcon(type), 24)}</span><div><strong>${escape(type)}</strong>${model ? `<span>${escape(model)}</span>` : ''}${identifier && normalize(identifier) !== 'nao informado' ? `<small>TAG ${escape(identifier)}</small>` : ''}<em class="${tone}">${escape(condition || (inventoryLinked ? 'Status indisponível no Inventário' : 'Estado não informado'))}</em>${situation ? '<small>Situação: ' + escape(situation) + '</small>' : ''}${cleaning ? '<small>Limpeza: <span class="cleaning-pill" data-cleaning="' + escape(cleaning) + '">' + escape(cleaning) + '</span></small>' : ''}${overdue ? '<small class="management-cleaning-overdue">Limpeza vencida</small>' : ''}</div></article>`;
     }).join('')}</div>`;
   }
   function networkRows(item) {
@@ -383,6 +417,46 @@
       : '';
     return `<section class="management-asset-section">${sectionTitle('pin', 'Localização')}${fields ? `<div class="management-detail-grid">${fields}</div>` : '<p class="management-asset-empty">Localização não cadastrada.</p>'}${warning}</section>`;
   }
+  function positionHistoryMarkup(rows, positionId, eventCard) {
+    const episodes = [];
+    const replacements = new Map();
+    rows.forEach(event => {
+      const metadata = event.metadata;
+      const operation = metadata?.operationId || metadata?.regularizationRequestId;
+      if (!metadata?.peripheral || typeof metadata.peripheral !== 'object'
+        || metadata.regularizationIntent !== 'replacement' || !operation) {
+        episodes.push({ event });
+        return;
+      }
+      if (!replacements.has(operation)) {
+        const episode = { event, operation, events: [] };
+        replacements.set(operation, episode);
+        episodes.push(episode);
+      }
+      replacements.get(operation).events.push(event);
+    });
+    return episodes.map(({ event, operation, events }) => {
+      const removed = events?.find(row => row.metadata.peripheral.fromPositionId === positionId);
+      const installed = events?.find(row => row.metadata.peripheral.toPositionId === positionId);
+      if (!removed || !installed || removed === installed || events.length !== 2)
+        return (events || [event]).map(row => eventCard(row, 'position')).join('');
+      return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>Substituição no PDV</strong>${event.reason ? `<span>Motivo · ${escape(event.reason)}</span>` : ''}<small>Operação ${escape(operation)}</small><div class="management-movement-legs">${peripheralHistoryLeg(removed, 'Retirado')}${peripheralHistoryLeg(installed, 'Instalado')}</div></article>`;
+    }).join('');
+  }
+
+  function peripheralHistoryLeg(event, heading = '') {
+    const { peripheral, previousStatus, newStatus } = event.metadata;
+    const label = peripheral.equipment || peripheral.type || 'Periférico';
+    const details = [
+      ['Equipamento do Inventário', peripheral.inventoryItemId],
+      ['Série', peripheral.serial],
+      ['PDV de origem', peripheral.fromPositionId],
+      ['PDV de destino', peripheral.toPositionId]
+    ].filter(([, value]) => value);
+    const state = (location, status) => [location || 'Local não informado', status].filter(Boolean).join(' · ');
+    return `<div class="management-movement-leg"><strong>${heading ? `${escape(heading)} · ` : ''}${escape(label)}${peripheral.tag ? ` · TAG ${escape(peripheral.tag)}` : ''}</strong><span>Antes · ${escape(state(peripheral.fromLocation, previousStatus))}</span><span>Depois · ${escape(state(peripheral.toLocation, newStatus))}</span><small>Evento ${escape(event.event_id)}</small>${details.length ? `<details><summary>Dados técnicos</summary><dl>${details.map(([key, value]) => `<dt>${key}</dt><dd>${escape(value)}</dd>`).join('')}</dl></details>` : ''}</div>`;
+  }
+
   function movementHistoryMarkup(item, kind) {
     const key = `${item.id}:${item.computerId || ''}`;
     const history = movementHistory.key === key ? movementHistory : { loading: true, computer: [], position: [], error: '' };
@@ -396,12 +470,14 @@
       }
       const peripheral = event.metadata?.peripheral;
       if (kind === 'position' && peripheral && typeof peripheral === 'object') {
-        const label = peripheral.equipment || peripheral.type || 'Periférico';
-        const identity = (peripheral.tag ? ' · TAG ' + peripheral.tag : '')
-          + (peripheral.serial ? ' · Série ' + peripheral.serial : '');
-        const direction = peripheral.fromPositionId === item.id ? 'Saída' : 'Entrada';
-        const route = `${peripheral.fromLocation || 'Local não informado'} → ${peripheral.toLocation || 'Local não informado'}`;
-        return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(`${direction} de ${label}${identity} · ${route}`)}</strong><span>${escape(event.reason || 'Movimentação registrada no Inventário')}</span><small>Evento ${escape(event.event_id)}</small></article>`;
+        const direction = peripheral.fromPositionId === item.id ? 'Saída de periférico' : 'Entrada de periférico';
+        const replacement = event.metadata?.regularizationIntent === 'replacement';
+        const correction = event.action === 'Correção cadastral de local';
+        const afterReturn = event.action === 'Regularização após retorno';
+        const operationId = event.metadata?.operationId || event.metadata?.regularizationRequestId || '';
+        const title = correction || afterReturn ? event.action
+          : replacement ? `${direction} em substituição` : direction;
+        return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(title)}</strong>${event.reason ? `<span>Motivo · ${escape(event.reason)}</span>` : ''}${operationId && operationId !== event.event_id ? `<small>Operação ${escape(operationId)}</small>` : ''}${peripheralHistoryLeg(event)}</article>`;
       }
       const lines = eventLegs(event).flatMap(leg => {
         const before = leg.before || {};
@@ -413,18 +489,18 @@
       });
       return `<article class="management-movement-event"><time>${escape(dateTime(event.occurred_at))}</time><strong>${escape(lines.join(' | ') || 'Movimentação registrada')}</strong><span>${escape(event.reason || 'Motivo não informado')}</span><small>Evento ${escape(event.event_id)}</small></article>`;
     };
-    const group = (title, kind, rows, empty) => `<section class="management-movement-history-group"><h4>${escape(title)}</h4>${history.loading ? '<p class="management-asset-empty">Carregando movimentações…</p>' : history.error ? '<p class="management-asset-empty">Consulta indisponível.</p>' : rows.length ? `<div class="management-movement-events">${rows.map(event => eventCard(event, kind)).join('')}</div>` : `<p class="management-asset-empty">${escape(empty)}</p>`}</section>`;
+    const group = (title, kind, rows, empty) => `<section class="management-movement-history-group"><h4>${escape(title)}</h4>${history.loading ? '<p class="management-asset-empty">Carregando movimentações…</p>' : history.error ? '<p class="management-asset-empty">Consulta indisponível.</p>' : rows.length ? `<div class="management-movement-events">${kind === 'position' ? positionHistoryMarkup(rows, item.id, eventCard) : rows.map(event => eventCard(event, kind)).join('')}</div>` : `<p class="management-asset-empty">${escape(empty)}</p>`}</section>`;
     return `<div class="management-movement-history">${history.error ? `<p class="management-asset-disclaimer" role="status">${escape(history.error)}</p>` : ''}${kind === 'computer' ? group('Computador atual', 'computer', history.computer, item.computerId ? 'Nenhuma movimentação registrada para este PC.' : 'Nenhum computador instalado.') : group('Posição física', 'position', history.position, 'Nenhuma movimentação registrada para esta posição.')}</div>`;
   }
   function detailContent(item) {
     const tab = state.tab;
     if (tab === 'general') return generalDashboard(item);
     if (tab === 'hardware') return `<section class="management-asset-section">${sectionTitle('cpu', 'Hardware')}${hardwareCards(item) ? `<div class="management-asset-data-grid">${hardwareCards(item)}</div>` : '<p class="management-asset-empty">Dados técnicos ainda não cadastrados.</p>'}${[item.brand, item.model, item.serial].some(hasDetailValue) ? `<div class="management-detail-grid">${hasDetailValue(item.brand) ? detail('Marca', item.brand) : ''}${hasDetailValue(item.model) ? detail('Modelo', item.model) : ''}${hasDetailValue(item.serial) ? detail('Nº de série', item.serial) : ''}</div>` : ''}</section>`;
-    if (tab === 'peripherals') return `<section class="management-asset-section">${sectionTitle('cube', 'Periféricos vinculados')}${peripheralCards(item)}</section>`;
+    if (tab === 'peripherals') return `<section class="management-asset-section">${sectionTitle('cube', 'Periféricos vinculados')}${peripheralCards(item)}${/^PDV\s+[0-9]+$/i.test(terminalName(item)) ? `<div class="management-log-head"><p>Confira o local no Inventário e o vínculo nesta posição antes de regularizar um periférico.</p><button class="management-log-add" type="button" data-management-action="regularize-local" ${canManage() ? '' : 'disabled'}>${svg('pin', 13)} Conferência por PDV</button></div>` : ''}</section>`;
     if (tab === 'network') return `<section class="management-asset-section">${sectionTitle('network', 'Endereço IP e Rede')}${networkRows(item)}<p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
     if (tab === 'location') return locationPanel(item);
     if (tab === 'operational' && !hasInstalledComputer(item)) return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<p class="management-asset-empty">Sem computador instalado nesta posição.</p></section>`;
-    if (tab === 'operational') return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article>${hasDetailValue(item.priority) ? `<article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority)}</b></article>` : ''}${hasDetailValue(item.situation) ? `<article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article>` : ''}${hasDetailValue(item.cleaning) ? `<article class="management-operational-card" style="--operational-color:${cleaningColors[item.cleaning] || cleaningColors.Preventiva}"><i>Limpeza</i><b>${escape(item.cleaning)}</b></article>` : ''}</div><p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
+    if (tab === 'operational') return `<section class="management-asset-section">${sectionTitle('pulse', 'Status Operacional')}<div class="management-operational"><article class="management-operational-card" style="--operational-color:${statusColors[item.status] || statusColors.Ativo}"><i>Status</i><b>${escape(item.status)}</b></article>${hasDetailValue(item.priority) ? `<article class="management-operational-card" style="--operational-color:${priorityColors[item.priority] || priorityColors.Estável}"><i>Prioridade</i><b>${escape(item.priority)}</b></article>` : ''}${hasDetailValue(item.situation) ? `<article class="management-operational-card" style="--operational-color:${situationColors[item.situation] || situationColors['Em Uso']}"><i>Situação</i><b>${escape(item.situation)}</b></article>` : ''}${hasDetailValue(item.cleaning) ? `<article class="management-operational-card" style="--operational-color:var(--cleaning-tone, #8195a6)" data-cleaning="${escape(item.cleaning)}"><i>Limpeza</i><b><span class="cleaning-pill">${escape(item.cleaning)}</span></b></article>` : ''}</div><p class="management-asset-disclaimer">Conectividade em tempo real não monitorada.</p></section>`;
     if (tab === 'history') return `<section class="management-asset-section">${sectionTitle('history', 'Histórico do computador')}${movementHistoryMarkup(item, 'computer')}</section>`;
     return `<section class="management-asset-section">${sectionTitle('history', 'Movimentação da posição física')}${movementHistoryMarkup(item, 'position')}<div class="management-log-head"><p>Registros desta posição, separados do histórico imutável do PC e do PDV.</p><button class="management-log-add" type="button" data-management-action="add-log">${svg('plus', 13)} Adicionar log</button></div><div class="management-history">${(item.logs || []).length ? item.logs.map(log => `<article class="management-history-item"><time>${escape(dateTime(log.at))}</time><p>${escape(log.text)}</p>${log.eventId ? '' : `<span class="management-log-actions"><button class="management-log-action" type="button" data-management-action="edit-log" data-management-log-id="${escape(log.id)}" title="Editar log" aria-label="Editar log">${svg('edit', 13)}</button><button class="management-log-action danger" type="button" data-management-action="delete-log" data-management-log-id="${escape(log.id)}" title="Excluir log" aria-label="Excluir log">${svg('trash', 13)}</button></span>`}</article>`).join('') : '<p class="management-asset-empty">Nenhum registro nesta posição.</p>'}</div></section>`;
   }
@@ -579,7 +655,7 @@
   const priorityField = value => `<label class="management-field management-priority-field" data-management-priority-field data-tone="${priorityTone(value)}"><span>Prioridade</span><div class="management-priority-select"><i></i><select name="priority" data-management-priority-choice>${optionList(priorities, priorities.includes(value) ? value : 'Estável')}</select></div></label>`;
 
   function formModal(item) {
-    const current = item || { terminal: '', equipment: '', status: 'Ativo', priority: 'Estável', situation: 'Em Uso', cleaning: 'Preventiva', area: state.modal?.area || 'Escritório', monitoring: {}, peripherals: [] };
+    const current = item || { terminal: '', equipment: '', status: 'Ativo', priority: 'Estável', situation: 'Em Uso', cleaning: 'Não realizada', area: state.modal?.area || 'Escritório', monitoring: {}, peripherals: [] };
     const edit = Boolean(item);
     // O nome identifica uma posição física fixa (PDV, RES, RCP etc.). Depois
     // de criado, ele é preservado no formulário sem ficar disponível para edição.
@@ -594,7 +670,12 @@
       return isValidPeripheralTag(type, value) ? peripheralTag(value) : '';
     };
     const peripheralFields = peripheralTypes.map(type => peripheralField(type, peripheralValue(type))).join('');
-    return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar terminal' : 'Adicionar terminal'}</h2><p class="management-last-sync">${formHint}</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Terminal e computador</h3>${terminalField}${field('equipment', 'Nome do computador instalado', current.equipment)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('sector', 'Setor', current.sector)}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${field('cleaning', 'Limpeza', current.cleaning, cleanings)}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar terminal'}</button></footer></form></section>`;
+    const cleaningField = edit && hasInstalledComputer(current)
+      ? '<div class="equipment-cleaning-edit"><span>Limpeza atual</span><span class="cleaning-pill" data-cleaning="' +
+        escape(current.cleaning) + '">' + escape(current.cleaning) +
+        '</span><button type="button" class="management-form-cancel" data-management-action="record-cleaning">Registrar limpeza</button></div>'
+      : field('cleaning', 'Limpeza', current.cleaning, cleanings);
+    return `<section class="management-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="managementFormTitle"><header class="management-modal-head"><div><h2 id="managementFormTitle">${edit ? 'Editar terminal' : 'Adicionar terminal'}</h2><p class="management-last-sync">${formHint}</p></div><button class="management-modal-action" type="button" data-management-action="close" aria-label="Fechar">${svg('close', 14)}</button></header><form class="management-form" data-management-form><section class="management-form-section"><h3>Terminal e computador</h3>${terminalField}${field('equipment', 'Nome do computador instalado', current.equipment)}${field('tag', 'TAG', current.tag)}${field('brand', 'Marca', current.brand)}${field('model', 'Modelo', current.model)}${field('serial', 'Nº de série', current.serial)}</section><section class="management-form-section"><h3>Rede</h3>${field('ip', 'Endereço IP', current.ip)}${field('gateway', 'Gateway', current.gateway)}${field('subnetMask', 'Máscara', current.subnetMask)}</section><section class="management-form-section"><h3>Hardware</h3>${field('operatingSystem', 'Sistema operacional', current.operatingSystem)}${field('osVersion', 'Versão do sistema', current.osVersion)}${field('processor', 'Processador', current.processor)}${field('memory', 'Memória RAM', current.memory)}${field('storage', 'Armazenamento', current.storage)}</section><section class="management-form-section"><h3>Periféricos</h3>${peripheralFields}</section><section class="management-form-section"><h3>Localização e operação</h3>${field('area', 'Área', current.area, areas)}${field('sector', 'Setor', current.sector, window.AldeckotSectors?.optionsFor(current.sector) || ['Frente de Loja','Doca','Escritório','Informática','Monitoramento','Tesouraria','Padaria','Açougue','Refeitório'])}${field('location', 'Local', current.location)}${field('status', 'Status', current.status, statuses)}${priorityField(current.priority)}${field('situation', 'Situação', current.situation, situations)}${cleaningField}${field('notes', 'Observações', current.notes, null, true, 'textarea')}</section><footer class="management-form-footer"><button class="management-form-cancel" type="button" data-management-action="close">Cancelar</button><button class="management-form-save" type="submit">${edit ? 'Salvar alterações' : 'Adicionar terminal'}</button></footer></form></section>`;
   }
 
   function mountClassificationFields() {
@@ -682,7 +763,8 @@
     const source = normalize(value);
     if (source.includes('complet') || source.includes('em dia')) return 'Completa';
     if (source.includes('prevent')) return 'Preventiva';
-    return 'Não Realizada';
+    if (source === 'regular') return 'Regular';
+    return 'Não realizada';
   };
 
   const legacyDate = value => {
@@ -851,6 +933,7 @@
 
   function openDetails(id) {
     if (!payload.items.some(item => item.id === id)) return;
+    resetMovementHistory();
     detailReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     state.modal = { type: 'details', id };
     state.tab = 'general';
@@ -882,7 +965,7 @@
       ip: String(values.ip || '').trim(), gateway: String(values.gateway || '').trim(), subnetMask: String(values.subnetMask || '').trim(), hostname: current?.hostname || '', operatingSystem: String(values.operatingSystem || '').trim(), osVersion: String(values.osVersion || '').trim(),
       processor: String(values.processor || '').trim(), memory: String(values.memory || '').trim(), storage: String(values.storage || '').trim(), type: current?.type || values.area || '', category: String(values.category || (values.equipment ? 'Computador' : '')).trim(), company: current?.company || '', sector: String(values.sector || '').trim(),
       location: String(values.location || '').trim(), responsible: current?.responsible || '', user: current?.user || '', notes: String(values.notes || '').trim(), status: values.status, priority: priorities.includes(values.priority) ? values.priority : 'Estável',
-      situation: values.situation, cleaning: values.cleaning, area: values.area, isFixed: current ? Boolean(current.isFixed) : false, peripherals,
+      situation: values.situation, cleaning: values.cleaning || current?.cleaning, area: values.area, isFixed: current ? Boolean(current.isFixed) : false, peripherals,
       monitoring: current?.monitoring || {},
       registeredAt: current?.registeredAt || new Date().toISOString().slice(0, 10), logs: [...(current?.logs || [])]
     };
@@ -977,8 +1060,7 @@
     try {
       const response = await window.AldeckotSupabase.management.moveComputer(operationId, plan);
       payload = { table: response.table, items: response.items };
-      movementHistoryRequest += 1;
-      movementHistory = { key: '', loading: false, loaded: false, computer: [], position: [], error: '' };
+      resetMovementHistory();
       state.syncAt = new Date().toISOString();
       state.modal = { type: 'details', id: response.result.incomingDestinationId };
       state.transferDraft = null;
@@ -1292,7 +1374,8 @@
       render();
       window.AldeckotModuleStage?.reveal?.();
       const pending = route.get('item');
-      if (pending && payload.items.some(item => item.id === pending)) openDetails(pending);
+      if (!state.modal && pending && payload.items.some(item => item.id === pending)) openDetails(pending);
+      if (state.modal?.type === 'details' && state.tab === 'operational') renderModal();
     } catch (error) {
       console.error('Falha ao carregar Gestão TI:', error);
       app.innerHTML = `<section class="management-empty"><i>${svg('monitor', 24)}</i><h2>Não foi possível abrir a Gestão TI.</h2><p>${escape(error?.message || 'Verifique a conexão com o Supabase e tente novamente.')}</p><button type="button" data-management-action="retry">Tentar novamente</button></section>`;
@@ -1308,7 +1391,7 @@
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
     if (!action) return;
-    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-mode', 'select-transfer-destination', 'transfer-back', 'edit', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-mode', 'select-transfer-destination', 'transfer-back', 'edit', 'record-cleaning', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'regularize-local', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
     if (state.transferBusy && state.modal?.type === 'transfer' && (action === 'close' || action === 'details')) return;
@@ -1364,10 +1447,39 @@
       state.transferDraft.confirmedLocations = false;
       renderModal();
     }
+    if (action === 'record-cleaning' && hasInstalledComputer(activeItem())) {
+      const item = activeItem();
+      void window.AldeckotEquipmentCleaning.open({ module: 'management', item, onSaved: async () => {
+        payload = await window.AldeckotSupabase.management.load();
+        await refreshPeripheralStatuses();
+        render();
+        const label = modalNode.querySelector('.equipment-cleaning-edit .cleaning-pill');
+        const current = activeItem();
+        if (label && current?.id === item.id) {
+          label.dataset.cleaning = current.cleaning;
+          label.textContent = current.cleaning;
+        }
+        notify('Limpeza registrada.');
+      } });
+      return;
+    }
     if (action === 'edit' && activeItem()) { state.modal = { type: 'edit', id: activeItem().id }; state.actionMenu = false; renderModal(); }
     if (action === 'delete' && activeItem() && !isProtectedTerminal(activeItem())) { state.modal = { type: 'delete', id: activeItem().id }; state.actionMenu = false; renderModal(); }
     if (action === 'confirm-delete' && activeItem() && !isProtectedTerminal(activeItem())) removeActive();
     if (action === 'add-log' && activeItem()) { state.modal = { type: 'log', id: activeItem().id }; renderModal(); }
+    if (action === 'regularize-local' && activeItem()) {
+      window.AldeckotLocalRegularization.open({
+        location: terminalName(activeItem()), sector: activeItem().sector || '',
+        onSaved: async () => {
+          resetMovementHistory();
+          payload = await window.AldeckotSupabase.management.load();
+          await refreshPeripheralStatuses();
+          render(); renderModal();
+          if (state.modal?.type === 'details' && ['history', 'movement'].includes(state.tab))
+            void loadMovementHistory(activeItem());
+        }
+      }).catch(error => notify(error.message || 'Não foi possível abrir a conferência.'));
+    }
     if (action === 'edit-log' && activeItem() && !(activeItem().logs || []).find(log => log.id === actionNode.dataset.managementLogId)?.eventId) { state.modal = { type: 'log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'delete-log' && activeItem() && !(activeItem().logs || []).find(log => log.id === actionNode.dataset.managementLogId)?.eventId) { state.modal = { type: 'delete-log', id: activeItem().id, logId: actionNode.dataset.managementLogId }; renderModal(); }
     if (action === 'confirm-delete-log') deleteLog();
@@ -1499,6 +1611,7 @@
       window.clearTimeout(peripheralRealtimeTimer);
       peripheralRealtimeTimer = window.setTimeout(async () => {
         const changed = await refreshPeripheralStatuses();
+        if (changed) render();
         if (changed && state.modal?.type === 'details') {
           const activeTab = document.activeElement?.dataset?.managementTab;
           renderModal();

@@ -30,3 +30,48 @@ body:not(.theme-light) :is(.inventory-status.inativo,.inventory-status.descartad
 :where(.inventory-status,.inventory-situation,.inventory-movement,.inventory-shipping,.mini-status,.management-badge,.management-asset-status,.sp-badge,.detail-status,.central-severity-badge,.central-overall-badge) i {
   flex-shrink: 0;
 }
+
+/* A mesma paleta identifica a limpeza nas tabelas, formulários e gráficos. */
+:root {
+  --cleaning-complete: #0ec568;
+  --cleaning-preventive: #2294ff;
+  --cleaning-regular: #e6b820;
+  --cleaning-missed: #f1394b;
+}
+[data-cleaning="Completa" i],
+[data-kind="cleaning"][data-tone="green"],
+.management-field select[name="cleaning"]:has(option[value="Completa" i]:checked) { --cleaning-tone: var(--cleaning-complete); }
+[data-cleaning="Preventiva" i],
+[data-kind="cleaning"][data-tone="blue"],
+.management-field select[name="cleaning"]:has(option[value="Preventiva" i]:checked) { --cleaning-tone: var(--cleaning-preventive); }
+[data-cleaning="Regular" i],
+[data-kind="cleaning"][data-tone="yellow"],
+.management-field select[name="cleaning"]:has(option[value="Regular" i]:checked) { --cleaning-tone: var(--cleaning-regular); }
+[data-cleaning="Não realizada" i],
+[data-kind="cleaning"][data-tone="red"],
+.management-field select[name="cleaning"]:has(option[value="Não realizada" i]:checked) { --cleaning-tone: var(--cleaning-missed); }
+.cleaning-pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--cleaning-tone, #8195a6);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cleaning-tone, #8195a6) 14%, #051020);
+  box-shadow: inset 0 0 8px color-mix(in srgb, var(--cleaning-tone, #8195a6) 32%, transparent),
+    0 0 5px color-mix(in srgb, var(--cleaning-tone, #8195a6) 42%, transparent);
+  color: #f5fbff;
+  text-align: center;
+  font-size: 10.5px;
+  line-height: 1.1;
+}
+.theme-light .cleaning-pill {
+  background: color-mix(in srgb, var(--cleaning-tone, #8195a6) 14%, #fff);
+  color: #17304a;
+}
+.inv-choice-field[data-kind="cleaning"][data-tone] .inv-choice-select i {
+  color: var(--cleaning-tone);
+  background: var(--cleaning-tone);
+}
+.management-field select[name="cleaning"] {
+  border-color: var(--cleaning-tone, #55789769);
+}

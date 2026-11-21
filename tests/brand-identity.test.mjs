@@ -13,7 +13,7 @@ test('o símbolo oficial está nos cabeçalhos e nos formatos de exportação', 
   const symbol = read('assets/aldeckot-symbol.png');
   assert.equal(symbol.subarray(1, 4).toString('ascii'), 'PNG');
   for (const file of ['index.html', 'login.html', 'settings.html', 'header-official-logo.js', 'supplies.js']) {
-    assert.match(read(file).toString('utf8'), /assets\/aldeckot-symbol\.png\?v=2\.0\.71/);
+    assert.match(read(file).toString('utf8'), /assets\/aldeckot-symbol\.png\?v=2\.0\.\d+/);
   }
   for (const file of ['inventory.js', 'management.js', 'supplies.js']) {
     assert.match(read(file).toString('utf8'), /class="print-brand" src="\$\{printBrand\}"/);

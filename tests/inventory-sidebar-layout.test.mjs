@@ -12,14 +12,14 @@ test('a lateral recolhida do Inventário não vira um painel vertical', () => {
   assert.doesNotMatch(glassCss, /\.inventory-panel\.inventory-table-sidebar/);
 });
 
-test('tabelas abrem na home dos três módulos, recolhem na seleção e reabrem no retorno', () => {
-  assert.match(inventoryView, /sidebarOpen: !moduleRoute\.get\('table'\)/);
+test('as Homes permanecem disponíveis e a casa retorna à visão geral', () => {
+  assert.match(inventoryView, /sidebarOpen: false/);
   const selection = inventoryView.split("const chosen = event.target.closest('[data-inv-table]');")[1]?.split("const editTable =")[0];
   assert.ok(selection);
   assert.match(selection, /state\.sidebarOpen = false/);
-  const back = inventoryView.split("if (event.target.closest('[data-inv-global-home]')) {")[1]?.split('const branchCard =')[0];
-  assert.ok(back);
-  assert.match(back, /state\.active = null;[\s\S]*state\.sidebarOpen = true/);
+  assert.match(inventoryView, /active: null, overview: true, sidebarOpen: false/);
+  assert.match(inventoryView, /if \(event\.target\.closest\('\[data-inv-global-home\]'\)\) \{\s*await showModuleHome\(\)/);
   assert.match(inventoryView, /const moduleHomeButton = event\.target\.closest\('\[data-inv-module-home\]'\)/);
+  assert.match(inventoryView, /data-module-home-table-select/);
   assert.match(inventoryView, /if \(type === 'toggle-tables'\) \{ state\.sidebarOpen = !state\.sidebarOpen/);
 });

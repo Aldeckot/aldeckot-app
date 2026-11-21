@@ -1,0 +1,56 @@
+.equipment-cleaning-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.equipment-cleaning-dialog {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 22px;
+  border: 1px solid #345778;
+  border-radius: 16px;
+  background: #111f32;
+  color: #eef5fc;
+}
+.equipment-cleaning-dialog::backdrop { background: #030c1cb3; }
+.equipment-cleaning-dialog form,
+.equipment-cleaning-dialog fieldset {
+  display: grid;
+  gap: 12px;
+}
+.equipment-cleaning-dialog fieldset[hidden] { display: none; }
+.equipment-cleaning-dialog h2,
+.equipment-cleaning-dialog p { margin: 0; }
+.equipment-cleaning-dialog label { display: block; }
+.equipment-cleaning-dialog select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.equipment-cleaning-dialog input[type="checkbox"] { margin-right: 8px; }
+.equipment-cleaning-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.equipment-cleaning-dialog button,
+.equipment-cleaning-dialog select {
+  padding: 8px 12px;
+  border: 1px solid #456b90;
+  border-radius: 8px;
+  background: #172d47;
+  color: inherit;
+  font: inherit;
+}
+.equipment-cleaning-dialog button[type="submit"]:not(:disabled) { background: #13558d; }
+.equipment-cleaning-dialog button:disabled { opacity: .5; }
+.equipment-cleaning-dialog :focus-visible { outline: 2px solid #72bcff; }
+.management-asset-peripheral .management-cleaning-overdue { color: #ff929d; }
+.mini-cleaning-overdue {
+  color: #ff929d;
+  font-size: .72rem;
+  text-align: center;
+}
+:where(.light-mode, [data-theme="light"]) .mini-cleaning-overdue { color: #9b1631; }

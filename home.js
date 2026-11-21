@@ -72,21 +72,21 @@
     + '<div class="home-center-metrics"><section class="home-global home-panel" aria-label="Resumo Global">' + heading('Resumo Global', 'summary', 'equipment', 'Ver detalhes')
     + '<div data-home-summary><p class="home-state aldeckot-inline-loading" role="status">Carregando equipamentos…</p></div></section>'
     + '<section class="home-operations home-panel" aria-label="Central de Operações"><header class="home-panel-head"><h2>' + icons.operations + 'Central de Operações</h2>'
-    + '<div class="home-operations-actions"><button class="home-small-button" data-home-operation-clear type="button">Limpar</button>'
-    + '<button class="home-small-button home-refresh" data-home-refresh type="button" aria-label="Atualizar indicadores">↻ Atualizar</button></div></header>'
+    + '<div class="home-operations-actions"><button class="home-small-button" data-home-operation-clear type="button"><span aria-hidden="true">◇</span> Limpar</button>'
+    + '<button class="home-small-button home-refresh" data-home-refresh type="button" aria-label="Atualizar indicadores"><span aria-hidden="true">⟳</span> Atualizar</button></div></header>'
     + '<div data-home-operations class="home-operations-analytic"></div></section></div>'
     + '</div>'
     + '<aside class="home-side"><section class="home-calendar home-panel" aria-label="Calendário"></section>'
-    + '<section class="agenda-upcoming-panel home-panel" aria-label="Próximos agendamentos"></section>'
+    + '<section class="agenda-upcoming-panel home-panel" aria-label="Próximos agendamentos" hidden></section>'
     + '<section class="home-recent-panel home-panel" data-home-recent-items aria-label="Últimos itens atualizados">' + heading('Últimos itens atualizados', 'clock', '')
     + '<div data-home-recent-list></div></section>'
     + '<section class="home-alert-panel home-panel" aria-label="Alertas críticos">' + heading('Alertas críticos', 'alert', 'alerts') + '<div data-home-alerts></div></section>'
     + '</aside>';
   let current = model.build({});
   let source = {};
-  const defaultOperationsFilters = { mode: 'open', module: 'all', type: 'all', period: 'all', from: '', to: '' };
+  const defaultOperationsFilters = { mode: 'activity', module: 'all', type: 'all', period: 'month', from: '', to: '' };
   let operationsFilters;
-  try { operationsFilters = { ...defaultOperationsFilters, ...JSON.parse(sessionStorage.getItem('aldeckot-home-operations-filters') || '{}') }; }
+  try { operationsFilters = { ...defaultOperationsFilters, ...JSON.parse(sessionStorage.getItem('aldeckot-home-operations-filters-v2') || '{}') }; }
   catch { operationsFilters = { ...defaultOperationsFilters }; }
   let operations = operationsModel?.build(source, operationsFilters);
   let operationHistoryRequest = null;
@@ -425,7 +425,7 @@
       operationsFilters.period = control.value === 'open' ? 'all' : 'month';
     }
     if (control.dataset.homeOperationFilter === 'module') operationsFilters.type = 'all';
-    sessionStorage.setItem('aldeckot-home-operations-filters', JSON.stringify(operationsFilters));
+    sessionStorage.setItem('aldeckot-home-operations-filters-v2', JSON.stringify(operationsFilters));
     renderOperations();
     void loadOperationsHistory();
   });
@@ -437,7 +437,7 @@
     if (event.target.closest('[data-home-refresh]')) refresh();
     if (event.target.closest('[data-home-operation-clear]')) {
       operationsFilters = { ...defaultOperationsFilters };
-      sessionStorage.setItem('aldeckot-home-operations-filters', JSON.stringify(operationsFilters));
+      sessionStorage.setItem('aldeckot-home-operations-filters-v2', JSON.stringify(operationsFilters));
       renderOperations();
     }
     const key = event.target.closest('[data-home-set]')?.dataset.homeSet;
@@ -447,7 +447,7 @@
   });
   const search = document.querySelector('[data-central-search-input]');
   if (search) {
-    search.placeholder = 'Buscar no sistema…';
+    search.placeholder = 'TAG, série ou equipamento';
     search.dataset.homeSearch = 'true';
     const key = document.createElement('kbd'); key.textContent = 'Ctrl + K';
     search.parentElement.append(key);
@@ -461,7 +461,10 @@
   refresh();
   const changes = {
     inventory_items: ['inventory', 'stock', 'events', 'effects'], inventory_item_logs: ['inventory', 'events'],
-    module_records: ['management', 'control', 'events', 'effects'], control_items: ['control', 'controlLogs', 'inventory', 'management', 'events', 'effects'], control_item_logs: ['controlLogs'], flux_items: ['flux', 'events', 'effects'],
+    module_records: ['management', 'control', 'events', 'effects'], control_items: ['control', 'controlLogs', 'inventory', 'management', 'events', 'effects'],
+    control_cases: ['caseAging'], control_case_transitions: ['caseAging'], control_case_state_intervals: ['caseAging'],
+    control_case_priority_changes: ['caseAging'],
+    control_item_logs: ['controlLogs'], flux_items: ['flux', 'events', 'effects'],
     nfe_occurrences: ['nfe', 'nfeRecurring'], sync_events: ['events', 'effects', 'backups'], equipment_events: ['events'], equipment_event_effects: ['effects'],
     supply_units: ['stock'], supply_variants: ['stock'], supplies: ['stock']
   };

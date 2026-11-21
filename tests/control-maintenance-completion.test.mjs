@@ -37,7 +37,8 @@ test('Controle TI exige escolha explícita e cancelar não salva', () => {
 test('interface usa uma RPC para concluir, sem gravação parcial no cliente', () => {
   const control = api.split('const control = {')[1].split('const flux = {')[0];
   const completion = control.split('async completeMaintenance(')[1].split('async saveItem(')[0];
-  assert.match(completion, /client\.rpc\('complete_control_maintenance'/);
+  assert.match(completion, /client\.rpc\(peripheral[\s\S]*?'complete_control_peripheral_with_destination'\s*:\s*'complete_control_maintenance'/);
+  assert.match(completion, /p_review_token: equipmentStatus\.token/);
   assert.doesNotMatch(completion, /client\.from\(/);
   assert.match(control, /inventory_item_id, management_record_id, supply_unit_id/);
 });

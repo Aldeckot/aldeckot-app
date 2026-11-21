@@ -63,6 +63,11 @@
       },
       controlLogs: async () => (await all(() => client.from('control_item_logs')
         .select('id,control_item_id,action,created_at').order('id'))).map(row => ({ ...camel(row), controlItemId: row.control_item_id })),
+      caseAging: async () => {
+        const response = await client.rpc('control_case_duration_summary', { p_case_id: null });
+        if (response.error) throw response.error;
+        return response.data || [];
+      },
       flux: async () => sourceRows(await all(() => client.from('flux_items').select(
         'id,table_id,equipment,model,brand,serial,tag,status,received_date,created_at,updated_at'
       ).order('id')), 'flux'),
@@ -185,7 +190,7 @@
     load(selected) {
       if (pending) return pending;
       pending = read(selected).catch(error => {
-        const keys = selected || ['inventory', 'management', 'control', 'controlLogs', 'flux', 'nfe', 'events', 'effects', 'backups', 'stock', 'nfeRecurring'];
+        const keys = selected || ['inventory', 'management', 'control', 'controlLogs', 'caseAging', 'flux', 'nfe', 'events', 'effects', 'backups', 'stock', 'nfeRecurring'];
         cache = { ...cache, health: { ...cache.health } };
         keys.forEach(key => { cache.health[key] = { unavailable: !Array.isArray(cache[key]), stale: Array.isArray(cache[key]),
           error: 'Conexão indisponível. Tente atualizar novamente.' }; });

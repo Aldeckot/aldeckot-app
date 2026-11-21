@@ -504,6 +504,12 @@ body.theme-light.management-open .management-transfer-dialog { background: linea
 .management-movement-event time, .management-movement-event small { color: #9fbcd0; font-size: 10px; overflow-wrap: anywhere; }
 .management-movement-event strong { color: #e8f8ff; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .management-movement-event span { color: #c5dfed; font-size: 11px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.management-movement-event details { color: #bdd7e8; font-size: 11px; }
+.management-movement-event summary { cursor: pointer; }
+.management-movement-event dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 9px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.management-movement-event dd { margin: 0; }
+.management-movement-legs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr)); gap: 8px; margin-top: 4px; }
+.management-movement-leg { display: grid; align-content: start; gap: 4px; padding: 8px; border-inline-start: 2px solid #5686a0; min-width: 0; }
 .theme-light .management-movement-history-group, .theme-light .management-movement-event { border-color: #9ac0d3; background: #f1f8fbdc; }
 .theme-light .management-movement-history-group h4, .theme-light .management-movement-event strong { color: #183d5a; }
 .theme-light .management-movement-event span { color: #315b79; }

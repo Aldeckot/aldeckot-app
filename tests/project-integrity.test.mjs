@@ -20,7 +20,7 @@ test('todas as páginas principais usam o ícone oficial na aba do navegador', (
   assert.equal(existsSync(resolve(root, 'assets/aldeckot-favicon.png')), true);
   for (const page of pages) {
     const source = readFileSync(resolve(root, page), 'utf8');
-    assert.match(source, /rel="icon" type="image\/png" href="assets\/aldeckot-favicon\.png\?v=2\.0\.71"/);
+    assert.match(source, /rel="icon" type="image\/png" href="assets\/aldeckot-favicon\.png\?v=2\.0\.\d+"/);
   }
 });
 
@@ -263,7 +263,7 @@ test('Fiscal NF-e registra os valores total e pendente com validação financeir
   assert.match(migration, /add column if not exists total_value numeric\(14, 2\)/);
   assert.match(migration, /pending_value <= total_value/);
   assert.match(migration, /create or replace function app\.audit_nfe_occurrence\(\)/);
-  assert.match(page, /nfe\.js\?v=2\.0\.82/);
+  assert.ok(page.includes(`src="nfe.js?v=${appVersion}"`));
   assert.match(page, /nfe-metric-icons\.css\?v=\d+\.\d+\.\d+/);
   assert.match(page, /nfe-header-layout\.css\?v=\d+\.\d+\.\d+/);
   assert.match(metricStyles, /\.nfe-metric-main\s*\{\s*align-items: center;/);
@@ -430,11 +430,14 @@ test('a frequência dos backups automáticos é configurável por módulo', () =
 
 test('Flux mostra o número de série apenas nos detalhes da movimentação', () => {
   const inventory = readFileSync(resolve(root, 'inventory.js'), 'utf8');
-  const list = inventory.split('function fluxTableMarkup(table, visible) {')[1]?.split('function tableMarkup(table, visible) {')[0];
+  const list = inventory.split('function fluxTableMarkup(table) {')[1]?.split('const fluxGroups =')[0];
 
   assert.ok(list);
   assert.doesNotMatch(list, /<th>Nº SÉRIE<\/th>/);
   assert.doesNotMatch(list, /<td>\$\{escape\(item\.serial\)\}<\/td>/);
-  assert.match(list, /colspan="12"/);
+  assert.match(list, /class="flux-card-list" aria-label="Equipamentos movimentados"/);
+  const cards = inventory.split('function fluxCardMarkup(group) {')[1]?.split('function fluxSidebarMarkup(')[0];
+  assert.ok(cards);
+  assert.doesNotMatch(cards, /escape\(current\.serial\)/);
   assert.match(inventory, /\['serial', 'Nº de série'\]/);
 });

@@ -8,8 +8,12 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = path => readFileSync(resolve(root, path), 'utf8');
 
 test('todos os módulos com backup carregam o padrão visual do Inventário', () => {
+  let stylesheetReference;
   for (const page of ['inventory.html', 'control.html', 'flux.html', 'management.html', 'nfe.html', 'supplies.html']) {
-    assert.match(read(page), /backup-standard\.css\?v=2\.0\.72/, page);
+    const reference = read(page).match(/backup-standard\.css\?v=\d+\.\d+\.\d+/)?.[0];
+    assert.ok(reference, page);
+    stylesheetReference ??= reference;
+    assert.equal(reference, stylesheetReference, page);
   }
   const css = read('backup-standard.css');
   for (const selector of ['.backup-dialog', '.management-backup-dialog', '.nfe-backup-dialog', '.sp-backup-dialog']) {

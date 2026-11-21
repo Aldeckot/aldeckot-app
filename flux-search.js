@@ -3,45 +3,74 @@
   const priority = { inventory: 0, management: 1, control: 2, flux: 3 };
   const sourceLabel = { inventory: 'Inventário', management: 'Gestão TI', control: 'Controle TI', flux: 'Histórico do Flux' };
 
-  function canonicalId(row) {
+  function inventoryIdFor(row) {
     if (row.module === 'inventory') return row.id;
     const metadata = row.metadata || {};
     return row.inventory_item_id || metadata.inventoryItemId || metadata.inventory_item_id ||
       (metadata.sourceModule === 'inventory' ? metadata.sourceItemId : '') || '';
   }
 
-  function prepare(rows, term) {
+  function identityFor(row) {
+    const inventoryId = inventoryIdFor(row);
+    if (inventoryId) return { key: `inventory:${inventoryId}`, inventoryId };
+    if (row.metadata?.computerId && ['management', 'control'].includes(row.module))
+      return { key: `computer:${row.metadata.computerId}`, inventoryId: '' };
+    if (row.module === 'flux' && row.metadata?.equipmentUid)
+      return { key: `flux:${row.metadata.equipmentUid}`, inventoryId: '' };
+    return { key: '', inventoryId: '' };
+  }
+
+  const unknown = new Set(['', '-', '—', '***', 'N/A', 'S/N', 'SEM TAG', 'SEM SÉRIE', 'NÃO INFORMADO', 'NÃO INFORMADA']);
+  function legacySignature(row) {
+    const tag = normalize(row.tag);
+    const serial = normalize(row.serial);
+    return unknown.has(tag) || unknown.has(serial) ? '' : JSON.stringify([tag, serial]);
+  }
+
+  function prepare(rows, term, { allowLegacyPair = true } = {}) {
     const query = normalize(term);
+    const exact = row => normalize(row.tag) === query || normalize(row.serial) === query;
     const ordered = (Array.isArray(rows) ? rows : []).filter(row => row?.id && priority[row.module] !== undefined)
-      .sort((left, right) => {
-        const exactLeft = normalize(left.tag) === query || normalize(left.serial) === query;
-        const exactRight = normalize(right.tag) === query || normalize(right.serial) === query;
-        return Number(exactRight) - Number(exactLeft) || priority[left.module] - priority[right.module] ||
-          String(right.updated_at || '').localeCompare(String(left.updated_at || ''));
-      });
+      .sort((left, right) => priority[left.module] - priority[right.module] ||
+        Number(exact(right)) - Number(exact(left)) ||
+        String(right.updated_at || '').localeCompare(String(left.updated_at || '')));
     const groups = [];
-    for (const row of ordered) {
-      const inventoryId = canonicalId(row);
-      const tag = normalize(row.tag);
-      const serial = normalize(row.serial);
-      const signature = tag && serial ? `${tag}:${serial}` : '';
-      let matching = inventoryId ? groups.filter(group => group.inventoryId === inventoryId) : [];
-      // Série + TAG só unem origens diferentes se houver uma única identidade possível.
-      if (!matching.length && signature) {
-        const candidates = groups.filter(group => group.signature === signature);
-        if (candidates.length === 1 && !candidates[0].modules.has(row.module) &&
-            (!inventoryId || !candidates[0].inventoryId || candidates[0].inventoryId === inventoryId)) matching = candidates;
-      }
-      if (matching.length === 1) {
-        matching[0].modules.add(row.module);
-        if (inventoryId) matching[0].inventoryId = inventoryId;
-      } else groups.push({ signature, inventoryId, modules: new Set([row.module]), row: {
-        ...row,
-        inventoryItemId: inventoryId || null,
-        sourceLabel: sourceLabel[row.module]
-      } });
+    const byIdentity = new Map();
+    const legacy = [];
+    function add(group, row) {
+      group.rows.push(row);
+      const signature = legacySignature(row);
+      if (signature) group.signatures.add(signature);
     }
-    const results = groups.map(group => ({ ...group.row, inventoryItemId: group.inventoryId || null }));
+    function create(row, inventoryId) {
+      const group = { rows: [], signatures: new Set(), inventoryId };
+      add(group, row);
+      groups.push(group);
+      return group;
+    }
+    for (const row of ordered) {
+      const { key, inventoryId } = identityFor(row);
+      if (!key) { legacy.push(row); continue; }
+      if (byIdentity.has(key)) add(byIdentity.get(key), row);
+      else byIdentity.set(key, create(row, inventoryId));
+    }
+    // A fallback is only possible when one identity and one row per module share the pair.
+    for (const row of legacy) {
+      const signature = legacySignature(row);
+      const matching = signature ? groups.filter(group => group.signatures.has(signature)) : [];
+      const sameSource = signature && legacy.some(other =>
+        other !== row && other.module === row.module && legacySignature(other) === signature);
+      if (allowLegacyPair && !sameSource && matching.length === 1 && !matching[0].rows.some(other => other.module === row.module))
+        add(matching[0], row);
+      else create(row, '');
+    }
+    groups.sort((left, right) => Number(right.rows.some(exact)) - Number(left.rows.some(exact))
+      || priority[left.rows[0].module] - priority[right.rows[0].module]);
+    const results = groups.map(group => {
+      const row = group.rows[0];
+      return { ...row, inventoryItemId: group.inventoryId || null, sourceLabel: sourceLabel[row.module],
+        modules: [...new Set(group.rows.map(member => member.module))], members: group.rows };
+    });
     const tagCounts = new Map();
     for (const row of results) {
       const tag = normalize(row.tag);
