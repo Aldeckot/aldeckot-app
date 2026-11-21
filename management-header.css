@@ -330,3 +330,111 @@ body.theme-light.management-open .management-toolbar .management-clear {
   body.management-open .management-toolbar .management-filter-wrap .management-filter,
   body.management-open .management-toolbar .management-clear { width: 100%; }
 }
+
+/* A faixa usa a altura da arte existente e dá mais espaço aos filtros. */
+body.management-open .management-header {
+  min-height: 88px !important;
+  padding: 4px 16px !important;
+}
+
+body.management-open .management-header .module-header-summary-art.management { height: 76px; }
+
+body.management-open .management-toolbar {
+  width: calc(100% - 289px);
+  min-height: 0;
+  margin: 12px 0 14px !important;
+  padding: 8px 10px !important;
+  border-color: #4c88b4a6 !important;
+  background: linear-gradient(110deg, #061a32db, #0b2842c7) !important;
+  box-shadow: inset 0 1px #a3e6ff1b, 0 9px 25px #0005 !important;
+}
+
+body.management-open .management-toolbar :is(.management-search, .management-filter-wrap) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.management-open .management-toolbar .management-search {
+  flex: 1 1 320px;
+  max-width: none;
+}
+
+body.management-open .management-toolbar .management-filter-wrap {
+  flex: 0 1 185px;
+  min-width: 145px;
+}
+
+body.management-open .management-field-caption {
+  color: #97c5e1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  line-height: 1;
+}
+
+body.management-open .management-toolbar .management-search svg {
+  top: 29px;
+  left: 12px;
+  stroke: #63d4f6;
+}
+
+body.management-open .management-toolbar .management-search input,
+body.management-open .management-toolbar .management-filter-wrap .management-filter {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #4c87b1;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #0b2b48, #0a2038);
+  color: #f0faff;
+  font-size: 12px;
+}
+
+body.management-open .management-toolbar .management-search input { padding-left: 38px; }
+body.management-open .management-toolbar .management-search input::placeholder { color: #96b6d0; }
+body.management-open .management-toolbar .management-filter-wrap .management-filter { padding-left: 27px; }
+body.management-open .management-toolbar .management-filter-wrap::before {
+  display: block;
+  top: 33px;
+  left: 12px;
+  width: 7px;
+  height: 7px;
+}
+
+body.management-open .management-toolbar :is(.management-search, .management-filter-wrap):focus-within :is(input, select) {
+  border-color: #66dfff;
+  box-shadow: 0 0 0 2px #1a9ed158, 0 0 12px #20bbef4d;
+}
+
+body.management-open .management-toolbar .management-clear {
+  align-self: end;
+  height: 38px;
+  border-color: #4c87b1;
+  border-radius: 8px;
+  background: #103554ba;
+  color: #d8f6ff;
+  font-size: 11px;
+}
+
+body.theme-light.management-open .management-field-caption { color: #325d7a; }
+body.theme-light.management-open .management-toolbar {
+  border-color: #6cb7d8 !important;
+  background: linear-gradient(110deg, #f6fcffeb, #deeff9df) !important;
+}
+body.theme-light.management-open .management-toolbar :is(.management-search input, .management-filter-wrap .management-filter, .management-clear) {
+  border-color: #78accb;
+  background: #f4fbff;
+  color: #193d59;
+}
+
+@media (max-width: 1040px) {
+  body.management-open .management-toolbar { width: 100%; }
+}
+
+@media (max-width: 720px) {
+  body.management-open .management-header { padding: 4px 12px !important; }
+  body.management-open .management-toolbar { flex-wrap: wrap; }
+  body.management-open .management-toolbar .management-search { flex-basis: 100%; }
+  body.management-open .management-toolbar .management-filter-wrap { flex: 1 1 150px; }
+  body.management-open .management-toolbar .management-clear { flex: 1 1 100%; }
+}

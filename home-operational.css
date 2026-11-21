@@ -331,10 +331,8 @@ body.home-operational .home-alert-row .home-row-date { font-size: 11px; }
 body.home-operational .home-alert-row .home-label { font-size: 10px; }
 body.home-operational .home-operations-toggle { width: 28px; justify-content: center; padding: 4px; }
 body.home-operational .home-operations-toggle span { display: block; transition: transform .2s ease; }
-body.home-operational .home-operations.is-collapsed { min-height: 0; flex: 0 0 auto; }
-body.home-operational .home-operations.is-collapsed .home-operations-analytic { display: none; }
+body.home-operational .home-operations.is-collapsed .home-operations-filters { display: none; }
 body.home-operational .home-operations.is-collapsed .home-operations-toggle span { transform: rotate(180deg); }
-body.home-operational .home-operations.is-collapsed .home-panel-head { margin-bottom: 0; }
 .home-operational .home-system-activity { display: grid; grid-template-columns: 7px 125px 80px minmax(0,1fr); align-items: center; gap: 8px; width: 100%; padding: 6px 5px; text-align: left; color: var(--home-text); background: none; border-bottom: 1px solid #1b517d4d; font-size: 11px; }
 .home-operational .home-system-activity i { width: 6px; height: 6px; border-radius: 50%; background: #24d8b4; }
 .home-operational .home-system-activity i.failed { background: #ff526b; }

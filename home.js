@@ -72,7 +72,7 @@
     + '<div class="home-center-metrics"><section class="home-global home-panel" aria-label="Resumo Global">' + heading('Resumo Global', 'summary', 'equipment', 'Ver detalhes')
     + '<div data-home-summary><p class="home-state aldeckot-inline-loading" role="status">Carregando equipamentos…</p></div></section>'
     + '<section class="home-operations home-panel" aria-label="Central de Operações"><header class="home-panel-head"><h2>' + icons.operations + 'Central de Operações</h2>'
-    + '<div class="home-operations-actions"><button class="home-small-button home-operations-toggle" data-home-operation-toggle type="button" aria-label="Recolher Central de Operações" aria-expanded="true" title="Recolher Central de Operações"><span aria-hidden="true">⌄</span></button><button class="home-small-button" data-home-operation-clear type="button"><span aria-hidden="true">◇</span> Limpar</button>'
+    + '<div class="home-operations-actions"><button class="home-small-button home-operations-toggle" data-home-operation-toggle type="button" aria-label="Ocultar filtros da Central de Operações" aria-expanded="true" title="Ocultar filtros da Central de Operações"><span aria-hidden="true">⌄</span></button><button class="home-small-button" data-home-operation-clear type="button"><span aria-hidden="true">◇</span> Limpar</button>'
     + '<button class="home-small-button home-refresh" data-home-refresh type="button" aria-label="Atualizar indicadores"><span aria-hidden="true">⟳</span> Atualizar</button></div></header>'
     + '<div data-home-operations class="home-operations-analytic"></div></section></div>'
     + '</div>'
@@ -440,8 +440,8 @@
       const expanded = panel?.classList.toggle('is-collapsed') === false;
       if (button) {
         button.setAttribute('aria-expanded', String(expanded));
-        button.setAttribute('aria-label', expanded ? 'Recolher Central de Operações' : 'Expandir Central de Operações');
-        button.title = expanded ? 'Recolher Central de Operações' : 'Expandir Central de Operações';
+        button.setAttribute('aria-label', expanded ? 'Ocultar filtros da Central de Operações' : 'Mostrar filtros da Central de Operações');
+        button.title = expanded ? 'Ocultar filtros da Central de Operações' : 'Mostrar filtros da Central de Operações';
       }
       return;
     }

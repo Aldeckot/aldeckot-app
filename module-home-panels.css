@@ -25,6 +25,13 @@ body[data-module="control"] .inventory-layout.module-home-layout.global-selected
 .module-home-sidebar{display:grid;align-content:start;gap:10px;min-width:0}
 .module-home-sidebar .module-home-panel{width:100%}
 .management-charts.module-home-sidebar{position:sticky;top:14px}
+.management-cleaning-chart .module-home-donut{position:relative;isolation:isolate;width:106px;height:106px;margin:5px auto;box-shadow:0 0 16px #249fe25c,inset 0 1px #ffffff50}
+.management-cleaning-chart .module-home-donut::before,.management-cleaning-chart .module-home-donut::after{content:"";position:absolute;border:2px solid transparent;border-radius:50%;pointer-events:none}
+.management-cleaning-chart .module-home-donut::before{inset:-5px;border-top-color:#66e8ff;border-right-color:#66e8ff55;animation:module-home-ring-clockwise 4.2s linear infinite}
+.management-cleaning-chart .module-home-donut::after{inset:-10px;border-bottom-color:#ac83ff;border-left-color:#ac83ff55;animation:module-home-ring-clockwise 6.2s linear infinite reverse}
+.management-cleaning-chart .module-home-donut b{width:76px;height:76px;font-size:20px}
+.management-cleaning-chart .module-home-donut-layout{grid-template-columns:112px minmax(0,1fr);gap:9px}
+@keyframes module-home-ring-clockwise{to{transform:rotate(360deg)}}
 .nfe-side .module-home-panel{min-width:0}
 .sp-detail.sp-home-sidebar{min-height:0;padding:0;border:0;background:none;position:sticky;top:12px}
 body.supplies-open .sp-layout:has(.sp-home-sidebar){grid-template-columns:minmax(0,1fr) clamp(238px,22vw,300px)}
