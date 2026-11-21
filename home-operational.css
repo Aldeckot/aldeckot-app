@@ -276,7 +276,8 @@ body.home-operational .home-alert-panel::-webkit-scrollbar { display: none; widt
 .home-operational .home-summary-legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--status-color); box-shadow: 0 0 5px var(--status-color); }
 .home-operational .home-summary-legend small { color: var(--home-muted); font-size: 10px; min-width: 25px; text-align: right; }
 .home-operational .home-operations { display: flex; flex-direction: column; }
-.home-operational .home-operations .home-panel-head { flex: 0 0 auto; margin-bottom: 5px; }
+.home-operational .home-operations .home-panel-head { order: 2; flex: 0 0 auto; margin: 6px 0 0; }
+body.home-operational .home-operations-analytic { order: 1; }
 .home-operational .home-operations-actions { display: flex; align-items: center; gap: 4px; }
 .home-operational .home-operations-actions .home-small-button { padding: 4px 6px; font-size: 10px; }
 .home-operational .home-operations-actions [data-home-operation-clear] { color: #8edfff; }
