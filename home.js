@@ -71,8 +71,8 @@
   root.innerHTML = '<div class="home-center"><div class="home-hero" aria-hidden="true"></div>'
     + '<div class="home-center-metrics"><section class="home-global home-panel" aria-label="Resumo Global">' + heading('Resumo Global', 'summary', 'equipment', 'Ver detalhes')
     + '<div data-home-summary><p class="home-state aldeckot-inline-loading" role="status">Carregando equipamentos…</p></div></section>'
-    + '<section class="home-operations home-panel" aria-label="Central de Operações"><header class="home-panel-head"><h2>' + icons.operations + 'Central de Operações</h2>'
-    + '<div class="home-operations-actions"><button class="home-small-button home-operations-toggle" data-home-operation-toggle type="button" aria-label="Ocultar filtros da Central de Operações" aria-expanded="true" title="Ocultar filtros da Central de Operações"><span aria-hidden="true">⌄</span></button><button class="home-small-button" data-home-operation-clear type="button"><span aria-hidden="true">◇</span> Limpar</button>'
+    + '<section class="home-operations home-panel is-collapsed" aria-label="Central de Operações"><header class="home-panel-head"><h2>' + icons.operations + 'Central de Operações</h2>'
+    + '<div class="home-operations-actions"><button class="home-small-button home-operations-toggle" data-home-operation-toggle type="button" aria-label="Mostrar filtros da Central de Operações" aria-expanded="false" title="Mostrar filtros da Central de Operações"><span aria-hidden="true">⌄</span></button><button class="home-small-button" data-home-operation-clear type="button"><span aria-hidden="true">◇</span> Limpar</button>'
     + '<button class="home-small-button home-refresh" data-home-refresh type="button" aria-label="Atualizar indicadores"><span aria-hidden="true">⟳</span> Atualizar</button></div></header>'
     + '<div data-home-operations class="home-operations-analytic"></div></section></div>'
     + '</div>'
