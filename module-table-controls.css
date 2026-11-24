@@ -297,7 +297,7 @@ body[data-module="control"] .inventory-layout.module-home-layout.global-selected
 .module-table-picker-caption { display: flex; justify-content: space-between; gap: 6px; color: #83c3e3; font-size: 8px; font-weight: 850; letter-spacing: .11em; line-height: 1.3; white-space: nowrap; }
 .module-table-picker-caption small { color: #a9d8ed; font-size: 8px; letter-spacing: 0; }
 .module-table-picker-field select { height: 25px; padding: 0 12px 0 0; font-size: 13px; font-weight: 750; }
-.module-table-picker:focus-within { border-color: #8ae3ff; box-shadow: 0 0 0 2px #47c8ff38, inset 0 1px #b1ecff42; }
+.module-table-picker[data-keyboard-focus="true"]:focus-within { border-color: #8ae3ff; box-shadow: 0 0 0 2px #47c8ff38, inset 0 1px #b1ecff42; }
 .module-home-navigation { padding: 9px 11px; border: 1px solid #285d83; border-radius: 12px; background: linear-gradient(110deg,#081d34d9,#05172aca); box-shadow: inset 0 1px #83cfff1b; }
 .module-home-heading { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 0; border: 0; background: transparent; color: #f4fbff; text-align: left; font: inherit; cursor: pointer; }
 .module-home-heading:hover .module-home-heading-icon { border-color: #74dfff; background: #16456a; }

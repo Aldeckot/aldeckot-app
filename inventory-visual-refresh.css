@@ -111,29 +111,30 @@ body.theme-light.inventory-open .inventory-pie-visual { border-color: #2c82b483;
 .theme-light .inventory-situation-summary-row span,.theme-light .inventory-situation-summary-row b { color: #244860; }
 .theme-light .inventory-situation-summary-track { background: #c9deeb; }
 
-/* Novo cenário do cabeçalho: estante de ativos sob leitura e localização. */
+/* Cabeçalho do Inventário: ativos ligados ao registro central e à localização. */
 body.inventory-open .inventory-scan-art { width: min(100%,600px); height: 106px; overflow: visible; filter: drop-shadow(0 0 7px #1bbaff66); }
-.inventory-scan-floor { fill: none; stroke: #2f90be; stroke-width: 1; opacity: .38; }
+.inventory-scan-halo { animation: inventory-scan-halo 5s ease-in-out infinite; }
 .inventory-scan-input { fill: #0b2a45; stroke: #42b5df; stroke-width: 1.8; filter: drop-shadow(0 0 5px #30c8ff88); }
 .inventory-scan-input path { fill: none; stroke: #7cdbfb; stroke-width: 1.5; }
 .inventory-scan-input circle { fill: #37dfa7; stroke: none; animation: inventory-scan-blink 2.8s ease-in-out infinite; }
-.inventory-scan-route { fill: none; stroke: #52c5ee; stroke-width: 1.8; stroke-dasharray: 7 6; animation: inventory-scan-route 6s linear infinite; }
-.inventory-scan-route circle { fill: #6eeeff; stroke: none; filter: drop-shadow(0 0 5px #61e9ff); }
-.inventory-scan-rack { fill: #091c35cf; stroke: #459cce; stroke-width: 2; filter: drop-shadow(0 0 9px #167ccb88); }
-.inventory-scan-rack path { fill: none; stroke: #3878ad; stroke-width: 1.5; }
-.inventory-scan-asset { fill: #0c3453; stroke: #65d3f1; stroke-width: 1.4; animation: inventory-scan-asset 5.4s ease-in-out infinite; }
+.inventory-scan-route { fill: none; stroke: #52c5ee; stroke-width: 1.6; stroke-dasharray: 4 6; animation: inventory-scan-route 5s linear infinite; }
+.inventory-scan-rack { fill: #091c35cf; stroke: #58c6ec; stroke-width: 1.8; filter: drop-shadow(0 0 8px #21bdedaa); }
+.inventory-scan-rack circle:nth-child(2) { fill: none; stroke: #36799f; stroke-dasharray: 3 5; }
+.inventory-scan-rack path { fill: #1a608554; stroke: #83e5fa; stroke-width: 1.6; stroke-linejoin: round; }
+.inventory-scan-asset { fill: #0c3453; stroke: #65d3f1; stroke-width: 1.3; animation: inventory-scan-asset 4.5s ease-in-out infinite; }
 .inventory-scan-asset path { fill: none; stroke: #94e9fc; stroke-width: 1; }
-.inventory-scan-asset.b { fill: #113d65; stroke: #a7a1ff; filter: drop-shadow(0 0 5px #9384ff); }
-.inventory-scan-asset.c,.inventory-scan-asset.f { stroke: #73e6bc; }
-.inventory-scan-asset.d { animation-delay: -1s; }.inventory-scan-asset.e { animation-delay: -2s; }.inventory-scan-asset.f { animation-delay: -3s; }
-.inventory-scan-sweep { fill: none; stroke: #8dfffb; stroke-width: 1.7; filter: drop-shadow(0 0 5px #49f4ff); animation: inventory-scan-sweep 4.8s ease-in-out infinite; }
+.inventory-scan-asset circle { fill: #4ef5d4; stroke: none; }
+.inventory-scan-asset.b,.inventory-scan-asset.d { stroke: #a7a1ff; filter: drop-shadow(0 0 5px #9384ff); }
+.inventory-scan-asset.b { animation-delay: -1.1s; }.inventory-scan-asset.c { animation-delay: -2.2s; }.inventory-scan-asset.d { animation-delay: -3.3s; }
+.inventory-scan-sweep { fill: #8dfffb; stroke: #8dfffb; stroke-width: 1.8; filter: drop-shadow(0 0 6px #49f4ff); transform-origin: 306px 56px; animation: inventory-scan-sweep 6s linear infinite; }
 .inventory-scan-location { fill: #112a50; stroke: #be91ff; stroke-width: 2; filter: drop-shadow(0 0 7px #b079ff); animation: inventory-scan-location 4s ease-in-out infinite; }
 .inventory-scan-location circle { fill: #7964d6; stroke: #e1c7ff; }
 .inventory-scan-signal { fill: #64f6e3; filter: drop-shadow(0 0 5px #39ffda); animation: inventory-scan-blink 2.5s ease-in-out infinite; }
-@keyframes inventory-scan-route { to { stroke-dashoffset: -78; } }
-@keyframes inventory-scan-sweep { 0%,100% { transform: translateX(0); opacity: .35; } 50% { transform: translateX(186px); opacity: .95; } }
-@keyframes inventory-scan-asset { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+@keyframes inventory-scan-route { to { stroke-dashoffset: -50; } }
+@keyframes inventory-scan-sweep { to { transform: rotate(360deg); } }
+@keyframes inventory-scan-asset { 0%,100% { opacity: .65; transform: translateY(2px); } 50% { opacity: 1; transform: translateY(-2px); } }
+@keyframes inventory-scan-halo { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes inventory-scan-location { 0%,100% { transform: translateY(2px); } 50% { transform: translateY(-3px); } }
 @keyframes inventory-scan-blink { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
 @media (max-width:700px) { body.inventory-open .inventory-scan-art { height: 82px; } }
-@media (prefers-reduced-motion:reduce) { .inventory-scan-route,.inventory-scan-sweep,.inventory-scan-asset,.inventory-scan-location,.inventory-scan-signal,.inventory-scan-input circle { animation: none; } }
+@media (prefers-reduced-motion:reduce) { .inventory-scan-halo,.inventory-scan-route,.inventory-scan-sweep,.inventory-scan-asset,.inventory-scan-location,.inventory-scan-signal,.inventory-scan-input circle { animation: none; } }

@@ -64,7 +64,10 @@ try {
   Invoke-LocalPodman -PodmanArgs @('exec', '-u', 'postgres', $containerName,
     'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres',
     '-f', '/tmp/sql/agenda-retention.sql') | Out-Null
-  Write-Output 'PASS: offline migrations, fictional backfill, case transitions, components, durations, structured resolution, manual reopen, stable-ID recurrence, external service, distinct-case reporting, cross-sector inventory replacement and rollback, central sector catalog and legacy preservation.'
+  Invoke-LocalPodman -PodmanArgs @('exec', '-u', 'postgres', $containerName,
+    'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres',
+    '-f', '/tmp/sql/equipment-photos-131-transaction.sql') | Out-Null
+  Write-Output 'PASS: offline migrations, fictional backfill, case transitions, components, durations, structured resolution, manual reopen, stable-ID recurrence, external service, distinct-case reporting, cross-sector inventory replacement and rollback, central sector catalog, legacy preservation, and equipment photo identity and upload guards.'
 }
 finally {
   if ($started) {

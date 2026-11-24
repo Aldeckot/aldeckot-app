@@ -78,9 +78,9 @@
     + '</div>'
     + '<aside class="home-side"><section class="home-calendar home-panel" aria-label="Calendário"></section>'
     + '<section class="agenda-upcoming-panel home-panel" aria-label="Próximos agendamentos" hidden></section>'
+    + '<section class="home-alert-panel home-panel" aria-label="Alertas críticos">' + heading('Alertas críticos', 'alert', 'alerts') + '<div data-home-alerts></div></section>'
     + '<section class="home-recent-panel home-panel" data-home-recent-items aria-label="Últimos itens atualizados">' + heading('Últimos itens atualizados', 'clock', '')
     + '<div data-home-recent-list></div></section>'
-    + '<section class="home-alert-panel home-panel" aria-label="Alertas críticos">' + heading('Alertas críticos', 'alert', 'alerts') + '<div data-home-alerts></div></section>'
     + '</aside>';
   let current = model.build({});
   let source = {};
@@ -225,7 +225,7 @@
     renderOperations();
     patch('[data-home-recent-list]', stateNote('recent') + (current.sets.recent.length
       ? current.sets.recent.slice(0, 3).map(row => listRow(row)).join('') : '<p class="home-state">Nenhum registro atualizado disponível.</p>'));
-    patch('[data-home-alerts]', stateNote('alerts') + (current.sets.alerts.length ? current.sets.alerts.slice(0, 6).map(row => listRow(row, 'alerts')).join('')
+    patch('[data-home-alerts]', stateNote('alerts') + (current.sets.alerts.length ? current.sets.alerts.slice(0, 3).map(row => listRow(row, 'alerts')).join('')
       : '<p class="home-state">' + (current.availability.alerts?.available ? 'Nenhum alerta ativo nas fontes consultadas.' : 'Alertas aguardando consulta completa.') + '</p>'));
     patch('[data-home-monthly]', current.metrics.map(metric => {
       const key = 'monthly:' + metric.key;

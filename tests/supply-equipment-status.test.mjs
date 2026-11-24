@@ -41,7 +41,8 @@ test('fotos e ações seguem os detalhes, com imagem do PC editada apenas no for
   const actions = read('action-menus.js');
   assert.match(inventory, /top\.className = 'inv-source-layout'/);
   assert.doesNotMatch(inventory.split('function inventoryRowMarkup(table, item) {')[1]?.split('function inventoryTableMarkup(table, visible) {')[0], /data-inv-image-key/);
-  assert.match(management, /if \(state\.modal\?\.type !== 'details' \|\| !item\?\.imagePath\) return/);
+  assert.match(management, /if \(state\.modal\?\.type !== 'details' \|\| !item\) return/);
+  assert.match(management, /loadComputerPhoto\(photo, item\)/);
   assert.match(management, /if \(state\.modal\?\.type === 'edit'\) mountComputerImageEditor\(activeItem\(\)\)/);
   assert.match(actions, /\.nfe-modal-actions/);
   assert.match(actions, /\.management-log-actions/);

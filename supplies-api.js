@@ -137,6 +137,13 @@
       logs: check(logs), maintenance
     };
   };
+  const monthlyMovementCount = async () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const result = await (await client()).from('supply_movements').select('id', { count: 'exact', head: true }).gte('created_at', start);
+    check(result);
+    return result.count ?? 0;
+  };
   const logs = async id => check(await (await client()).from('supply_logs').select('*')
     .eq('supply_id', id).order('created_at', { ascending: false }).limit(200));
   const compatibility = async id => {
@@ -322,7 +329,7 @@
   };
   window.AldeckotSupplies = {
     equipmentStatusReady: () => equipmentStatusAvailable,
-    list, detail, logs, compatibility, inventorySnapshot, inventoryHistory, inventoryGroupHistory, inventoryReplacements, ensureInventoryCatalog,
+    list, detail, monthlyMovementCount, logs, compatibility, inventorySnapshot, inventoryHistory, inventoryGroupHistory, inventoryReplacements, ensureInventoryCatalog,
     inventoryVariantMetadata, ensureInventoryVariants,
     equipment, availableReplacements, maintenanceAlerts, imageUrl, uploadImage, removeImage, installedFor, relatedFor, maintenanceFor, subscribe, integrationReady,
     backup,

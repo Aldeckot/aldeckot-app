@@ -221,6 +221,7 @@ body.home-operational.theme-light .auth-home-account-caret {
 }
 body.home-operational .auth-home-account-copy b { color: var(--home-text); }
 body.home-operational .auth-home-account-copy small { color: var(--home-muted); }
+body.home-operational .auth-home-account-caret { display: none; }
 body.home-operational main { min-width: 0; height: 100%; padding: 0 !important; overflow: hidden; }
 body.home-operational main::before { display: none !important; }
 body.home-operational #app { height: 100%; min-height: 0; }
@@ -334,6 +335,8 @@ body.home-operational .home-operations-toggle { width: 28px; justify-content: ce
 body.home-operational .home-operations-toggle span { display: block; transition: transform .2s ease; }
 body.home-operational .home-operations.is-collapsed .home-operations-filters { visibility: hidden; pointer-events: none; }
 body.home-operational .home-operations.is-collapsed .home-operations-toggle span { transform: rotate(180deg); }
+/* Os painéis de métricas não devem formar quadros vazios acima dos gráficos. */
+body.home-operational .home-center-metrics :is(.home-global,.home-operations) { background: transparent !important; }
 .home-operational .home-system-activity { display: grid; grid-template-columns: 7px 125px 80px minmax(0,1fr); align-items: center; gap: 8px; width: 100%; padding: 6px 5px; text-align: left; color: var(--home-text); background: none; border-bottom: 1px solid #1b517d4d; font-size: 11px; }
 .home-operational .home-system-activity i { width: 6px; height: 6px; border-radius: 50%; background: #24d8b4; }
 .home-operational .home-system-activity i.failed { background: #ff526b; }
@@ -585,6 +588,19 @@ body.home-operational .agenda-upcoming-panel[hidden],
 .home-page .agenda-upcoming-panel[hidden] { display: none !important; }
 body.home-operational .home-side:has(> .agenda-upcoming-panel[hidden]) {
   grid-template-rows: clamp(150px,20vh,180px) minmax(135px,1fr) minmax(235px,1.7fr) !important;
+}
+@media(min-width:1151px) {
+  body.home-operational .home-side:has(> .agenda-upcoming-panel[hidden]) {
+    grid-template-rows: clamp(150px,20vh,180px) minmax(0,1fr) max-content max-content !important;
+  }
+  body.home-operational .home-side:has(> .agenda-upcoming-panel[hidden]) > .home-alert-panel {
+    grid-row: 3 !important;
+    height: auto !important;
+  }
+  body.home-operational .home-side:has(> .agenda-upcoming-panel[hidden]) > .home-recent-panel {
+    grid-row: 4 !important;
+    height: auto !important;
+  }
 }
 body.home-operational .side .brand b { animation-duration: 14s !important; }
 @media(max-width:1150px) {

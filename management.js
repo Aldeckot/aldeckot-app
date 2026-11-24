@@ -55,6 +55,9 @@
   let inventoryPeripheralRows = [];
   let movementHistory = { key: '', loading: false, loaded: false, computer: [], position: [], error: '' };
   let movementHistoryRequest = 0;
+  window.addEventListener('aldeckot:equipment-photo-changed', () => {
+    if (state.modal?.type === 'details' && activeItem()) renderModal();
+  });
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -517,7 +520,7 @@
   }
 
   function mountComputerPhoto(item) {
-    if (state.modal?.type !== 'details' || !item?.imagePath) return;
+    if (state.modal?.type !== 'details' || !item) return;
     const overview = modalNode.querySelector('.management-asset-overview');
     if (!overview) return;
     const photo = document.createElement('section');
@@ -525,7 +528,9 @@
     photo.innerHTML = `<div class="management-computer-photo-frame"><span class="management-computer-photo-placeholder">${workstationArt()}</span><img alt="Foto do computador ${escape(item.equipment)}" hidden></div>`;
     overview.classList.add('has-photo');
     overview.prepend(photo);
-    loadComputerPhoto(photo, item);
+    void loadComputerPhoto(photo, item).then(path => {
+      if (!path && photo.isConnected) { photo.remove(); overview.classList.remove('has-photo'); }
+    });
   }
 
   function mountComputerImageEditor(item) {
@@ -534,21 +539,34 @@
     if (!firstSection) return;
     const photo = document.createElement('section');
     photo.className = 'management-form-section management-computer-photo-editor';
-    photo.innerHTML = `<h3>Imagem do computador</h3><div class="management-computer-photo"><div class="management-computer-photo-frame"><span class="management-computer-photo-placeholder">${workstationArt()}</span><img alt="Foto do computador ${escape(item.equipment)}" hidden></div><div class="management-computer-photo-copy"><small>${item.imagePath ? 'Foto vinculada ao PC deste terminal.' : 'Nenhuma foto cadastrada para este PC.'}</small><input type="file" accept="image/png,image/jpeg,image/webp" data-management-computer-image hidden><button type="button" data-management-action="choose-computer-image" ${imageUploadBusy ? 'disabled' : ''}>${item.imagePath ? 'Trocar imagem' : 'Adicionar imagem'}</button></div></div>`;
+    photo.innerHTML = `<h3>Imagem do computador</h3><div class="management-computer-photo"><div class="management-computer-photo-frame"><span class="management-computer-photo-placeholder">${workstationArt()}</span><img alt="Foto do computador ${escape(item.equipment)}" hidden></div><div class="management-computer-photo-copy"><small>${item.imagePath ? 'Foto vinculada ao PC deste terminal.' : 'Nenhuma foto cadastrada para este PC.'}</small><input type="file" accept="image/png,image/jpeg,image/webp" data-management-computer-image hidden><button type="button" data-management-action="choose-computer-image" ${imageUploadBusy ? 'disabled' : ''}>${item.imagePath ? 'Trocar imagem' : 'Adicionar imagem'}</button><button type="button" data-management-action="remove-computer-image" hidden>Remover fotografia</button></div></div>`;
     firstSection.after(photo);
     loadComputerPhoto(photo, item);
   }
 
-  function loadComputerPhoto(photo, item) {
-    if (!item.imagePath || !window.AldeckotEquipmentImages) return;
-    window.AldeckotEquipmentImages.urlForPath(item.imagePath).then(url => {
-      if (!url || !photo.isConnected || activeItem()?.id !== item.id || activeItem()?.imagePath !== item.imagePath) return;
+  async function loadComputerPhoto(photo, item) {
+    let officialPath = null;
+    try { officialPath = await window.AldeckotEquipmentPhoto?.get('management', item.id); }
+    catch (error) { console.warn('Fotografia oficial indisponível neste ambiente:', error); }
+    const path = officialPath === null || officialPath === undefined ? item.imagePath : officialPath;
+    photo.dataset.officialPath = officialPath || '';
+    const remove = photo.querySelector('[data-management-action="remove-computer-image"]');
+    if (remove) remove.hidden = !officialPath;
+    const copy = photo.querySelector('.management-computer-photo-copy small');
+    if (copy) copy.textContent = officialPath ? 'Foto oficial compartilhada com os módulos vinculados.'
+      : path ? 'Imagem anterior do computador.' : 'Nenhuma foto cadastrada para este PC.';
+    const choose = photo.querySelector('[data-management-action="choose-computer-image"]');
+    if (choose) choose.textContent = path ? 'Trocar imagem' : 'Adicionar imagem';
+    if (!path || !window.AldeckotEquipmentImages) return '';
+    window.AldeckotEquipmentImages.urlForPath(path).then(url => {
+      if (!url || !photo.isConnected || activeItem()?.id !== item.id) return;
       const image = photo.querySelector('img');
       image.onload = () => { image.hidden = false; photo.querySelector('.management-computer-photo-placeholder').hidden = true; };
       image.onerror = () => { image.hidden = true; photo.querySelector('.management-computer-photo-placeholder').hidden = false; };
       image.src = url;
       if (image.complete && image.naturalWidth) image.onload();
     }).catch(error => console.warn('Imagem do computador indisponível:', error));
+    return path;
   }
 
   const isOperationalPdv = item => /^PDV\s+[0-9]+$/i.test(terminalName(item));
@@ -1400,7 +1418,7 @@
     const actionNode = event.target.closest('[data-management-action]');
     const action = actionNode?.dataset.managementAction;
     if (!action) return;
-    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-mode', 'select-transfer-destination', 'transfer-back', 'edit', 'record-cleaning', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'regularize-local', 'choose-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
+    const restrictedActions = new Set(['add-area', 'toggle-actions', 'transfer', 'select-transfer-mode', 'select-transfer-destination', 'transfer-back', 'edit', 'record-cleaning', 'delete', 'confirm-delete', 'add-log', 'edit-log', 'delete-log', 'confirm-delete-log', 'regularize-local', 'choose-computer-image', 'remove-computer-image', 'backup', 'create-backup', 'restore-backup', 'backup-network-create', 'backup-local-create', 'backup-local-restore', 'backup-network-restore', 'toggle-backup-automatic', 'prepare-network-restore', 'confirm-backup-restore']);
     if (restrictedActions.has(action) && !canManage()) { event.preventDefault(); return; }
     if (action === 'add-area') { state.modal = { type: 'add', area: actionNode.dataset.managementArea || 'Escritório' }; state.actionMenu = false; renderModal(); }
     if (state.transferBusy && state.modal?.type === 'transfer' && (action === 'close' || action === 'details')) return;
@@ -1420,6 +1438,18 @@
     }
     if (action === 'toggle-actions' && activeItem()) { state.actionMenu = !state.actionMenu; renderModal(); }
     if (action === 'choose-computer-image' && activeItem() && !imageUploadBusy) modalNode.querySelector('[data-management-computer-image]')?.click();
+    if (action === 'remove-computer-image' && activeItem() && !imageUploadBusy) {
+      const item = activeItem();
+      const path = modalNode.querySelector('.management-computer-photo-editor')?.dataset.officialPath;
+      if (!path) return;
+      window.AldeckotMessage.confirm('Remover a fotografia oficial deste computador?',
+        { title: 'Remover fotografia', confirmText: 'Remover' }).then(async confirmed => {
+        if (!confirmed) return;
+        try { await window.AldeckotEquipmentPhoto.remove('management', item.id, path); renderModal(); notify('Fotografia oficial removida.'); }
+        catch (error) { notify(error.message || 'Não foi possível remover a fotografia.'); }
+      });
+      return;
+    }
     if (action === 'transfer' && activeItem() && hasInstalledComputer(activeItem())) { state.modal = { type: 'transfer', id: activeItem().id }; state.transferDraft = { step: 1, operationId: null }; state.transferQuery = ''; state.transferFilter = 'all'; state.transferOnlyAvailable = false; state.transferSameSector = false; state.actionMenu = false; renderModal(); }
     if (action === 'select-transfer-mode' && state.modal?.type === 'transfer' && !state.transferBusy) {
       const mode = actionNode.dataset.managementTransferMode;
@@ -1552,10 +1582,9 @@
       imageUploadBusy = true;
       const finishSave = window.AldeckotLoading?.beginSave?.('Enviando imagem do computador…');
       try {
-        const saved = await window.AldeckotSupabase.management.setComputerImage(item.id, file,
-          { equipment: item.equipment, tag: item.tag, serial: item.serial, updatedAt: item.updatedAt });
-        payload.items = payload.items.map(row => row.id === saved.id ? saved : row);
-        notify('Imagem vinculada ao computador.');
+        const previousPath = await window.AldeckotEquipmentPhoto.get('management', item.id);
+        await window.AldeckotEquipmentPhoto.save('management', item.id, file, previousPath);
+        notify('Fotografia oficial compartilhada com os módulos vinculados.');
       } catch (error) { notify(error.message || 'Não foi possível enviar a imagem.'); }
       finally {
         imageUploadBusy = false;

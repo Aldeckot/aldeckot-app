@@ -217,7 +217,7 @@ test('atualizar reconsulta dados, preserva wallpaper e falha parcial não exibe 
   expect(await page.evaluate(() => window.__homeReads)).toBe(2);
   await expect(page.locator('[data-home-recent-list]')).toContainText('Consulta incompleta');
 });
-test('prévias exibem três recentes e até seis alertas, com acesso à lista completa', async ({ page }) => {
+test('prévias exibem três recentes e os três alertas mais graves, com acesso à lista completa', async ({ page }) => {
   await page.goto('/index.html');
   await page.evaluate(() => {
     window.__homeSource.inventory.push({ id: 'quality-a', module: 'inventory', equipment: 'Monitor A', tag: 'TAG-DUP', status: 'Ativo', createdAt: '2026-10-01', updatedAt: '2026-10-22T11:00:00-03:00' });
@@ -230,7 +230,8 @@ test('prévias exibem três recentes e até seis alertas, com acesso à lista co
   await expect(page.locator('.home-activities')).toHaveCount(0);
   await expect(page.locator('.home-recent-panel .home-small-button')).toHaveCount(0);
   await expect(page.locator('.home-monthly .home-small-button')).toHaveCount(0);
-  await expect(page.locator('[data-home-alerts] .home-data-row')).toHaveCount(6);
+  await expect(page.locator('[data-home-alerts] .home-data-row')).toHaveCount(3);
+  await expect(page.locator('[data-home-alerts] .home-alert-row.priority-3')).toHaveCount(3);
   await expect(page.locator('.home-quality-note')).toHaveCount(0);
   await page.locator('.home-alert-panel [data-home-set="alerts"]').click();
   await expect(page.getByRole('dialog', { name: 'Alertas críticos' })).toContainText('TAG em identidades distintas');

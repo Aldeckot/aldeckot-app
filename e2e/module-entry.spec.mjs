@@ -114,3 +114,16 @@ test('Home do Flux mostra cartões recentes e abre o mês selecionado', async ({
   await page.getByRole('combobox', { name: 'Abrir mês' }).selectOption('flux-oct');
   await expect(page.getByRole('combobox', { name: 'Mês e ano' })).toHaveValue('flux-oct');
 });
+
+test('Flux abre a ficha unificada e navega pelo histórico sem perder o equipamento', async ({ page }) => {
+  await page.addInitScript(() => { window.__testFluxMonths = true; });
+  await page.goto('/flux.html?table=flux-oct');
+  await page.getByRole('button', { name: 'Abrir histórico de Impressora' }).click();
+  const modal = page.locator('.eqd-modal');
+  await expect(modal.getByText('Detalhes do Equipamento')).toBeVisible();
+  await expect(modal.locator('.eqd-hero-copy h2')).toHaveText('Impressora');
+  await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await expect(modal.getByRole('heading', { name: 'Histórico do equipamento' })).toBeVisible();
+  await modal.getByRole('button', { name: 'Voltar aos detalhes' }).click();
+  await expect(modal.locator('.eqd-hero-copy h2')).toHaveText('Impressora');
+});

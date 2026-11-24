@@ -99,7 +99,7 @@ test('chave persistente recupera metadados sem depender do nome visível', () =>
 test('formulário de variação inicia oculto e o mínimo mantém a visualização própria', () => {
   const ui = readFileSync(new URL('../supplies.js', import.meta.url), 'utf8');
   assert.match(ui, /variantFormOpen: false/);
-  assert.match(ui, /canEdit\(\) && state\.variantFormOpen/);
+  assert.match(ui, /canEdit\(\) && !inventory && state\.variantFormOpen/);
   assert.match(ui, /action === 'variant-cancel'.*state\.variantFormOpen = false/);
   assert.match(ui, /action === 'below-minimum'.*belowMinimumDialog\(\)/);
 });
@@ -136,8 +136,8 @@ test('Reserva, Manutenção e Inativo alteram apenas a disponibilidade projetada
   assert.equal(inactive.inventory_group.variants[0].maintenance, 1);
   assert.equal(inactive.inventory_group.units.find(row => row.id === 'unit-3').tag, 'IMPR 4');
   const ui = readFileSync(new URL('../supplies.js', import.meta.url), 'utf8');
-  assert.match(ui, /<span>Inativos<\/span>/);
-  assert.match(ui, /<span>Em manutenção<\/span>/);
+  assert.match(ui, /unitStatusOptions\(\['Ativo','Reserva','Manutenção','Inativo','Defeito','Atenção'\]\)/);
+  assert.match(ui, /badge\(unit\.status\)/);
 });
 
 test('migração 061 protege a origem, variações e eventos do Flux no banco', () => {
@@ -164,7 +164,7 @@ test('ações novas aguardam confirmação real da migração no banco', () => {
   assert.match(api, /return Array\.isArray\(result\.data\)/);
   assert.match(ui, /state\.integrationReady === false/);
   assert.match(ui, /state\.integrationReady \? '<button data-sp-action="delete"/);
-  assert.match(ui, /state\.integrationReady \? `<button data-sp-action="variant-active"/);
+  assert.match(ui, /!inventory && !row\.base && state\.integrationReady \? `<button type="button" data-sp-action="variant-active"/);
   assert.match(inventoryUi, /statuses\[3\] = inventoryIntegrationReady \? 'Inativo' : 'Troca'/);
 });
 

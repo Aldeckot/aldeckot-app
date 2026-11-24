@@ -32,7 +32,7 @@ test('estoque disponível ignora unidades não disponíveis e catálogo inativo'
   assert.match(sql, /when \(case when s\.tracking_type = 'unit'.*\) = 0 then 'Sem estoque'/);
   assert.match(sql, /then 'Estoque baixo'/);
   assert.match(ui, /filter\(row => !row\.inactive\)/);
-  assert.match(ui, /variations\.alerts\(operational\)\.length/);
+  assert.match(ui, /operational\.filter\(row => stockTone\(row\)\.label === label\)\.length/);
 });
 
 test('operações críticas são atômicas e evitam estados impossíveis', () => {
@@ -96,9 +96,12 @@ test('imagens ficam em bucket privado com limite e políticas de acesso', () => 
 
 test('composição visual preserva painel, variações e formulário sem dados fictícios na aplicação', () => {
   assert.match(ui, /sp-search-wrap/);
-  assert.match(ui, /sp-toolbar-add/);
-  assert.doesNotMatch(ui, /data-sp-filter="category"|data-sp-action="filters"|data-sp-action="sync"/);
-  assert.match(ui, /sp-variant-card/);
+  assert.match(ui, /sp-quick-actions/);
+  assert.match(ui, /data-sp-action="add"/);
+  assert.doesNotMatch(ui, /sp-toolbar-add/);
+  assert.match(ui, /data-sp-filter="category"/);
+  assert.doesNotMatch(ui, /data-sp-action="filters"|data-sp-action="sync"/);
+  assert.match(ui, /sp-variation-grid/);
   assert.match(ui, /sp-variant-form/);
   assert.match(ui, /spInlineVariantForm/);
   assert.match(css, /grid-template-columns:minmax\(0,1fr\) minmax\(410px,36\.8%\)/);
@@ -195,8 +198,11 @@ test('indicadores e imagens sem foto usam ícones distintos e acessíveis', () =
   for (const name of ['total', 'stock', 'warning', 'empty']) assert.match(ui, new RegExp(`${name}: '<svg`));
   assert.match(ui, /const imagePlaceholder = '<svg/);
   assert.match(ui, /node\.innerHTML = imagePlaceholder/);
-  assert.match(ui, /sp-export-action.*<img class="pdf-export-icon" src="assets\/pdf-export\.svg"/);
-  assert.match(ui, /sp-backup-action.*Sistema de backup/);
+  assert.match(ui, /module-header-summary-art supplies/);
+  assert.match(ui, /system-header-brand/);
+  assert.match(ui, /data-sp-action="export"/);
+  assert.match(ui, /data-sp-action="backup"/);
+  assert.match(read('supplies-rebuild.css'), /sp-variation-grid\{display:grid;grid-template-columns:repeat\(3/);
 });
 
 test('Suprimentos reutiliza a Central de Notificações compartilhada', () => {

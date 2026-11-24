@@ -230,6 +230,14 @@ A migração 130 alinha as consultas operacionais à leitura que as políticas d
 
 O ensaio `tests/sql/operational-read-access-130-transaction.sql` roda após o cenário da 129 na mesma transação revertida. Verifica um perfil padrão sem permissões de gravação e um perfil bloqueado. A 130 não depende da 128.
 
+### Fotografia oficial do equipamento (131)
+
+A migração 131 adiciona uma referência de foto por identidade física confirmada. Inventário, Controle TI, Flux, Gestão TI e Suprimentos consultam o mesmo arquivo quando há vínculo por ID; TAG e série não são usadas para presumir identidade. A foto existente continua disponível como imagem anterior até que uma foto oficial seja registrada. A remoção oficial registra uma referência vazia para não ressuscitar automaticamente essa imagem antiga.
+
+O arquivo é enviado primeiro ao bucket privado `supply-images`; só depois a função `equipment_photo_set` atualiza a referência e registra o evento. A troca exige a referência anterior para detectar outra edição simultânea. A limpeza do arquivo antigo ocorre somente após a gravação e após a checagem das referências existentes. Falhas de limpeza deixam o arquivo armazenado para uma remoção posterior segura.
+
+A cadeia de migrações, incluindo a 131, passou no PostgreSQL local isolado. A migração também foi aplicada no projeto Supabase de testes `ALDECKOT Restore Validation 2026-11-10` (`upxoyfivwuaqfnwfsrhw`). O roteiro `tests/sql/equipment-photos-131-transaction.sql` passou nesse projeto com reversão integral e verificou vínculo entre Inventário e Controle TI, inclusão, troca, remoção, novo envio após remoção, eventos de auditoria, conflito de edição e bloqueio de gravação sem arquivo ou sem permissão. Na prévia isolada conectada a esse projeto, a imagem `009642_88090.jpg` foi enviada ao nobreak APC Back-UPS 400 (TAG `AJNBCK015`), exibida após recarga, removida e reenviada; o arquivo foi confirmado no bucket privado e os eventos apareceram no histórico. Para verificar o compartilhamento visual, a mesma imagem foi adicionada temporariamente ao nobreak com TAG `AJNBCK007`, vinculado por ID a Inventário, Controle TI e Flux. Os três módulos exibiram o mesmo caminho de arquivo. Após a remoção pelo Inventário, a foto deixou de aparecer nos três módulos. A migração não foi executada no Supabase de produção.
+
 ## Dados sensíveis
 
 Nunca registre no Git, em prints ou em mensagens:

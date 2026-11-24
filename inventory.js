@@ -62,6 +62,12 @@
   const branchModel = window.AldeckotInventoryBranches;
   const moduleRoute = new URLSearchParams(window.location.search);
   let state = { active: moduleRoute.get('table'), overview: ['overview', 'operations'].includes(moduleRoute.get('view')), branchId: null, addMenu: false, pendingItemId: moduleRoute.get('item'), query: '', status: '', situation: '', operation: moduleRoute.get('operation') || '', sidebarOpen: false, tableMenu: null, tableMenuPosition: null, tableActionMenu: false, itemActionMenu: false };
+  let unifiedEditingHost = null;
+  window.addEventListener('aldeckot:equipment-photo-changed', () => {
+    const node = document.querySelector('.eqd-modal');
+    const item = activeTable()?.items.find(row => row.id === node?.dataset.itemId);
+    if (node && item) void loadUnifiedPhoto(node, item);
+  });
   const globalState = { view: 'recent', query: '', category: '', status: '', situation: '', order: 'recent', page: 1, pageSize: 25, overview: null, result: null, busy: false };
   const controlOperational = { tab: 'overview', query: '', status: '', priority: '',
     page: 1, pageSize: 25, dashboard: null, listing: null,
@@ -591,6 +597,14 @@
         { id: 'export-pdf', icon: 'report', label: 'Exportar PDF' }
       ], 'data-inv-home-action');
   }
+  function inventoryTableActions() {
+    return window.AldeckotModulePanels.actions([
+      { id: 'search-table', icon: 'search', label: 'Buscar nesta tabela' },
+      { id: 'add-item', icon: 'plus', label: 'Novo equipamento', disabled: !canManage() },
+      { id: 'new-branch', icon: 'folder', label: 'Nova ramificação', disabled: !canManage() },
+      { id: 'export-pdf', icon: 'report', label: 'Exportar tabela em PDF' }
+    ], 'data-inv-action');
+  }
   function controlHomeSidebar() {
     const panels = window.AldeckotModulePanels;
     const items = data.tables.flatMap(entry => entry.items || []);
@@ -989,7 +1003,7 @@
     $('#app').innerHTML = `<div class="inventory-shell">
       <header class="inventory-header"><div class="inventory-heading"><div class="inventory-heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v9"/></svg></div><div><h1>INVENTÁRIO</h1><p>Aldeckot — Controle de Equipamentos</p></div></div><div class="inventory-header-actions"><button title="Exportar tabela aberta em PDF" aria-label="Exportar tabela aberta em PDF" class="inventory-header-action" data-inv-action="export-pdf"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button><button title="Sistema de backup" aria-label="Sistema de backup" class="inventory-header-action inventory-backup-action" data-inv-action="backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l2 8H2l2-8Zm2-4h12l2 4H4l2-4Zm2 8h8"/></svg></button><button title="Criar nova tabela" aria-label="Criar nova tabela" class="inventory-header-action inventory-new-table-action" data-inv-action="add-table"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4V6Z"/><path d="M15 11v4m-2-2h4"/></svg></button><button title="Voltar para início" aria-label="Voltar para início" class="inventory-header-action inventory-home-action" data-inv-action="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9H4v-9Zm5 9v-5h6v5"/></svg></button></div></header>
       <div class="inventory-layout ${state.sidebarOpen ? 'tables-open' : ''} ${table ? 'table-selected' : globalHome || moduleHome ? 'global-selected' : 'no-table-selected'}"><aside class="inventory-panel inventory-tables inventory-table-sidebar"><div class="inventory-sidebar-head"><button class="inventory-sidebar-toggle" data-inv-action="toggle-tables" title="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-label="${state.sidebarOpen ? 'Ocultar tabelas' : 'Mostrar tabelas'}" aria-expanded="${state.sidebarOpen}"><svg class="inventory-table-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 9h19M2.5 14.5h19M9 3.5v17"/><path d="M5.3 6.3h1.2M5.3 11.7h1.2M5.3 17.2h1.2" stroke-width="2.2"/></svg><span>Tabelas</span></button><button class="inventory-table-add" data-inv-action="add-table" title="Criar tabela">+</button></div><div class="inventory-sidebar-content"><div class="inventory-table-list">${tableListMarkup()}</div></div></aside>
-        ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts module-home-sidebar">${inventoryHomeSidebar()}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${fluxMode ? fluxHomeMarkup() : window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts ${controlMode ? 'module-home-sidebar' : ''}">${controlMode ? controlHomeSidebar() : chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses) + chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
+        ${table ? `<main class="inventory-workspace">${tableMarkup(table, items)}</main><aside class="inventory-charts">${chart('Distribuição por Status', items, 'status', statuses)}${chart('Distribuição por Situação', items, 'situation', situations, 'situation-')}${!controlMode && !fluxMode ? inventoryTableActions() : ''}</aside>` : globalHome ? `<main class="inventory-workspace inventory-global-workspace">${globalMarkup()}</main><aside class="inventory-charts inventory-global-charts module-home-sidebar">${inventoryHomeSidebar()}</aside>` : moduleHome ? `<main class="inventory-workspace inventory-global-workspace">${fluxMode ? fluxHomeMarkup() : window.AldeckotModuleHome.markup(data.tables, globalState, moduleConfig.key, moduleConfig.name)}</main><aside class="inventory-charts ${controlMode ? 'module-home-sidebar' : ''}">${controlMode ? controlHomeSidebar() : chart('Distribuição por Status', data.tables.flatMap(entry => entry.items || []), 'status', statuses) + chart('Distribuição por Situação', data.tables.flatMap(entry => entry.items || []), 'situation', situations, 'situation-')}</aside>` : `<main class="inventory-workspace inventory-empty-workspace">${emptyPresentation.emptyState}</main>`}</div></div>`;
     if (!controlMode && table) {
       const layout = document.querySelector('.inventory-layout');
       layout?.classList.add('inventory-no-sidebar');
@@ -1129,22 +1143,20 @@
 
   function inventoryScanScene() {
     return `<svg class="inventory-scan-art" viewBox="0 0 620 112" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs><linearGradient id="inventory-scan-beam"><stop stop-color="#35dfff" stop-opacity="0"/><stop offset=".5" stop-color="#35dfff" stop-opacity=".38"/><stop offset="1" stop-color="#35dfff" stop-opacity="0"/></linearGradient></defs>
-      <g class="inventory-scan-floor"><path d="M29 94h562M58 107h504M112 79h397M116 80l-46 27m112-27-30 27m112-27-14 27m100-27 14 27m70-27 30 27m70-27 46 27"/></g>
-      <g class="inventory-scan-input"><rect x="38" y="30" width="63" height="52" rx="9"/><path d="M48 45h41M48 57h30M48 68h23"/><circle cx="87" cy="68" r="4"/></g>
-      <g class="inventory-scan-route"><path d="M102 56h88m240 0h87"/><circle cx="160" cy="56" r="3"/><circle cx="472" cy="56" r="3"/></g>
-      <g class="inventory-scan-rack"><rect x="190" y="10" width="240" height="91" rx="12"/><path d="M190 55h240M270 10v91m80-91v91"/></g>
+      <defs><radialGradient id="inventory-scan-halo"><stop stop-color="#39d6ff" stop-opacity=".27"/><stop offset="1" stop-color="#39d6ff" stop-opacity="0"/></radialGradient></defs>
+      <ellipse class="inventory-scan-halo" cx="306" cy="56" rx="125" ry="55" fill="url(#inventory-scan-halo)"/>
+      <g class="inventory-scan-route"><path d="M90 56h119m192 0h122M136 56l62-36h66M136 56l62 36h66M476 56l-60-36h-63M476 56l-60 36h-63"/></g>
+      <g class="inventory-scan-input"><rect x="39" y="35" width="54" height="42" rx="7"/><path d="M47 46h39M47 56h26M47 66h18"/><circle cx="81" cy="65" r="3"/></g>
+      <g class="inventory-scan-rack"><circle cx="306" cy="56" r="43"/><circle cx="306" cy="56" r="33"/><path d="m306 34 20 11v22l-20 11-20-11V45l20-11Zm-20 11 20 12 20-12m-20 12v21"/></g>
+      <g class="inventory-scan-sweep"><path d="M306 56V15"/><circle cx="306" cy="15" r="3"/></g>
       <g class="inventory-scan-assets">
-        <g class="inventory-scan-asset a"><rect x="208" y="23" width="42" height="22" rx="4"/><path d="M216 29h26m-26 7h15"/></g>
-        <g class="inventory-scan-asset b"><rect x="289" y="20" width="42" height="28" rx="4"/><path d="m297 27 13-5 13 5-13 5-13-5Zm0 0v13l13 6 13-6V27m-13 5v14"/></g>
-        <g class="inventory-scan-asset c"><rect x="367" y="23" width="42" height="22" rx="4"/><path d="M375 29h26m-26 7h19"/></g>
-        <g class="inventory-scan-asset d"><rect x="208" y="68" width="42" height="21" rx="4"/><path d="M216 75h26m-26 7h16"/></g>
-        <g class="inventory-scan-asset e"><rect x="289" y="67" width="42" height="23" rx="4"/><path d="M297 75h26m-26 7h18"/></g>
-        <g class="inventory-scan-asset f"><rect x="367" y="67" width="42" height="23" rx="4"/><path d="M375 75h26m-26 7h18"/></g>
+        <g class="inventory-scan-asset a"><rect x="187" y="9" width="63" height="25" rx="5"/><path d="M195 17h34m-34 9h46"/><circle cx="240" cy="17" r="3"/></g>
+        <g class="inventory-scan-asset b"><rect x="187" y="78" width="63" height="25" rx="5"/><path d="M195 86h34m-34 9h46"/><circle cx="240" cy="86" r="3"/></g>
+        <g class="inventory-scan-asset c"><rect x="365" y="9" width="63" height="25" rx="5"/><path d="M373 17h34m-34 9h46"/><circle cx="418" cy="17" r="3"/></g>
+        <g class="inventory-scan-asset d"><rect x="365" y="78" width="63" height="25" rx="5"/><path d="M373 86h34m-34 9h46"/><circle cx="418" cy="86" r="3"/></g>
       </g>
-      <g class="inventory-scan-sweep"><rect x="189" y="12" width="52" height="87" fill="url(#inventory-scan-beam)"/><path d="M215 13v85"/></g>
-      <g class="inventory-scan-location"><path d="M545 18c-16 0-28 12-28 28 0 20 28 47 28 47s28-27 28-47c0-16-12-28-28-28Z"/><circle cx="545" cy="46" r="10"/></g>
-      <g class="inventory-scan-signal"><circle cx="117" cy="56" r="3"/><circle cx="495" cy="56" r="3"/><circle cx="545" cy="46" r="3"/></g>
+      <g class="inventory-scan-location"><path d="M554 27c-14 0-24 10-24 24 0 16 24 39 24 39s24-23 24-39c0-14-10-24-24-24Z"/><circle cx="554" cy="51" r="8"/></g>
+      <g class="inventory-scan-signal"><circle cx="135" cy="56" r="3"/><circle cx="474" cy="56" r="3"/><circle cx="306" cy="56" r="4"/></g>
     </svg>`;
   }
 
@@ -1344,7 +1356,9 @@
     // Alguns fluxos atualizam o conteúdo do mesmo equipamento (por exemplo,
     // ao abrir o menu Ação). O modal anterior precisa sair antes de montar o
     // próximo, ou os controles ficam empilhados e parecem exigir dois cliques.
-    removeOpenModals();
+    const editingHost = unifiedEditingHost;
+    unifiedEditingHost = null;
+    if (!editingHost) removeOpenModals();
     const glowClass = statusColor ? ' inv-status-glow' : '';
     const glowStyle = statusColor ? ` style="--inv-modal-status-color:${statusColor}"` : '';
     const node = document.createElement('div');
@@ -1365,7 +1379,14 @@
       event.preventDefault();
       event.stopPropagation();
     });
-    document.body.appendChild(node);
+    if (editingHost?.isConnected) {
+      node.classList.add('eqd-editor-overlay');
+      editingHost.querySelector('[data-eqd-editor]').append(node);
+      editingHost.classList.add('eqd-editing');
+      editingHost.querySelectorAll('[data-eqd-screen]').forEach(screen => {
+        screen.hidden = !['detail', 'edit'].includes(screen.dataset.eqdScreen);
+      });
+    } else document.body.appendChild(node);
     return node;
   }
   function applyStatusModalGlow(node, status) {
@@ -1672,7 +1693,17 @@
     const choice = (name, label, values, selected, kind) => `<label class="inv-choice-field" data-inv-choice-field data-kind="${kind}" data-tone="${choiceTone(kind, selected)}"><span>${label} *</span><div class="inv-choice-select"><i></i><select name="${name}" data-inv-${kind}-choice required>${values.map(option => `<option ${selected === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div></label>`;
     const node = modal(`<div class="inv-dialog-head"><h2>${entry ? 'Editar Movimentação' : 'Adicionar Movimentação'}</h2><button class="inv-close" data-inv-close aria-label="Fechar">×</button></div><form data-inv-item-form><div class="inv-fields equipment-fields flux-fields">${choice('movement', 'Movimentação', moduleConfig.movements, movement, 'movement')}<label><span>Equipamento *</span><input name="equipment" required value="${escape(value.equipment)}"></label><label><span>Modelo *</span><input name="model" required value="${escape(value.model)}"></label><label><span>Marca *</span><input name="brand" required value="${escape(value.brand)}"></label><label><span>TAG *</span><input name="tag" required value="${escape(value.tag)}"></label><label><span>Nº Série *</span><input name="serial" required value="${escape(value.serial)}"></label><label><span>Setor</span><input name="sector" value="${escape(value.sector)}"></label><label><span>Local</span><input name="location" value="${escape(value.location)}"></label><label><span>Empresa Remetente *</span><input name="senderCompany" required value="${escape(value.senderCompany)}"></label><label><span>Empresa Destino *</span><input name="destinationCompany" required value="${escape(value.destinationCompany)}"></label><label><span>Responsável Envio *</span><input name="senderResponsible" required value="${escape(value.senderResponsible)}"></label><label><span>Responsável Recebimento *</span><input name="receiverResponsible" required value="${escape(value.receiverResponsible)}"></label><label><span>Data de Envio *</span><input name="sendDate" type="date" required value="${escape(value.sendDate)}"></label><label><span>Data de Recebimento *</span><input name="receivedDate" type="date" required value="${escape(value.receivedDate)}"></label>${choice('shippingType', 'Tipo de Envio', moduleConfig.shippingTypes, shippingType, 'shipping')}${choice('situation', 'Motivo', situations, situation, 'situation')}${choice('status', 'Status', statuses, status, 'status')}${choice('priority', 'Prioridade', priorities, priority, 'priority')}<label class="inv-full"><span>Observações</span><textarea name="notes">${escape(value.notes)}</textarea></label></div><div class="inv-footer equipment-footer">${entry ? `<button type="button" class="inv-ghost inv-danger" data-inv-delete-item="${entry.id}">Excluir</button>` : ''}<button class="inv-primary">Salvar</button><button type="button" class="inv-ghost" data-inv-close>Cancelar</button></div></form>`, 'equipment-dialog flux-dialog');
     node.dataset.itemId = entry?.id || '';
+    if (entry?.sourceModule && entry?.sourceRecordId) {
+      node.dataset.sourceModule = entry.sourceModule;
+      node.dataset.sourceRecordId = entry.sourceRecordId;
+      if (entry.inventoryItemId) node.dataset.inventoryItemId = entry.inventoryItemId;
+    }
     setupFluxEquipmentSearch(node, entry);
+    if (!entry || !String(value.tag || '').trim() || String(value.tag).trim() === '-') {
+      const tag = node.querySelector('[name="tag"]');
+      tag.required = false;
+      tag.closest('label').querySelector('span').textContent = 'TAG (opcional para equipamento novo)';
+    }
     if (!entry) {
       node.querySelector('.inv-dialog-head h2').textContent = 'Novo Envio';
       const form = node.querySelector('[data-inv-item-form]');
@@ -1687,9 +1718,6 @@
         hidden.type = 'hidden'; hidden.name = name; hidden.value = value;
         form.appendChild(hidden);
       }
-      const tag = form.querySelector('[name="tag"]');
-      tag.required = false;
-      tag.closest('label').querySelector('span').textContent = 'TAG (opcional para equipamento novo)';
       const recipient = form.querySelector('[name="receiverResponsible"]');
       recipient.required = false;
       recipient.closest('label').querySelector('span').textContent = 'Responsável recebimento (quando conhecido)';
@@ -1957,7 +1985,299 @@
   }
 
   function itemActionMenu(item) {
-    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ação <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L18.6 8.9l-3.5-3.5L4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>Editar</button><button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem"><svg viewBox="0 0 24" aria-hidden="true"><path d="M5 7h14M10 3h4l1 4H9l1-4Zm-3 4 1 13h8l1-13"/><path d="M10 11v5m4-5v5"/></svg>Excluir</button></span>` : ''}</span>`;
+    const replace = !controlMode && !fluxMode && inventoryIntegrationReady && item.status === 'Ativo'
+      ? `<button type="button" data-inv-replace-item="${escape(item.id)}" role="menuitem">Substituir</button>` : '';
+    return `<span class="inv-item-action-menu-wrap"><button class="inv-item-action-trigger" type="button" data-inv-action="toggle-item-actions" aria-haspopup="menu" aria-expanded="${state.itemActionMenu}">Ações <svg viewBox="0 0 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>${state.itemActionMenu ? `<span class="inv-item-action-menu" role="menu"><button type="button" data-inv-edit-item="${escape(item.id)}" role="menuitem">Editar</button>${replace}<button class="danger" type="button" data-inv-delete-item="${escape(item.id)}" role="menuitem">Excluir</button></span>` : ''}</span>`;
+  }
+
+  function unifyDetailModal(node, item) {
+    const view = window.AldeckotEquipmentDetailView;
+    if (!view || !node?.isConnected) return;
+    const dialog = node.querySelector('.inv-dialog');
+    const original = document.createElement('div');
+    original.className = 'eqd-original-content';
+    original.append(...dialog.childNodes);
+    const imageKeyValue = !controlMode && !fluxMode
+      ? imageKey(branchModel.categoryForTable(activeTable()), item.brand, item.model) : '';
+    dialog.innerHTML = view.render(item, { module: moduleConfig.key, tableName: activeTable()?.name,
+      imageKey: imageKeyValue, actions: canManage() ? itemActionMenu(item) : '', canManage: canManage() });
+    dialog.classList.add('eqd-dialog');
+    node.classList.add('eqd-modal');
+    node.dataset.itemId = item.id;
+    node.querySelector('[data-eqd-legacy]').append(original);
+    const originalActions = original.querySelector('.inv-actions');
+    if (originalActions) node.querySelector('[data-eqd-extras]').append(originalActions);
+    node.addEventListener('click', event => {
+      const target = event.target.closest('[data-eqd-view]');
+      if (!target) return;
+      const page = target.dataset.eqdView;
+      if (page === 'maintenance') void loadUnifiedMaintenance(node, item);
+      node.querySelectorAll('[data-eqd-screen]').forEach(screen => { screen.hidden = screen.dataset.eqdScreen !== page; });
+      dialog.scrollTop = 0;
+    });
+    void loadUnifiedPhoto(node, item);
+    void loadUnifiedHistory(node, item);
+  }
+
+  function decorateUnifiedEditor(host, form) {
+    const fields = form?.querySelector('.equipment-fields');
+    if (!fields || fields.classList.contains('eqd-editor-fields')) return;
+    const groups = new Map();
+    const cards = [
+      ['identity', 'Identificação', 'left'],
+      ['location', 'Localização e Vínculo', 'left'],
+      ['trace', 'Rastreabilidade', 'left'],
+      ['movement', 'Movimentação', 'left'],
+      ['status', 'Status Operacional', 'right'],
+      ['maintenance', 'Manutenção', 'right'],
+      ['classification', 'Classificação', 'right'],
+      ['notes', 'Observações', 'right']
+    ];
+    const columns = document.createElement('div');
+    columns.className = 'eqd-editor-columns';
+    const left = document.createElement('div');
+    const right = document.createElement('div');
+    left.className = right.className = 'eqd-editor-column';
+    columns.append(left, right);
+    const existing = [...fields.children];
+    const groupFor = name => {
+      if (['equipment', 'brand', 'model', 'serial', 'tag', 'branchId'].includes(name)) return 'identity';
+      if (['sector', 'location', 'terminal', 'computerId', 'inventoryItemId', 'movementReason'].includes(name)) return 'location';
+      if (name === 'status') return 'status';
+      if (['priority', 'situation', 'cleaning', 'cleaningType', 'verificationReason'].includes(name)) return 'classification';
+      if (name === 'notes') return 'notes';
+      return 'movement';
+    };
+    for (const [key, title, side] of cards) {
+      if (key === 'trace' || key === 'maintenance') {
+        const original = [...host.querySelectorAll('[data-eqd-screen="detail"] .eqd-card')]
+          .find(card => card.querySelector('h3 span')?.textContent === title);
+        if (original) {
+          const copy = original.cloneNode(true);
+          copy.querySelectorAll('button').forEach(button => { button.disabled = true; });
+          (side === 'left' ? left : right).append(copy);
+        }
+        continue;
+      }
+      const card = document.createElement('section');
+      card.className = 'eqd-card eqd-editor-card';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      const body = document.createElement('div');
+      body.className = 'eqd-card-body';
+      card.append(heading, body);
+      groups.set(key, body);
+      (side === 'left' ? left : right).append(card);
+    }
+    existing.forEach(child => {
+      const name = child.querySelector('[name]')?.name || '';
+      groups.get(groupFor(name))?.append(child);
+    });
+    for (const [key, body] of groups) {
+      if (!body.childElementCount) body.parentElement.remove();
+    }
+    fields.classList.add('eqd-editor-fields');
+    fields.append(columns);
+  }
+
+  async function loadUnifiedPhoto(node, item) {
+    const photo = node.querySelector('[data-eqd-photo]');
+    const service = window.AldeckotEquipmentPhoto;
+    const fallback = async () => {
+      if (controlMode || fluxMode) {
+        const url = await window.AldeckotEquipmentImages?.urlForItem(item, moduleConfig.key);
+        if (url && photo.isConnected) {
+          photo.onload = () => { photo.hidden = false; photo.previousElementSibling.hidden = true; };
+          photo.src = url;
+        }
+      } else await applySharedImages();
+    };
+    let officialPath = null;
+    try {
+      officialPath = await service?.get(moduleConfig.key, item.id);
+    } catch (error) { console.warn('Fotografia oficial indisponível neste ambiente:', error); }
+    if (officialPath === null || officialPath === undefined) {
+      try { await fallback(); } catch (error) { console.warn('Imagem de referência indisponível:', error); }
+    }
+    try {
+      const path = officialPath;
+      if (!node.isConnected || node.dataset.itemId !== item.id) return;
+      node.dataset.eqdPhotoPath = path || '';
+      node.dataset.eqdPhotoKnown = path === null || path === undefined ? 'false' : 'true';
+      const remove = node.querySelector('[data-eqd-photo-remove]');
+      if (remove) remove.hidden = !path;
+      if (path) {
+        const url = await service.url(path);
+        if (!photo.isConnected) return;
+        photo.removeAttribute('data-inv-image-key');
+        photo.onload = () => { photo.hidden = false; photo.previousElementSibling.hidden = true; };
+        photo.src = url;
+      } else if (path === '') {
+        photo.removeAttribute('src'); photo.hidden = true;
+        photo.previousElementSibling.hidden = false;
+      }
+    } catch (error) { console.warn('Fotografia oficial indisponível neste ambiente:', error); }
+    if (node.dataset.eqdPhotoBound) return;
+    node.dataset.eqdPhotoBound = 'true';
+    const input = node.querySelector('[data-eqd-photo-input]');
+    const choose = node.querySelector('[data-eqd-photo-choose]');
+    choose?.addEventListener('click', () => input.click());
+    input?.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      choose.disabled = true;
+      try {
+        await service.save(moduleConfig.key, item.id, file,
+          node.dataset.eqdPhotoKnown === 'true' ? node.dataset.eqdPhotoPath : null);
+        await loadUnifiedPhoto(node, item);
+        await loadUnifiedHistory(node, item);
+        window.AldeckotMessage.show('Fotografia do equipamento atualizada.');
+      } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+      finally { choose.disabled = false; input.value = ''; }
+    });
+    node.querySelector('[data-eqd-photo-remove]')?.addEventListener('click', async () => {
+      if (!node.dataset.eqdPhotoPath) return;
+      const confirmed = await window.AldeckotMessage.confirm('Remover a fotografia oficial deste equipamento?',
+        { title: 'Remover fotografia', confirmText: 'Remover' });
+      if (!confirmed) return;
+      try {
+        await service.remove(moduleConfig.key, item.id, node.dataset.eqdPhotoPath);
+        photo.removeAttribute('src'); photo.hidden = true;
+        photo.previousElementSibling.hidden = false;
+        await loadUnifiedPhoto(node, item);
+        await loadUnifiedHistory(node, item);
+        window.AldeckotMessage.show('Fotografia removida.');
+      } catch (error) { window.AldeckotMessage.show(backendMessage(error)); }
+    });
+  }
+
+  async function loadUnifiedHistory(node, item) {
+    const view = window.AldeckotEquipmentDetailView;
+    const requestVersion = Number(node.dataset.eqdHistoryRequest || 0) + 1;
+    node.dataset.eqdHistoryRequest = String(requestVersion);
+    const inventoryId = !controlMode && !fluxMode ? item.id
+      : item.inventoryItemId || item.verificationInventoryItemId || null;
+    let shared = [];
+    try {
+      const db = (await backend().init()).client;
+      const columns = 'id,source_module,source_event_key,source_id,action,previous_status,new_status,previous_location,new_location,origin_location,destination_location,reason,affected_modules,processing_result,metadata,actor_id,created_at';
+      const requests = [db.from('equipment_events').select(columns)
+        .eq('source_module', moduleConfig.key).eq('source_id', item.id)
+        .order('created_at', { ascending: false }).limit(200)];
+      if (inventoryId) requests.push(db.from('equipment_events').select(columns)
+        .eq('inventory_item_id', inventoryId).order('created_at', { ascending: false }).limit(200));
+      const linkedSources = controlMode ? [
+        ['management', item.managementRecordId], ['supplies', item.supplyUnitId]
+      ] : fluxMode ? [[item.sourceModule, item.sourceRecordId],
+        ['management', item.managementComputerId]] : [];
+      linkedSources.filter(([module, id]) => module && id).forEach(([module, id]) => {
+        requests.push(db.from('equipment_events').select(columns).eq('source_module', module)
+          .eq('source_id', id).order('created_at', { ascending: false }).limit(200));
+      });
+      if (fluxMode && item.equipmentUid) {
+        const siblings = await db.from('flux_items').select('id').eq('equipment_uid', item.equipmentUid).limit(100);
+        if (siblings.error) throw siblings.error;
+        const ids = (siblings.data || []).map(row => row.id);
+        if (ids.length) requests.push(db.from('equipment_events').select(columns)
+          .eq('source_module', 'flux').in('source_id', ids)
+          .order('created_at', { ascending: false }).limit(200));
+      }
+      const results = await Promise.all(requests);
+      if (results.some(result => result.error)) throw results.find(result => result.error).error;
+      shared = [...new Map(results.flatMap(result => result.data || []).map(entry => [entry.id, entry])).values()];
+      if (shared.length) {
+        const effects = await db.from('equipment_event_effects')
+          .select('event_id,module,status,error_message,metadata')
+          .in('event_id', shared.map(entry => entry.id)).limit(1000);
+        if (!effects.error) {
+          const grouped = new Map();
+          (effects.data || []).forEach(effect => grouped.set(effect.event_id,
+            [...(grouped.get(effect.event_id) || []), effect]));
+          shared.forEach(entry => { entry.effects = grouped.get(entry.id) || []; });
+        }
+      }
+    } catch (error) { console.warn('Eventos compartilhados indisponíveis:', error); }
+    if (!node.isConnected || node.dataset.itemId !== item.id
+      || node.dataset.eqdHistoryRequest !== String(requestVersion)) return;
+    const rows = view.historyRows(item, moduleConfig.key, shared);
+    node.querySelector('[data-eqd-summary]').innerHTML = view.summary(rows);
+    node.querySelector('[data-eqd-history-list]').innerHTML = rows.length
+      ? rows.map(view.historyEntry).join('') : '<p class="eqd-empty">Nenhum evento registrado.</p>';
+    const moduleSelect = node.querySelector('[data-eqd-history-module]');
+    const actionSelect = node.querySelector('[data-eqd-history-action]');
+    moduleSelect.innerHTML = '<option value="">Todos os módulos</option>' +
+      [...new Set(rows.map(row => row.module).filter(Boolean))].map(value =>
+        `<option value="${escape(value)}">${escape(({ inventory: 'Inventário', control: 'Controle TI', flux: 'Flux', management: 'Gestão TI', supplies: 'Suprimentos' })[value] || value)}</option>`).join('');
+    actionSelect.innerHTML = '<option value="">Todos os eventos</option>' +
+      [...new Set(rows.map(row => row.action).filter(Boolean))].map(value =>
+        `<option value="${escape(value)}">${escape(value)}</option>`).join('');
+    const filter = () => {
+      const module = moduleSelect.value; const action = actionSelect.value;
+      const month = node.querySelector('[data-eqd-history-month]').value;
+      const actor = node.querySelector('[data-eqd-history-actor]').value.trim().toLowerCase();
+      node.querySelectorAll('[data-eqd-history-entry]').forEach(entry => {
+        entry.hidden = Boolean((module && entry.dataset.module !== module) ||
+          (action && entry.dataset.action !== action) ||
+          (month && !entry.dataset.day.startsWith(month)) ||
+          (actor && !entry.dataset.actor.toLowerCase().includes(actor)));
+      });
+    };
+    const filters = node.querySelector('.eqd-history-filters');
+    if (!filters.dataset.eqdHistoryBound) {
+      filters.dataset.eqdHistoryBound = 'true';
+      filters.addEventListener('input', filter);
+      filters.addEventListener('change', filter);
+    }
+    const transition = rows.find(row => row.beforeStatus && row.afterStatus && row.beforeStatus !== row.afterStatus
+      && Number.isFinite(Date.parse(row.at)));
+    if (transition) {
+      const days = Math.max(0, Math.floor((Date.now() - Date.parse(transition.at)) / 86400000));
+      node.querySelector('.eqd-status-time b').textContent = `${days} ${days === 1 ? 'dia' : 'dias'}`;
+    }
+    const movement = rows.find(row => row.beforeLocation || row.afterLocation);
+    if (movement) node.querySelector('.eqd-last-movement b').textContent =
+      `${movement.beforeLocation || 'Origem não informada'} → ${movement.afterLocation || 'Destino não informado'} · ${view.dateTime(movement.at)}`;
+  }
+
+  async function loadUnifiedMaintenance(node, item) {
+    const target = node.querySelector('[data-eqd-maintenance-list]');
+    if (!target || target.dataset.loaded) return;
+    target.dataset.loaded = 'true';
+    try {
+      const db = (await backend().init()).client;
+      let ids = controlMode ? [item.id] : [];
+      const inventoryId = !controlMode && !fluxMode ? item.id : item.inventoryItemId;
+      if (inventoryId) {
+        const result = await db.from('control_items').select('id').eq('inventory_item_id', inventoryId).limit(50);
+        if (result.error) throw result.error;
+        ids = [...new Set([...ids, ...(result.data || []).map(row => row.id)])];
+      }
+      const managementId = item.managementRecordId || item.managementComputerId
+        || (fluxMode && item.sourceModule === 'management' ? item.sourceRecordId : null);
+      const supplyId = item.supplyUnitId
+        || (fluxMode && item.sourceModule === 'supplies' ? item.sourceRecordId : null);
+      if (fluxMode && item.sourceModule === 'control' && item.sourceRecordId) ids.push(item.sourceRecordId);
+      for (const [column, value] of [['management_record_id', managementId], ['supply_unit_id', supplyId]]) {
+        if (!value) continue;
+        const result = await db.from('control_items').select('id').eq(column, value).limit(50);
+        if (result.error) throw result.error;
+        ids.push(...(result.data || []).map(row => row.id));
+      }
+      ids = [...new Set(ids)];
+      const cases = [...new Map((await Promise.all(ids.map(id => backend().control.listCases(id)))).flat()
+        .map(entry => [entry.id, entry])).values()]
+        .sort((a, b) => (Date.parse(b.opened_at) || 0) - (Date.parse(a.opened_at) || 0));
+      const details = await Promise.allSettled(cases.slice(0, 15)
+        .map(entry => backend().control.caseDetail(entry.id)));
+      if (!node.isConnected || node.dataset.itemId !== item.id) return;
+      target.innerHTML = cases.length ? cases.map((entry, index) => `<article class="eqd-maintenance-row"><b>${escape(entry.ticket_state || 'Estado não informado')}</b><span>${escape(entry.followup_kind === 'verification' ? 'Verificação' : 'Manutenção')} · ${escape(window.AldeckotEquipmentDetailView.dateTime(entry.opened_at))}${entry.closed_at ? ` · concluída em ${escape(window.AldeckotEquipmentDetailView.dateTime(entry.closed_at))}` : ''}</span>${controlMode && window.AldeckotControlCaseDetail ? `<button type="button" class="inv-ghost" data-control-open-case="${escape(entry.id)}">Abrir chamado</button>` : ''}${details[index]?.status === 'fulfilled' && window.AldeckotControlCaseDetail ? `<details><summary>Ver diagnóstico e intervenções</summary>${window.AldeckotControlCaseDetail.history(details[index].value, [])}</details>` : ''}</article>`).join('')
+        : '<p class="eqd-empty">Nenhum chamado de manutenção vinculado a este equipamento.</p>';
+      const pending = cases.filter(entry => !entry.closed_at).length;
+      node.querySelector('[data-eqd-maintenance]').textContent = pending ? `${pending} ${pending === 1 ? 'chamado pendente' : 'chamados pendentes'} no Controle TI` : 'Sem pendências de manutenção registradas';
+    } catch (error) {
+      if (target.isConnected) { target.textContent = 'Não foi possível consultar os chamados agora.'; delete target.dataset.loaded; }
+      console.warn('Chamados do equipamento indisponíveis:', error);
+    }
   }
 
   async function refreshInstallationDetail(node) {
@@ -1998,6 +2318,7 @@
     if (canManage()) node.querySelector('.inv-actions')?.insertAdjacentHTML('afterbegin', `<button type="button" class="inv-primary" data-inv-transfer-item="${item.id}">Transferência</button>${table?.branches?.length ? `<button type="button" class="inv-ghost" data-inv-manage-shares="${item.id}">Ramificações</button>` : ''}`);
     applyStatusModalGlow(node, item.status);
     void applySharedImages();
+    unifyDetailModal(node, item);
   }
 
   function shareDialog(item) {
@@ -2080,6 +2401,7 @@
       });
     }
     applyStatusModalGlow(node, item.status);
+    unifyDetailModal(node, item);
   }
 
   function renderControlCaseDetail(node, tab = 'overview') {
@@ -2568,6 +2890,7 @@
       }).catch(error => console.warn('Elegibilidade do estorno indisponível:', error));
     }
     applyStatusModalGlow(node, item.status);
+    unifyDetailModal(node, item);
   }
 
   function mountSourcePhoto(node, item) {
@@ -2888,7 +3211,7 @@
 
   async function saveItem(form) {
     if (fluxMode && form.dataset.fluxBusy === 'true') return;
-    const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = document.querySelector('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
+    const table = activeTable(); const values = Object.fromEntries(new FormData(form)); const modalNode = form.closest('.inv-modal'); const id = modalNode.dataset.itemId; const old = id ? table.items.find(entry => entry.id === id) : null; let item = { ...values, id: id || `item-${Date.now()}`, date: old?.date || new Date().toISOString().slice(0, 10) };
     const verificationStart = !controlMode && !fluxMode && item.situation === 'Verificando'
       && old?.situation !== 'Verificando';
     if (verificationStart) {
@@ -3409,6 +3732,15 @@
     renderInventory();
     details(item);
   };
+  let tablePickerKeyboard = false;
+  document.addEventListener('keydown', event => {
+    const picker = event.target.closest?.('.module-table-picker');
+    if (picker) { tablePickerKeyboard = true; picker.dataset.keyboardFocus = 'true'; }
+  });
+  document.addEventListener('pointerdown', event => {
+    const picker = event.target.closest?.('.module-table-picker');
+    if (picker) { tablePickerKeyboard = false; delete picker.dataset.keyboardFocus; }
+  });
   async function selectModuleTable(id, direction) {
     if (state.active === id || !data.tables.some(table => table.id === id)) return;
     if (controlMode || fluxMode) {
@@ -3434,8 +3766,13 @@
       }
     }
     renderInventory();
-    const nextStep = direction && document.querySelector(`[data-module-table-step="${direction}"]:enabled`);
-    (nextStep || document.querySelector('[data-module-table-select]'))?.focus({ preventScroll: true });
+    if (tablePickerKeyboard) {
+      const picker = document.querySelector('.module-table-picker');
+      if (picker) picker.dataset.keyboardFocus = 'true';
+      const nextStep = direction && document.querySelector(`[data-module-table-step="${direction}"]:enabled`);
+      (nextStep || document.querySelector('[data-module-table-select]'))?.focus({ preventScroll: true });
+    }
+    tablePickerKeyboard = false;
   }
   document.querySelectorAll('#nav button').forEach(button => {
     if (button.textContent.includes('Inventário')) button.onclick = openInventorySafely;
@@ -3622,6 +3959,7 @@
     const action = event.target.closest('[data-inv-action]');
     if (action) {
       const type = action.dataset.invAction;
+      if (type === 'search-table') { document.querySelector('[data-inv-search]')?.focus(); return; }
       const restrictedActions = new Set(['add-table', 'add-item', 'toggle-add-menu', 'new-equipment', 'new-branch', 'toggle-active-table-actions', 'edit-active-table', 'delete-active-table', 'toggle-item-actions', 'add-log', 'edit-log', 'delete-log', 'backup', 'create-backup', 'restore-backup', 'backup-local-create', 'backup-local-restore', 'backup-network-create', 'backup-network-restore', 'prepare-network-restore', 'confirm-backup-restore', 'toggle-auto-backup', 'flux-new-send', 'flux-return', 'flux-delivery', 'flux-replace']);
       if (restrictedActions.has(type) && !canManage()) { event.preventDefault(); return; }
       if (controlMode && type === 'control-report') { controlReportForm(); return; }
@@ -3751,7 +4089,25 @@
       }
       return;
     }
-    if (event.target.closest('[data-inv-close]')) { closeModal(); return; }
+    if (event.target.closest('[data-inv-close]')) {
+      const editor = document.querySelector('.eqd-modal .eqd-editor-overlay');
+      if (editor) {
+        const form = editor.querySelector('[data-inv-item-form]');
+        const changed = form && form.dataset.eqdInitial !== JSON.stringify([...new FormData(form).entries()]);
+        if (changed && !await window.AldeckotMessage.confirm('Há alterações não salvas. Descartar as alterações?',
+          { title: 'Alterações não salvas', confirmText: 'Descartar' })) return;
+        if (event.target.closest('.eqd-editor-overlay')) {
+          editor.remove();
+          const host = document.querySelector('.eqd-modal');
+          host?.classList.remove('eqd-editing');
+          host?.querySelectorAll('[data-eqd-screen]').forEach(screen => {
+            screen.hidden = screen.dataset.eqdScreen !== 'detail';
+          });
+          return;
+        }
+      }
+      closeModal(); return;
+    }
     const acquisition = event.target.closest('[data-inv-flux-acquisition]');
     if (acquisition && fluxMode && canManage()) {
       const item = activeTable()?.items.find(entry => entry.id === acquisition.dataset.invFluxAcquisition);
@@ -3796,7 +4152,21 @@
       }
       return;
     }
-    const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) { if (!canManage()) return; const item = activeTable().items.find(entry => entry.id === editItem.dataset.invEditItem); closeModal(); itemForm(item); return; }
+    const editItem = event.target.closest('[data-inv-edit-item]'); if (editItem) {
+      if (!canManage()) return;
+      const item = activeTable()?.items.find(entry => entry.id === editItem.dataset.invEditItem);
+      if (!item) return;
+      const host = editItem.closest('.eqd-modal');
+      if (host) unifiedEditingHost = host;
+      else closeModal();
+      itemForm(item);
+      const form = host?.querySelector('.eqd-editor-overlay [data-inv-item-form]');
+      if (form) {
+        decorateUnifiedEditor(host, form);
+        form.dataset.eqdInitial = JSON.stringify([...new FormData(form).entries()]);
+      }
+      return;
+    }
     const transferItem = event.target.closest('[data-inv-transfer-item]');
     if (transferItem && canManage() && !controlMode && !fluxMode) {
       try { const table = await ensureFullActiveTable(); const item = table?.items.find(row => row.id === transferItem.dataset.invTransferItem); if (item) { closeModal(); transferForm(item); } }
@@ -3812,8 +4182,28 @@
     }
     const deleteItem = event.target.closest('[data-inv-delete-item]');
     if (deleteItem && canManage()) {
-      const confirmed = await window.AldeckotMessage.confirm('Excluir este equipamento?', { title: 'Excluir equipamento', confirmText: 'Excluir' });
-      if (confirmed) moduleApi().deleteItem(deleteItem.dataset.invDeleteItem).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
+      const item = activeTable()?.items.find(entry => entry.id === deleteItem.dataset.invDeleteItem);
+      if (!item) return;
+      try {
+        const db = (await backend().init()).client;
+        const checks = [db.from('equipment_events').select('id').eq('source_module', moduleConfig.key)
+          .eq('source_id', item.id).limit(1)];
+        if (!controlMode && !fluxMode) checks.push(
+          db.from('equipment_events').select('id').eq('inventory_item_id', item.id).limit(1),
+          db.from('control_items').select('id').eq('inventory_item_id', item.id).limit(1),
+          db.from('flux_items').select('id').eq('inventory_item_id', item.id).limit(1),
+          db.from('supply_units').select('id').eq('installed_inventory_item_id', item.id).limit(1));
+        if (controlMode) checks.push(db.from('control_cases').select('id').eq('control_item_id', item.id).limit(1));
+        const results = await Promise.all(checks);
+        const unavailable = results.find(result => result.error);
+        if (unavailable) throw unavailable.error;
+        if ((item.logs || []).length || results.some(result => result.data?.length)) {
+          window.AldeckotMessage.show('Este equipamento possui histórico ou vínculos. A exclusão definitiva foi impedida para preservar a rastreabilidade.');
+          return;
+        }
+        const confirmed = await window.AldeckotMessage.confirm('Excluir este equipamento sem histórico ou vínculos? Esta operação é definitiva.', { title: 'Excluir equipamento', confirmText: 'Excluir' });
+        if (confirmed) moduleApi().deleteItem(item.id).then(async () => { await reloadInventory(); closeModal(); renderInventory(); }).catch(error => window.AldeckotMessage.show(backendMessage(error)));
+      } catch (error) { window.AldeckotMessage.show(`Não foi possível confirmar os vínculos; a exclusão foi bloqueada. ${backendMessage(error)}`); }
     }
   }, true);
   document.addEventListener('input', event => {

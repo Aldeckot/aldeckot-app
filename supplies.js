@@ -3,6 +3,7 @@
   const dialogLayer = document.getElementById('suppliesDialog');
   const toastNode = document.getElementById('suppliesToast');
   const api = window.AldeckotSupplies;
+  const equipmentPhoto = window.AldeckotEquipmentPhoto;
   const inventoryCatalog = window.AldeckotInventorySupplies;
   const variations = window.AldeckotSupplyVariations;
   const supplyHistory = window.AldeckotSupplyHistory;
@@ -14,14 +15,19 @@
   })();
   const state = {
     items: [], detail: null, detailError: '', selectedId: params.get('item'), activeTab: params.get('unit') ? 'units' : 'general',
-    query: '', status: '', location: '', page: 1,
+    query: '', status: '', location: '', category: '', view: 'cards', page: 1,
     pageSize: pageSizes.includes(savedPageSize) ? savedPageSize : 25, selectedVariantId: null,
     equipment: [], images: new Map(), busy: false, error: '', dialog: '', renderVersion: 0,
     ensuredGroups: new Set(), ensuredVariants: new Set(), catalogUnavailable: false, catalogPromise: null,
     variantMetadataAvailable: null,
     variantFormOpen: false, integrationReady: null, alertQuery: '', movementResume: null,
+    variantQuery: '', monthlyMovements: null,
     initialized: false, bootSyncing: false
   };
+  let equipmentPhotoAvailable = null;
+  window.addEventListener('aldeckot:equipment-photo-changed', () => {
+    if (state.activeTab === 'units' && active()) render();
+  });
   const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const fmtDate = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
   const canEdit = () => Boolean(window.AldeckotAuth?.isAdmin) && !state.error && !state.bootSyncing;
@@ -67,17 +73,17 @@
   const stockTone = row => {
     const available = quantityAvailable(row);
     const minimum = Math.max(0, Number(row.minimum_stock || 0));
-    if (row.stock_status === 'Estoque baixo') return { className: 'below', label: 'Modelo abaixo do mínimo' };
-    if (available === 0 || available < minimum) return { className: 'below', label: available === 0 ? 'Sem estoque' : 'Abaixo do mínimo' };
-    if (minimum > 0 && available <= minimum + Math.max(1, Math.ceil(minimum * .2))) return { className: 'near', label: 'Próximo do mínimo' };
-    return { className: 'above', label: 'Acima do mínimo' };
+    if (available <= 0) return { className: 'none', label: 'Sem estoque' };
+    if (available <= minimum || row.stock_status === 'Estoque baixo') return { className: 'below', label: 'Abaixo do mínimo' };
+    return { className: 'above', label: 'Em estoque' };
   };
   const filtered = () => state.items.filter(row => {
     const haystack = [row.name,row.category,row.brand,row.model,
       ...(isInventory(row) ? row.inventory_group.variants.flatMap(variant => [variant.brand, variant.model]) : [])]
       .join(' ').toLocaleLowerCase('pt-BR');
     return haystack.includes(state.query.toLocaleLowerCase('pt-BR'))
-      && (!state.status || row.stock_status === state.status)
+      && (!state.status || stockTone(row).label === state.status)
+      && (!state.category || row.category === state.category)
       && (!state.location || row.default_location === state.location);
   });
   const metricIcons = {
@@ -86,12 +92,28 @@
     warning: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 30 28H2L16 3Zm0 9v8m0 4v1"/></svg>',
     empty: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="m4 10 12-7 12 7-12 7-12-7Zm0 0v13l12 7 12-7V10M16 17v13M11 22h10"/></svg>'
   };
-  const metric = (icon, label, number, type = '', action = '') => `<${action ? 'button' : 'article'} class="sp-metric ${type}"${action ? ` type="button" data-sp-action="${action}" aria-label="Ver itens abaixo do mínimo"` : ''}><span class="sp-metric-icon">${metricIcons[icon]}</span><span><small>${label}</small><b>${number.toLocaleString('pt-BR')}</b></span></${action ? 'button' : 'article'}>`;
+  const uiIcon = paths => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  const uiIcons = {
+    layers: uiIcon('<path d="m12 2-9 5 9 5 9-5-9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/>'),
+    monitor: uiIcon('<rect x="2" y="3" width="20" height="15" rx="2"/><path d="M8 22h8m-4-4v4"/>'),
+    box: uiIcon('<path d="m12 2-9 5 9 5 9-5-9-5ZM3 7v10l9 5 9-5V7m-9 5v10"/>'),
+    chart: uiIcon('<path d="M3 21h18M5 18v-6h3v6m4 0V5h3v13m4 0V9h3v9"/>'),
+    info: uiIcon('<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10h.01"/>'),
+    movement: uiIcon('<path d="M3 7h17m-4-4 4 4-4 4M21 17H4m4-4-4 4 4 4"/>'),
+    link: uiIcon('<path d="M10 13a5 5 0 0 0 7 .4l3-3A5 5 0 0 0 13 3l-2 2M14 11a5 5 0 0 0-7-.4l-3 3A5 5 0 0 0 11 21l2-2"/>'),
+    file: uiIcon('<path d="M6 2h8l4 4v16H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 0v5h5M8 12h8M8 16h8"/>'),
+    note: uiIcon('<path d="M4 4h16v13H8l-4 4V4Zm4 5h8m-8 4h6"/>'),
+    pin: uiIcon('<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Zm-8-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/>'),
+    pulse: uiIcon('<path d="M2 12h4l3-7 4 14 3-7h6"/>'),
+    bell: uiIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>'),
+    drop: uiIcon('<path d="M12 2s-8 9-8 14a8 8 0 0 0 16 0c0-5-8-14-8-14Z"/>')
+  };
+  const metric = (icon, label, number, type = '', action = '', share = '') => `<${action ? 'button' : 'article'} class="sp-metric ${type}"${action ? ` type="button" data-sp-action="${action}" aria-label="Ver itens abaixo do mínimo"` : ''}><span class="sp-metric-icon">${metricIcons[icon] || metricIcons.total}</span><span class="sp-metric-copy"><small>${label}</small><b>${typeof number === 'number' ? number.toLocaleString('pt-BR') : safe(number)}</b></span>${share ? `<em>${share}</em>` : ''}</${action ? 'button' : 'article'}>`;
   const metrics = () => {
     const operational = state.items.filter(row => !row.inactive);
-    const available = operational.reduce((sum, row) => sum + quantityAvailable(row), 0);
-    const belowMinimum = variations.alerts(operational).length;
-    return `<section class="sp-metrics" aria-label="Indicadores">${metric('total','Total de itens',operational.length)}${metric('stock','Em estoque',available)}${metric('warning','Abaixo do mínimo',belowMinimum,belowMinimum ? 'warn has-alert' : 'warn','below-minimum')}${metric('empty','Sem estoque',operational.filter(row => row.stock_status === 'Sem estoque').length,'empty')}</section>`;
+    const count = label => operational.filter(row => stockTone(row).label === label).length;
+    const percent = value => operational.length ? `${Math.round(value / operational.length * 100)}%` : '0%';
+    return `<section class="sp-metrics" aria-label="Indicadores">${metric('total','Total de itens',operational.length)}${metric('stock','Em estoque',count('Em estoque'),'in-stock','',percent(count('Em estoque')))}${metric('warning','Abaixo do mínimo',count('Abaixo do mínimo'),'warn','below-minimum',percent(count('Abaixo do mínimo')))}${metric('empty','Sem estoque',count('Sem estoque'),'empty','',percent(count('Sem estoque')))}${metric('total','Pedidos pendentes','—','orders')}${metric('stock','Movimentações (mês)',state.monthlyMovements ?? '—','movements')}</section>`;
   };
   const options = values => values.map(value => `<option value="${safe(value)}">${safe(value)}</option>`).join('');
   const unitStatusOptions = values => values.map(value => `<option value="${safe(value)}"${state.unitStatus === value ? ' selected' : ''}>${safe(value)}</option>`).join('');
@@ -103,35 +125,50 @@
     const pageRows = rows.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
     const firstPage = Math.max(1, Math.min(state.page - 3, max - 6));
     const lastPage = Math.min(max, firstPage + 6);
-    return `${metrics()}<div class="sp-toolbar"><label class="sp-search-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 5 5"/></svg><input class="sp-search" data-sp-search type="search" placeholder="Buscar por nome, categoria, marca, modelo..." value="${safe(state.query)}" aria-label="Buscar suprimentos"></label>${canEdit() ? '<button class="sp-btn primary sp-toolbar-add" data-sp-action="add" type="button">＋ Adicionar</button>' : ''}<select data-sp-filter="status" aria-label="Filtrar status"><option value="">Todos os status</option>${options(['Normal','Estoque baixo','Sem estoque','Inativo'])}</select></div>
-    <div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status do estoque</th></tr></thead><tbody>${pageRows.length ? pageRows.map(row => {
+    const categories = [...new Set(state.items.map(row => row.category).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+    const toolbar = `<div class="sp-toolbar" role="search" aria-label="Buscar suprimentos"><label class="sp-search-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 5 5"/></svg><input class="sp-search" data-sp-search type="search" placeholder="Buscar suprimento, categoria, marca ou modelo..." value="${safe(state.query)}" aria-label="Buscar suprimentos"></label><select data-sp-filter="category" aria-label="Filtrar categoria"><option value="">Categoria: Todas</option>${options(categories)}</select><select data-sp-filter="status" aria-label="Filtrar estoque"><option value="">Estoque: Todos</option>${options(['Em estoque','Abaixo do mínimo','Sem estoque'])}</select></div>`;
+    const cards = `<div class="sp-catalog">${[['patrimonial','Equipamentos Patrimoniais'],['consumable','Materiais e Consumíveis']].map(([kind,title]) => {
+      const group = rows.filter(row => isInventory(row) === (kind === 'patrimonial'));
+      const shown = group;
+      return `<section class="sp-catalog-section"><div class="sp-catalog-heading"><h2><span class="sp-section-symbol" aria-hidden="true">${uiIcons[kind === 'patrimonial' ? 'monitor' : 'layers']}</span>${title}${kind === 'patrimonial' ? '<small>Integrados ao Inventário</small>' : ''}</h2></div><div class="sp-product-grid">${shown.length ? shown.map(row => {
+        const tone = stockTone(row);
+        return `<button type="button" class="sp-product-card" data-sp-open="${safe(row.id)}">${img(row.image_path,'sp-product-image')}<b>${safe(row.name)}</b><span>${quantityAvailable(row)} ${isInventory(row) ? 'itens' : 'unidades'}</span><strong class="sp-availability ${tone.className}">${tone.className === 'above' ? '✓ ' : '⚠ '}${safe(tone.label)}</strong></button>`;
+      }).join('') : '<p class="sp-muted">Nenhum item nesta seção.</p>'}</div></section>`;
+    }).join('')}</div>`;
+    const table = `<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Imagem</th><th>Nome do item</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Indicador</th><th>Status do estoque</th></tr></thead><tbody>${pageRows.length ? pageRows.map(row => {
       const tone = stockTone(row);
       return `<tr data-supply-id="${safe(row.id)}" class="${row.id === state.selectedId ? 'selected' : ''}"><td>${img(row.image_path)}</td><td><button type="button" class="sp-item-open" data-sp-open="${safe(row.id)}" aria-label="Abrir ${safe(row.name)}">${safe(row.name)}</button><br><small class="sp-muted">${isInventory(row) ? `${row.total_units} equipamentos no Inventário` : row.tracking_type === 'unit' ? `${row.total_units} unidades cadastradas` : 'Por quantidade'}</small></td><td>${safe(row.category)}</td><td class="sp-stock sp-stock-${tone.className}" title="${tone.label}">${quantityAvailable(row)}</td><td>${row.minimum_stock}</td><td>${Number(row.active_count || 0)}</td><td>${badge(row.stock_status)}</td></tr>`;
-    }).join('') : '<tr><td colspan="7" class="sp-empty">Nenhum suprimento encontrado. Os indicadores e a tabela mostram somente dados reais.</td></tr>'}</tbody></table></div>
+    }).join('') : '<tr><td colspan="7" class="sp-empty">Nenhum suprimento encontrado.</td></tr>'}</tbody></table></div>
     <div class="sp-pagination"><span>Mostrando ${pageRows.length ? (state.page - 1) * state.pageSize + 1 : 0} a ${Math.min(state.page * state.pageSize, rows.length)} de ${rows.length} itens</span><label class="sp-page-size">Itens por página <select data-sp-page-size aria-label="Itens por página">${pageSizes.map(size => `<option value="${size}"${size === state.pageSize ? ' selected' : ''}>${size}</option>`).join('')}</select></label><nav class="sp-pages" aria-label="Páginas"><button type="button" data-sp-page="${state.page - 1}" aria-label="Página anterior" ${state.page === 1 ? 'disabled' : ''}>‹</button>${firstPage > 1 ? `<button type="button" data-sp-page="1">1</button>${firstPage > 2 ? '<span aria-hidden="true">…</span>' : ''}` : ''}${Array.from({length: lastPage - firstPage + 1}, (_, index) => firstPage + index).map(page => `<button type="button" data-sp-page="${page}" class="${state.page === page ? 'active' : ''}" ${state.page === page ? 'aria-current="page"' : ''}>${page}</button>`).join('')}${lastPage < max ? `${lastPage < max - 1 ? '<span aria-hidden="true">…</span>' : ''}<button type="button" data-sp-page="${max}">${max}</button>` : ''}<button type="button" data-sp-page="${state.page + 1}" aria-label="Próxima página" ${state.page === max ? 'disabled' : ''}>›</button></nav></div>`;
+    return toolbar + (state.view === 'cards' ? cards : table);
   };
-  const renderGeneral = item => isInventory(item)
-    ? `<div class="sp-fields"><div><span>Fonte dos equipamentos</span><strong>Inventário</strong></div><div><span>Total de unidades</span><strong>${item.total_units}</strong></div><div><span>Em Reserva (Estoque)</span><strong>${item.available_stock}</strong></div><div><span>Ativos (Indicador)</span><strong>${item.active_count}</strong></div><div><span>Em manutenção</span><strong>${item.inventory_group.maintenance}</strong></div><div><span>Inativos</span><strong>${item.inventory_group.inactive}</strong></div><div><span>Com defeito</span><strong>${item.inventory_group.defect}</strong></div><div><span>Estoque mínimo</span><strong>${item.minimum_stock}</strong></div><div><span>Variações por modelo</span><strong>${item.inventory_group.variants.length}</strong></div></div><p class="sp-muted">Os quantitativos são calculados diretamente dos registros físicos do Inventário. TAG, série, local e histórico permanecem em cada unidade.</p>${item.legacy_minimum_unallocated ? `<p class="sp-muted">Mínimo legado do item: ${item.legacy_minimum_unallocated}. Ele foi preservado, mas precisa ser distribuído manualmente entre os modelos; não gera alerta até a distribuição.</p>` : ''}`
-    : `<div class="sp-fields"><div><span>Descrição</span><strong>${safe(item.description || '—')}</strong></div><div><span>Tipo de controle</span><strong>${item.tracking_type === 'unit' ? 'Unidades rastreáveis' : 'Por quantidade'}</strong></div><div><span>Disponível</span><strong>${quantityAvailable(item)}</strong></div><div><span>Unidades cadastradas</span><strong>${item.tracking_type === 'unit' ? item.total_units : '—'}</strong></div><div><span>Estoque mínimo</span><strong>${item.minimum_stock}</strong></div><div><span>Local padrão</span><strong>${safe(item.default_location)}</strong></div><div><span>Observações</span><strong>${safe(item.notes || '—')}</strong></div></div>${canEdit() && item.tracking_type === 'quantity' && !item.inactive ? '<div class="sp-card-actions"><button class="sp-btn primary" data-sp-action="adjust">Movimentar estoque</button></div>' : ''}`;
+  const renderGeneral = item => {
+    const inventory = isInventory(item);
+    const available = quantityAvailable(item);
+    const minimum = Number(item.minimum_stock || 0);
+    const values = [
+      ['Categoria', item.category], ['Origem', inventory ? 'Inventário' : 'Suprimentos'],
+      ['Marca', item.brand || '—'], ['Modelo', item.model || '—'],
+      ['Tipo de controle', inventory ? 'Unidades do Inventário' : item.tracking_type === 'unit' ? 'Unidades rastreáveis' : 'Por quantidade'],
+      ['Unidades cadastradas', inventory || item.tracking_type === 'unit' ? item.total_units : '—']
+    ];
+    const progress = available / Math.max(1, available + minimum) * 100;
+    return `<div class="sp-general-layout"><section class="sp-general-info sp-modal-panel"><h3><span aria-hidden="true">${uiIcons.file}</span> Informações do suprimento</h3><dl>${values.map(([label,value]) => `<div><dt>${label}</dt><dd>${safe(value)}</dd></div>`).join('')}</dl></section><div class="sp-general-side"><section class="sp-general-stock sp-modal-panel"><h3><span aria-hidden="true">${uiIcons.box}</span> Estoque</h3><div class="sp-stock-content"><div class="sp-stock-ring" style="--sp-ring:${progress.toFixed(1)}%" role="img" aria-label="${available} disponíveis; mínimo ${minimum}"><div><b>${available}</b><small>Disponíveis</small></div></div><div class="sp-stock-legend"><div><span class="sp-key green"></span>Disponível<b>${available}</b></div><div><span class="sp-key yellow"></span>Estoque mínimo<b>${minimum}</b></div><div><span class="sp-key muted"></span>Em uso / Reservado<b>${Number(item.active_count || 0)}</b></div></div></div></section><section class="sp-general-notes sp-modal-panel"><h3><span aria-hidden="true">${uiIcons.note}</span> Observações</h3><p>${safe(item.notes || '—')}</p></section></div></div><footer class="sp-detail-footer">${canEdit() && !inventory && item.tracking_type === 'quantity' && !item.inactive ? '<button class="sp-btn primary sp-move-button" type="button" data-sp-action="adjust">⇄ &nbsp; Movimentar estoque <span aria-hidden="true">⌄</span></button>' : inventory ? '<button class="sp-btn primary sp-move-button" type="button" data-sp-tab="units">▣ &nbsp; Ver unidades</button>' : ''}${canEdit() ? '<button class="sp-btn sp-edit-button" type="button" data-sp-action="edit">✎ &nbsp; Editar</button>' : ''}</footer>`;
+  };
   const renderVariants = item => {
-    if (isInventory(item)) {
-      const variants = item.inventory_group.variants;
-      return `<div class="sp-section-title"><h3>Modelos do Inventário · ${variants.length}</h3></div>${variants.map(row => `<button type="button" class="sp-card sp-inventory-variant sp-health-${variations.health(row).tone} ${state.selectedVariantId === row.id ? 'selected' : ''}" data-sp-variant="${safe(row.id)}">${img(row.image_path || item.image_path)}<span><b>${safe(row.name)}</b><small>${safe(row.brand || 'Marca não informada')} · ${row.total} unidade(s)</small>${row.inactive || row.defect ? `<small>${[['Inativos', row.inactive], ['Defeito', row.defect]].filter(([, count]) => count > 0).map(([label, count]) => `${label}: ${count}`).join(' · ')}</small>` : ''}</span><span><small>Ativos</small><strong>${row.active}</strong></span><span><small>Reserva</small><strong>${row.reserve}</strong></span><span><small>Mínimo</small><strong>${row.minimum_stock}</strong></span></button>`).join('') || '<p class="sp-muted">Nenhum modelo encontrado no Inventário.</p>'}`;
-    }
-    const variants = item.variation_rows || [];
-    const title = item.category.toLocaleLowerCase('pt-BR').includes('cabo') ? 'Variações por tipo de conector' : 'Variações por tipo/modelo';
-    const cards = variants.length ? variants.map(row => `<article class="sp-card sp-variant-card sp-health-${variations.health(row).tone} ${state.selectedVariantId === row.id ? 'selected' : ''}" data-sp-variant="${safe(row.id)}" role="button" tabindex="0" aria-label="Selecionar ${safe(row.name)}"><div class="sp-variant-row">
-      ${img(row.image_path || item.image_path)}<div class="sp-variant-copy"><b>${safe(row.name)}</b>${row.disabled ? badge('Inativa') : ''}<small>${safe([row.brand, row.model, row.description].filter(Boolean).join(' · ') || row.location || item.default_location)}</small></div>
-      <div class="sp-variant-value"><small>Estoque</small><strong>${row.reserve}</strong></div>
-      <div class="sp-variant-value"><small>Mínimo</small><strong class="${row.minimum_stock ? 'sp-minimum' : ''}">${row.minimum_stock}</strong></div></div>
-      ${canEdit() ? `<details class="sp-variant-menu"><summary aria-label="Ações de ${safe(row.name)}">•••</summary><div class="sp-variant-menu-list"><button data-sp-action="${row.base ? 'edit' : 'variant-edit'}" data-id="${row.id}">Editar</button>${!row.base && state.integrationReady ? `<button data-sp-action="variant-active" data-id="${row.id}">${row.inactive ? 'Reativar' : 'Inativar'} variação</button>` : ''}${item.tracking_type === 'quantity' && !row.disabled ? `<button data-sp-action="adjust" data-id="${safe(row.id)}">Movimentar estoque</button>` : ''}</div></details>` : ''}
-    </article>`).join('') : '<p class="sp-muted">Nenhuma variação cadastrada.</p>';
-    const form = canEdit() && state.variantFormOpen ? `<form id="spInlineVariantForm" class="sp-variant-form"><h3>Adicionar nova variação</h3>
-      <div class="sp-variant-form-grid">
-      <div class="sp-variant-form-fields"><label>Marca<input name="brand" placeholder="Ex.: Epson" maxlength="120"></label><label>Modelo<input name="model" placeholder="Ex.: 544" maxlength="120"></label><label>Características<input name="description" placeholder="Ex.: Azul, 500 ml, USB-C" maxlength="1000"></label><small>Informe o modelo ou uma característica. Marca, modelo e características identificam a variação.</small>
-      <div class="sp-variant-form-numbers">${item.tracking_type === 'quantity' ? '<label>Estoque inicial<input name="initial_stock" type="number" min="0" value="0" required></label>' : ''}<label>Estoque mínimo<input name="minimum_stock" type="number" min="0" value="0" required></label></div>
-      <button class="sp-btn primary" type="submit">＋ Adicionar variação</button><button class="sp-btn" type="button" data-sp-action="variant-cancel">Cancelar</button></div></div><p class="sp-error" role="alert"></p></form>` : '';
-    return `<div class="sp-section-title"><h3>${title}</h3>${canEdit() && !state.variantFormOpen ? '<button class="sp-btn primary" data-sp-action="variant-focus">＋ Adicionar variação</button>' : ''}</div>${cards}${form}`;
+    const inventory = isInventory(item);
+    const variants = inventory ? item.inventory_group.variants : item.variation_rows || [];
+    const search = state.variantQuery.trim().toLocaleLowerCase('pt-BR');
+    const visible = variants.filter(row => !search || [row.name, row.brand, row.model, row.description].join(' ').toLocaleLowerCase('pt-BR').includes(search));
+    const cards = visible.map(row => {
+      const amount = Number(row.reserve || 0), minimum = Number(row.minimum_stock || 0);
+      const tone = amount <= 0 ? 'none' : amount <= minimum ? 'below' : 'above';
+      const label = tone === 'none' ? 'Sem estoque' : tone === 'below' ? 'Abaixo do mínimo' : 'Em estoque';
+      const menu = canEdit() ? `<details class="sp-variant-menu"><summary aria-label="Ações de ${safe(row.name)}">⋮</summary><div class="sp-variant-menu-list"><button type="button" data-sp-action="${inventory ? 'variant-edit' : row.base ? 'edit' : 'variant-edit'}" data-id="${safe(row.id)}">Editar variação</button>${!inventory && !row.base && state.integrationReady ? `<button type="button" data-sp-action="variant-active" data-id="${safe(row.id)}">${row.inactive ? 'Reativar' : 'Inativar'} variação</button>` : ''}${!inventory && item.tracking_type === 'quantity' && !row.disabled ? `<button type="button" data-sp-action="adjust" data-id="${safe(row.id)}">Movimentar estoque</button>` : ''}</div></details>` : '';
+      return `<article class="sp-variation-tile ${state.selectedVariantId === row.id ? 'selected' : ''}" data-sp-variant="${safe(row.id)}" role="button" tabindex="0" aria-label="Selecionar ${safe(row.name)}"><div class="sp-variation-top">${img(row.image_path || item.image_path, 'sp-variation-image')}<div class="sp-variation-copy"><b>${safe(row.name)}</b><span>${safe([row.brand || item.brand, row.model || item.model].filter(Boolean).join(' · ') || 'Modelo não informado')}</span></div>${menu}</div><div class="sp-variation-bottom"><div class="sp-variation-stat"><span aria-hidden="true">${uiIcons.box}</span><div><small>Estoque</small><b>${amount}</b></div></div><div class="sp-variation-stat"><span aria-hidden="true">${uiIcons.layers}</span><div><small>Mínimo</small><b>${minimum}</b></div></div><strong class="sp-availability ${tone}">${tone === 'above' ? '✓' : '⚠'} ${label}</strong></div></article>`;
+    }).join('');
+    const form = canEdit() && !inventory && state.variantFormOpen ? `<form id="spInlineVariantForm" class="sp-variant-form"><h3>Adicionar variação</h3><div class="sp-variant-form-fields"><label>Marca<input name="brand" placeholder="Ex.: Epson" maxlength="120"></label><label>Modelo<input name="model" placeholder="Ex.: 544" maxlength="120"></label><label>Características<input name="description" placeholder="Ex.: Azul, 500 ml, USB-C" maxlength="1000"></label>${item.tracking_type === 'quantity' ? '<label>Estoque inicial<input name="initial_stock" type="number" min="0" value="0" required></label>' : ''}<label>Estoque mínimo<input name="minimum_stock" type="number" min="0" value="0" required></label></div><p class="sp-error" role="alert"></p><div class="sp-card-actions"><button class="sp-btn primary" type="submit">Salvar variação</button><button class="sp-btn" type="button" data-sp-action="variant-cancel">Cancelar</button></div></form>` : '';
+    return `<div class="sp-variations-toolbar"><h3><span aria-hidden="true">${uiIcons.layers}</span> Variações por tipo/modelo</h3><div><label class="sp-variant-search"><span aria-hidden="true">⌕</span><input type="search" data-sp-variant-search value="${safe(state.variantQuery)}" placeholder="Buscar variação..." aria-label="Buscar variação"></label>${canEdit() && !inventory ? '<button class="sp-btn primary" type="button" data-sp-action="variant-focus">＋ Adicionar variação</button>' : ''}</div></div><div class="sp-variation-grid">${cards || '<p class="sp-muted">Nenhuma variação encontrada.</p>'}</div>${form}`;
   };
   const renderUnits = item => {
     if (isInventory(item)) {
@@ -196,24 +233,23 @@
     if (!item) {
       const panels = window.AldeckotModulePanels;
       const rows = [
-        { label: 'Normal', color: '#24d89d' },
-        { label: 'Estoque baixo', color: '#ffcb38' },
+        { label: 'Em estoque', color: '#24d89d' },
+        { label: 'Abaixo do mínimo', color: '#ffcb38' },
         { label: 'Sem estoque', color: '#ff5f78' },
-        { label: 'Inativo', color: '#a467ee' }
-      ].map(row => ({ ...row, count: state.items.filter(entry => (entry.inactive ? 'Inativo' : entry.stock_status) === row.label).length }));
-      const categories = [...new Set(state.items.map(entry => entry.category).filter(Boolean))];
-      const colors = ['#27d4ae', '#4aa6ff', '#a56bfa', '#ffc63c', '#ff6f7f', '#37d3eb'];
-      const ranked = categories.map(label => ({ label, count: state.items.filter(entry => entry.category === label).length }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
-      const categoryRows = ranked.slice(0, 5).map((row, index) => ({ ...row, color: colors[index] }));
-      if (ranked.length > 5) categoryRows.push({ label: 'Outras categorias', count: ranked.slice(5).reduce((sum, row) => sum + row.count, 0), color: colors[5] });
-      return `<aside class="sp-detail sp-home-sidebar module-home-sidebar" tabindex="0" aria-label="Visão geral de Suprimentos">${panels.bars('Distribuição por Estoque', rows)}${panels.donut('Distribuição por Categoria', categoryRows)}${panels.actions([
-        { id: 'add', icon: 'plus', label: 'Adicionar suprimento', disabled: !canEdit() },
-        { id: 'focus-search', icon: 'search', label: 'Buscar suprimento' },
-        { id: 'below-minimum', icon: 'alert', label: 'Abaixo do mínimo' },
-        { id: 'export', icon: 'report', label: 'Exportar PDF' },
-        { id: 'backup', icon: 'backup', label: 'Backup' }
-      ], 'data-sp-action')}</aside>`;
+      ].map(row => ({ ...row, count: state.items.filter(entry => !entry.inactive && stockTone(entry).label === row.label).length }));
+      const operational = state.items.filter(entry => !entry.inactive);
+      const byType = [{ label: 'Patrimoniais', count: operational.filter(isInventory).length, color: '#148dff' },
+        { label: 'Consumíveis', count: operational.filter(entry => !isInventory(entry)).length, color: '#25c9ed' }];
+      const total = rows.reduce((sum, row) => sum + row.count, 0);
+      const percent = count => total ? Math.round(count / total * 100) : 0;
+      const first = total ? rows[0].count / total * 100 : 0;
+      const second = total ? (rows[0].count + rows[1].count) / total * 100 : 0;
+      return `<aside class="sp-detail sp-home-sidebar" aria-label="Gráficos e ações de Suprimentos">
+        <section class="sp-chart-panel sp-status-chart"><h2>Distribuição por Status</h2><div class="sp-chart-row"><div class="sp-chart-donut ${total ? '' : 'empty'}" style="--green-end:${first}%;--yellow-end:${second}%" role="img" aria-label="Em estoque: ${rows[0].count}; abaixo do mínimo: ${rows[1].count}; sem estoque: ${rows[2].count}"><div><b>${total}</b><small>Itens</small></div></div><div class="sp-chart-legend">${rows.map((row,index) => `<div><i class="sp-key ${['green','yellow','red'][index]}"></i><span>${row.label}<small>${percent(row.count)}%</small></span><b>${row.count}</b></div>`).join('')}</div></div></section>
+        <section class="sp-chart-panel sp-type-chart"><h2>Estoque por Tipo</h2>${byType.map((row,index) => `<div class="sp-type-row"><span class="sp-type-icon" aria-hidden="true">${uiIcons[index ? 'layers' : 'box']}</span><div><span>${row.label}<b>${row.count}</b></span><div class="sp-type-track"><i style="width:${percent(row.count)}%"></i><em>${percent(row.count)}%</em></div></div></div>`).join('')}</section>
+        <section class="sp-chart-panel sp-quick-actions"><h2>Ações Rápidas</h2><div class="sp-action-grid"><button type="button" data-sp-action="focus-search">${uiIcons.info}<span>Buscar suprimento</span></button>${canEdit()?`<button type="button" data-sp-action="add">${uiIcons.box}<span>Adicionar suprimento</span></button>`:''}<button type="button" data-sp-view="${state.view==='cards'?'table':'cards'}">${uiIcons.chart}<span>${state.view==='cards'?'Ver tabela':'Ver cards'}</span></button><button type="button" data-sp-action="export">${uiIcons.file}<span>Exportar PDF</span></button><button type="button" data-sp-action="backup">${uiIcons.layers}<span>Backup</span></button></div></section>
+        <section class="sp-chart-panel sp-activity-chart"><h2>Atividade do mês</h2><div><strong>${state.monthlyMovements ?? '—'}</strong><span>movimentações registradas</span></div></section></aside>`;
+
     }
     const inventory = isInventory(item);
     const chosen = selectedVariant(item);
@@ -233,18 +269,15 @@
     const situationBadge = variationHealth
       ? `<span class="sp-badge sp-variation-health ${variationHealth.tone}">${safe(variationHealth.label)}</span>`
       : badge(item.stock_status);
-    return `<aside class="sp-detail" tabindex="0" aria-label="Detalhes de ${safe(item.name)}"><div class="sp-detail-top"><div>${img(chosen?.image_path || item.image_path,'sp-main-image')}</div><div><div class="sp-detail-title"><h2>${safe(chosen ? `${item.name} · ${chosen.name}` : item.name)}</h2>${canEdit() ? `<details class="sp-variant-menu sp-detail-menu"><summary aria-label="Ações de ${safe(chosen?.name || item.name)}">•••</summary><div class="sp-variant-menu-list"><button data-sp-action="${chosen && !chosen.base ? 'variant-edit' : 'edit'}" ${chosen && !chosen.base ? `data-id="${safe(chosen.id)}"` : ''}>Editar</button>${chosen || inventory ? '' : `<button data-sp-action="active">${item.inactive ? 'Reativar' : 'Inativar'} suprimento</button>${state.integrationReady ? '<button data-sp-action="delete">Excluir</button>' : ''}`}</div></details>` : ''}<button class="sp-icon-btn" data-sp-action="close" aria-label="Fechar painel">×</button></div>${overviewButton}${situationBadge}${detailFields}</div></div><nav class="sp-detail-tabs" aria-label="Abas do suprimento">${tabs.map(([id,label]) => `<button data-sp-tab="${id}" class="${state.activeTab === id ? 'active' : ''}">${label}</button>`).join('')}</nav><div class="sp-detail-body">${state.detail ? body : state.detailError ? `<p class="sp-error" role="alert">${safe(state.detailError)}</p>` : '<p class="sp-muted aldeckot-inline-loading" role="status">Carregando detalhes…</p>'}</div></aside>`;
+    const wide = state.activeTab === 'variants';
+    const itemLabel = safe(chosen ? `${item.name} · ${chosen.name}` : item.name);
+    const detailMenu = canEdit() ? `<details class="sp-variant-menu sp-detail-menu"><summary aria-label="Ações de ${itemLabel}">•••</summary><div class="sp-variant-menu-list"><button data-sp-action="${chosen && !chosen.base ? 'variant-edit' : 'edit'}" ${chosen && !chosen.base ? `data-id="${safe(chosen.id)}"` : ''}>Editar</button>${chosen || inventory ? '' : `<button data-sp-action="active">${item.inactive ? 'Reativar' : 'Inativar'} suprimento</button>${state.integrationReady ? '<button data-sp-action="delete">Excluir</button>' : ''}`}</div></details>` : '';
+    const heroStats = `<div class="sp-hero-stats"><div><span>${uiIcons.box}</span><small>Disponível</small><b>${quantityAvailable(item)}</b></div><div><span>${uiIcons.layers}</span><small>Estoque mínimo</small><b>${Number(item.minimum_stock || 0)}</b></div><div><span>${uiIcons.pin}</span><small>Local padrão</small><b>${safe(item.default_location || '—')}</b></div><div><span>${uiIcons.pulse}</span><small>Status</small><b>${item.inactive ? 'Inativo' : 'Ativo'}</b></div></div>`;
+    return `<aside class="sp-detail sp-rebuild-modal ${wide ? 'sp-modal-wide' : 'sp-modal-general'}" tabindex="0" role="dialog" aria-modal="true" aria-label="Detalhes de ${safe(item.name)}"><header class="sp-product-hero">${img(chosen?.image_path || item.image_path, 'sp-main-image')}<div class="sp-hero-intro"><span class="sp-hero-kicker"><span aria-hidden="true">${uiIcons.layers}</span> Suprimentos</span><h2>${itemLabel}</h2>${situationBadge}<p>${safe(item.description || 'Sem descrição cadastrada.')}</p>${heroStats}</div><div class="sp-hero-watermark" aria-hidden="true">${uiIcons.drop}</div><div class="sp-modal-controls">${detailMenu}<button type="button" class="sp-icon-btn" data-sp-action="close" aria-label="Fechar painel">×</button></div></header>${overviewButton}<nav class="sp-detail-tabs" aria-label="Abas do suprimento">${tabs.map(([id,label]) => `<button data-sp-tab="${id}" class="${state.activeTab === id ? 'active' : ''}"><span aria-hidden="true">${({general:uiIcons.info,variants:uiIcons.layers,units:uiIcons.box,movements:uiIcons.movement,compatibility:uiIcons.link,logs:uiIcons.file})[id]}</span>${label}</button>`).join('')}</nav><div class="sp-detail-body">${state.detail ? body : state.detailError ? `<p class="sp-error" role="alert">${safe(state.detailError)}</p>` : '<p class="sp-muted aldeckot-inline-loading" role="status">Carregando detalhes…</p>'}</div></aside>`;
   };
   const renderHeader = () => `<header class="sp-header">
-    <div class="sp-heading module-header-summary">
-      <div class="module-header-summary-copy"><h1 class="module-header-summary-title">Suprimentos</h1><p class="module-header-summary-description">Controle de estoque de materiais e consumíveis de TI.</p><div class="module-header-summary-tags"><span>Estoque</span><span>Componentes</span><span>Manutenção</span></div></div>
-      <span class="module-header-summary-art supplies" aria-hidden="true"></span>
-    </div>
-    <div class="sp-header-actions" role="toolbar" aria-label="Ações de Suprimentos">
-      <button class="sp-header-action sp-export-action" type="button" data-sp-action="export" title="Exportar em PDF" aria-label="Exportar em PDF"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button>
-      <button class="sp-header-action sp-backup-action" type="button" data-sp-action="backup" title="Sistema de backup" aria-label="Sistema de backup"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/></svg></button>
-      <a class="system-header-brand" href="index.html" aria-label="Voltar para a Home do Aldeckot"><span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span></a>
-    </div>
+    <div class="sp-heading module-header-summary"><div class="module-header-summary-copy"><h1 class="module-header-summary-title">Suprimentos</h1><p class="module-header-summary-description">Controle de estoque de materiais e consumíveis de TI.</p><div class="module-header-summary-tags"><span>Estoque</span><span>Componentes</span><span>Manutenção</span></div></div><span class="module-header-summary-art supplies" aria-hidden="true"></span></div>
+    <div class="sp-header-actions" role="toolbar" aria-label="Ações de Suprimentos"><button class="sp-header-action sp-export-action" type="button" data-sp-action="export" title="Exportar em PDF" aria-label="Exportar em PDF"><img class="pdf-export-icon" src="assets/pdf-export.svg" width="24" height="24" alt=""></button><button class="sp-header-action sp-backup-action" type="button" data-sp-action="backup" title="Sistema de backup" aria-label="Sistema de backup"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="10.5" cy="5" rx="5.5" ry="2.5"/><path d="M5 5v10c0 1.4 2.5 2.5 5.5 2.5 1.1 0 2.1-.1 3-.4M16 5v5M5 10c0 1.4 2.5 2.5 5.5 2.5S16 11.4 16 10M16.2 17.5l1.8 1.8 3.4-4"/></svg></button><a class="system-header-brand" href="index.html" aria-label="Voltar para a Home do Aldeckot"><span class="system-header-brand-mark" aria-hidden="true"><img class="official-logo-image" src="assets/aldeckot-symbol.png?v=2.0.71" alt=""></span><span class="system-header-brand-copy"><b>Aldeckot</b></span></a></div>
   </header>`;
   const render = () => {
     const mainScroll = app.querySelector('.sp-main')?.scrollTop || 0;
@@ -253,12 +286,15 @@
     window.AldeckotActionMenus?.enhance(app);
     const statusFilter = app.querySelector('[data-sp-filter="status"]');
     if (statusFilter) statusFilter.value = state.status;
+    const categoryFilter = app.querySelector('[data-sp-filter="category"]');
+    if (categoryFilter) categoryFilter.value = state.category;
     const unitFilter = app.querySelector('[data-sp-filter="unit-status"]');
     if (unitFilter) unitFilter.value = state.unitStatus || '';
     app.querySelector('.sp-main').scrollTop = mainScroll;
     const detailPanel = app.querySelector('.sp-detail');
     if (detailPanel) detailPanel.scrollTop = detailScroll;
     hydrateImages(app);
+    void hydrateEquipmentPhotos(app);
   };
   const hydrateImages = root => {
     root.querySelectorAll('[data-supply-image]').forEach(async node => {
@@ -271,11 +307,64 @@
       } catch { if (node.isConnected) node.innerHTML = imagePlaceholder; }
     });
   };
+  const hydrateEquipmentPhotos = async root => {
+    if (!equipmentPhoto || !active() || state.activeTab !== 'units' || equipmentPhotoAvailable === false) return;
+    const cards = [...root.querySelectorAll('.sp-card[id^="unit-"]')];
+    if (!cards.length) return;
+    const module = isInventory(active()) ? 'inventory' : 'supplies';
+    try {
+      const firstId = cards[0].id.slice(5);
+      const firstPath = await equipmentPhoto.get(module, firstId);
+      equipmentPhotoAvailable = true;
+      for (let offset = 0; offset < cards.length; offset += 5) {
+        await Promise.all(cards.slice(offset, offset + 5).map(async (card, batchIndex) => {
+          const index = offset + batchIndex;
+          const id = card.id.slice(5);
+          try {
+            const path = index === 0 ? firstPath : await equipmentPhoto.get(module, id);
+            if (!card.isConnected) return;
+            if (path) {
+              const image = document.createElement('img');
+              image.className = 'sp-unit-official-photo';
+              image.alt = 'Fotografia oficial da unidade';
+              image.src = await equipmentPhoto.url(path);
+              card.querySelector('.sp-card-row')?.append(image);
+            }
+            if (canEdit()) {
+              const button = document.createElement('button');
+              button.type = 'button'; button.className = 'sp-btn';
+              button.dataset.spAction = 'unit-photo'; button.dataset.id = id;
+              button.textContent = path ? 'Substituir fotografia' : 'Adicionar fotografia';
+              card.querySelector('.sp-card-actions')?.append(button);
+            }
+          } catch (error) { console.warn('Fotografia desta unidade indisponível:', error); }
+        }));
+      }
+    } catch (error) {
+      equipmentPhotoAvailable = false;
+      console.warn('Fotografias oficiais indisponíveis neste ambiente:', error);
+    }
+  };
+  const unitPhotoDialog = async (module, id) => {
+    if (!equipmentPhoto || !canEdit()) return;
+    const path = await equipmentPhoto.get(module, id);
+    const imageUrl = path ? await equipmentPhoto.url(path) : '';
+    showDialog('Fotografia do equipamento', `<div class="sp-image-editor"><p class="sp-muted">Fotografia oficial desta unidade, compartilhada com os módulos vinculados.</p>${imageUrl ? `<img class="sp-unit-photo-preview" src="${safe(imageUrl)}" alt="Fotografia atual">` : '<p>Sem fotografia cadastrada.</p>'}<label>Adicionar ou substituir<input type="file" name="image" accept="image/png,image/jpeg,image/webp"></label>${path ? '<label><input type="checkbox" name="remove_image" value="1"> Remover fotografia atual</label>' : ''}<small>PNG, JPG ou WebP até 5 MB.</small></div>`, async form => {
+      const file = form.querySelector('[name="image"]')?.files?.[0];
+      const remove = new FormData(form).get('remove_image') === '1';
+      if (file && remove) throw new Error('Escolha entre substituir ou remover a fotografia.');
+      if (!file && !remove) throw new Error('Selecione uma imagem ou marque a remoção.');
+      if (file) await equipmentPhoto.save(module, id, file, path);
+      else await equipmentPhoto.remove(module, id, path);
+      notify('Fotografia oficial atualizada.');
+    });
+  };
   const load = async () => {
     state.error = '';
     try {
       const integrationPromise = api.integrationReady().then(value => ({ value }), error => ({ error }));
       let [manual, snapshot] = await Promise.all([api.list(), api.inventorySnapshot()]);
+      state.monthlyMovements = await api.monthlyMovementCount().catch(() => null);
       state.equipmentStatusAvailable = api.equipmentStatusReady();
       const groups = inventoryCatalog.groupInventory(snapshot.tables, snapshot.items);
       let projected = inventoryCatalog.project(manual, groups);
@@ -861,6 +950,8 @@
     popup.document.close();
   };
   app.addEventListener('click', async event => {
+    const view = event.target.closest('[data-sp-view]');
+    if (view) { state.view = view.dataset.spView; render(); return; }
     const tab = event.target.closest('[data-sp-tab]');
     if (tab) { state.activeTab = tab.dataset.spTab; state.variantFormOpen = false; render(); return; }
     const inventoryVariant = event.target.closest('[data-sp-variant]');
@@ -875,6 +966,8 @@
     if (!button) return;
     const action = button.dataset.spAction;
     if (action === 'focus-search') { app.querySelector('[data-sp-search]')?.focus(); return; }
+    if (action === 'notifications') { app.querySelector('.module-notification-toggle')?.click(); return; }
+    if (action === 'help') { showDialog('Ajuda de Suprimentos', '<p>Use a busca e os filtros para localizar itens. Abra um card para consultar estoque, variações, movimentações, compatibilidade e histórico.</p>', async () => {}); return; }
     if (action === 'close') { state.selectedId = null; state.selectedVariantId = null; state.detail = null; history.replaceState(null,'','supplies.html'); render(); return; }
     if (action === 'overview') { state.selectedVariantId = null; state.activeTab = 'variants'; render(); return; }
     if (action === 'export') { exportPdf(); return; }
@@ -887,6 +980,12 @@
         try { await inventoryHistoryDialog(inventoryUnit); }
         catch (error) { notify(error.message || 'Não foi possível abrir o histórico.', true); }
       }
+      return;
+    }
+    if (action === 'unit-photo') {
+      const module = isInventory(active()) ? 'inventory' : 'supplies';
+      try { await unitPhotoDialog(module, button.dataset.id); }
+      catch (error) { notify(error.message || 'Fotografia indisponível.', true); }
       return;
     }
     if (!canEdit()) return;
@@ -929,6 +1028,14 @@
     render();
   });
   app.addEventListener('input', event => {
+    if (event.target.matches('[data-sp-variant-search]')) {
+      state.variantQuery = event.target.value;
+      const cursor = event.target.selectionStart;
+      render();
+      const input = app.querySelector('[data-sp-variant-search]');
+      input?.focus(); input?.setSelectionRange(cursor,cursor);
+      return;
+    }
     if (event.target.matches('[data-sp-search]')) {
       state.query = event.target.value; state.page = 1;
       const cursor = event.target.selectionStart;
